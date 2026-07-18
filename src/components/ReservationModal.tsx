@@ -44,9 +44,9 @@ export function ReservationModal({ establishmentName, onClose, onSubmit }: Reser
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm overflow-y-auto">
+      <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 flex-shrink-0">
           <div>
             <h2 className="text-lg font-black text-gray-900 leading-tight">Réserver</h2>
             <p className="text-xs text-orange-600 font-bold">{establishmentName}</p>
@@ -59,7 +59,7 @@ export function ReservationModal({ establishmentName, onClose, onSubmit }: Reser
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto flex-1">
           <div className="space-y-1.5">
             <label className="text-[11px] uppercase tracking-wider font-bold text-gray-500">Type de réservation</label>
             <div className="grid grid-cols-2 gap-2">

@@ -130,11 +130,15 @@ service cloud.firestore {
       
       match /messages/{msgId} {
         allow get, list: if isSignedIn() && (
-          get(/databases/$(database)/documents/conversations/$(convId)).data.clientId == request.auth.uid 
+          isUserAdmin()
+          || !exists(/databases/$(database)/documents/conversations/$(convId))
+          || get(/databases/$(database)/documents/conversations/$(convId)).data.clientId == request.auth.uid 
           || get(/databases/$(database)/documents/conversations/$(convId)).data.ownerId == request.auth.uid
         );
         allow create: if isSignedIn() && isValidMessage(incoming()) && incoming().senderId == request.auth.uid && (
-          get(/databases/$(database)/documents/conversations/$(convId)).data.clientId == request.auth.uid 
+          isUserAdmin()
+          || !exists(/databases/$(database)/documents/conversations/$(convId))
+          || get(/databases/$(database)/documents/conversations/$(convId)).data.clientId == request.auth.uid 
           || get(/databases/$(database)/documents/conversations/$(convId)).data.ownerId == request.auth.uid
         );
       }

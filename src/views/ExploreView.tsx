@@ -75,7 +75,7 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
                 <span className="text-yellow-500">★</span> {est.averageRating.toFixed(1)}
               </div>
             </div>
-            <div className="p-4 flex items-center justify-between">
+            <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <div className="text-[10px] font-bold text-orange-600 uppercase tracking-wider mb-1">{est.category.replace(/_/g, ' ')}</div>
                 <h3 className="font-bold text-gray-900 text-lg truncate">{est.name}</h3>
@@ -85,7 +85,7 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
                 </div>
               </div>
               {onStartChat && (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto justify-end">
                   {(() => {
                     const req = relationshipRequests.find(r => r.establishmentId === est.id && (r.initiatorId === currentUser?.id || r.targetId === currentUser?.id));
                     if (!req) {
@@ -110,7 +110,7 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
                               alert("Erreur lors de l'envoi de la demande.");
                             }
                           }}
-                          className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-600 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all flex-shrink-0 cursor-pointer"
+                          className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-600 font-bold text-xs px-3 py-2.5 rounded-xl transition-all cursor-pointer"
                         >
                           Rejoindre
                         </button>
@@ -118,27 +118,27 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
                     }
                     if (req.status === 'en_attente') {
                       return (
-                        <span className="flex items-center gap-1.5 bg-yellow-50 text-yellow-600 font-bold text-xs px-3.5 py-2.5 rounded-xl flex-shrink-0 select-none">
+                        <span className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-yellow-50 text-yellow-600 font-bold text-xs px-3 py-2.5 rounded-xl select-none">
                           En attente
                         </span>
                       );
                     }
                     if (req.status === 'acceptee') {
                       return (
-                        <span className="flex items-center gap-1.5 bg-green-50 text-green-600 font-bold text-xs px-3.5 py-2.5 rounded-xl flex-shrink-0 select-none">
+                        <span className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-green-50 text-green-600 font-bold text-xs px-3 py-2.5 rounded-xl select-none">
                           Membre ✓
                         </span>
                       );
                     }
                     return (
-                      <span className="flex items-center gap-1.5 bg-red-50 text-red-600 font-bold text-xs px-3.5 py-2.5 rounded-xl flex-shrink-0 select-none">
+                      <span className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-red-50 text-red-600 font-bold text-xs px-3 py-2.5 rounded-xl select-none">
                         Refusé
                       </span>
                     );
                   })()}
                   <button
                     onClick={() => onStartChat(est.id)}
-                    className="flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 active:scale-95 text-orange-600 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all flex-shrink-0"
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-orange-50 hover:bg-orange-100 active:scale-95 text-orange-600 font-bold text-xs px-3 py-2.5 rounded-xl transition-all"
                   >
                     <MessageSquare className="w-4 h-4" />
                     Discuter
@@ -152,7 +152,7 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
                       }
                       setReservationEst({ id: est.id, name: est.name });
                     }}
-                    className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all flex-shrink-0"
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-bold text-xs px-3 py-2.5 rounded-xl transition-all"
                   >
                     <Calendar className="w-4 h-4" />
                     Réserver

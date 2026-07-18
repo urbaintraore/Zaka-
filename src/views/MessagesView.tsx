@@ -571,13 +571,19 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
                 )}
               </button>
 
-              <input 
-                type="text"
+              <textarea 
                 placeholder="Rédigez votre message..."
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
                 disabled={isSending}
-                className="flex-1 bg-gray-50 border-none outline-none rounded-xl px-4 py-3 text-xs font-medium focus:bg-gray-100 focus:ring-1 focus:ring-orange-500/20"
+                rows={2}
+                className="flex-1 bg-gray-50 border-none outline-none rounded-xl px-4 py-2.5 text-xs font-medium focus:bg-gray-100 focus:ring-1 focus:ring-orange-500/20 resize-none"
               />
 
               <button

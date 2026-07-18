@@ -617,8 +617,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addPublication = async (pub: Omit<Publication, 'id' | 'views' | 'clicks' | 'createdAt'>) => {
     try {
+      const cleanPub = Object.entries(pub).reduce((acc, [key, val]) => {
+        if (val !== undefined) {
+          acc[key] = val;
+        }
+        return acc;
+      }, {} as any);
+
       await addDoc(collection(db, 'publications'), {
-        ...pub,
+        ...cleanPub,
         views: 0,
         clicks: 0,
         createdAt: new Date().toISOString()
