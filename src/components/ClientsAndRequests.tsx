@@ -11,6 +11,7 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
     updateServiceRequest, 
     createRelationshipRequest,
     createConversation, 
+    toggleDJStatus,
     users, 
     establishments 
   } = useAppStore();
@@ -30,6 +31,22 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
 
   // Filter service requests
   const estServiceRequests = serviceRequests.filter(r => r.establishmentId === establishmentId);
+
+  // Get members (accepted relationship requests)
+  const acceptedRequests = relationshipRequests.filter(
+    r => r.establishmentId === establishmentId && r.status === 'acceptee'
+  );
+
+  const members = acceptedRequests.map(r => {
+    const memberId = r.type === 'client_join' ? r.initiatorId : r.targetId;
+    const memberUser = users.find(u => u.id === memberId);
+    return {
+      requestId: r.id,
+      clientId: memberId,
+      user: memberUser,
+      isDJ: r.isDJ || false
+    };
+  });
 
   // Filter all clients that are registered on the app
   const allClients = users.filter(u => u.role === 'client');
@@ -324,6 +341,90 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
             )}
           </div>
         ))}
+      </div>
+
+      {/* 5. Liste des clients de l'établissement */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+        <h4 className="font-bold text-gray-900 text-sm mb-1 flex items-center gap-2">
+          <User className="w-4 h-4 text-orange-500" />
+          Clients / Membres de l'établissement
+        </h4>
+        <p className="text-xs text-gray-400 mb-4 font-medium">
+          Gérez les membres officiels de votre établissement et attribuez le rôle de DJ.
+        </p>
+        
+        {members.length === 0 ? (
+          <p className="text-xs text-gray-400 font-medium text-center py-4 bg-gray-50 rounded-xl">
+            Aucun membre officiel pour l'instant.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {members.map(member => (
+              <div key={member.requestId} className="flex items-center justify-between p-3.5 bg-gray-50/50 hover:bg-gray-50 rounded-xl border border-gray-100 transition-all">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center">
+                    {(member.user?.name || 'Client').substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="text-xs font-black text-gray-900 flex items-center gap-1.5">
+                      {member.user?.name || `Client (${member.clientId.slice(0, 5)})`}
+                      {member.isDJ && (
+                        <span className="text-[9px] bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded">
+                          DJ Actif
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-gray-400 font-semibold">
+                      {member.user?.phone || member.user?.email || 'Pas de contact'}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => startChat(member.clientId)} 
+                    className="p-2 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors"
+                    title="Discuter"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </button>
+                  
+                  {member.isDJ ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await toggleDJStatus(member.requestId, false);
+                          setSuccessMsg(`Le statut DJ a été retiré pour ${member.user?.name || 'le client'}.`);
+                        } catch (err) {
+                          setErrorMsg("Erreur lors du retrait du statut DJ.");
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-[10px] rounded-lg transition-colors cursor-pointer"
+                    >
+                      Retirer le statut DJ
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await toggleDJStatus(member.requestId, true);
+                          setSuccessMsg(`${member.user?.name || 'Le client'} a été promu DJ de l'établissement !`);
+                        } catch (err) {
+                          setErrorMsg("Erreur lors de la promotion en DJ.");
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-600 font-bold text-[10px] rounded-lg transition-colors cursor-pointer"
+                    >
+                      Promouvoir en DJ
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ import { Toast } from './components/Toast';
 function AppContent() {
   const [currentTab, setCurrentTab] = useState<Tab>('home');
   const [preselectedChatEstId, setPreselectedChatEstId] = useState<string | null>(null);
+  const [preselectedChatRecipient, setPreselectedChatRecipient] = useState<'gerant' | 'dj'>('gerant');
   const [preselectedConvId, setPreselectedConvId] = useState<string | null>(null);
   const { currentUser, loading } = useAppStore();
 
@@ -24,12 +25,13 @@ function AppContent() {
     );
   }
 
-  const handleStartChat = (estId: string) => {
+  const handleStartChat = (estId: string, recipient: 'gerant' | 'dj' = 'gerant') => {
     if (!currentUser) {
       setCurrentTab('profile');
       return;
     }
     setPreselectedChatEstId(estId);
+    setPreselectedChatRecipient(recipient);
     setCurrentTab('messages');
   };
 
@@ -50,9 +52,11 @@ function AppContent() {
         {currentTab === 'messages' && (
           <MessagesView 
             preselectedEstablishmentId={preselectedChatEstId} 
+            preselectedRecipientType={preselectedChatRecipient}
             preselectedConvId={preselectedConvId}
             onClearPreselected={() => {
               setPreselectedChatEstId(null);
+              setPreselectedChatRecipient('gerant');
               setPreselectedConvId(null);
             }} 
             onBackToHome={() => setCurrentTab('home')}

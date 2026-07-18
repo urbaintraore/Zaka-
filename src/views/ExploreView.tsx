@@ -4,12 +4,12 @@ import { Search, MapPin, MessageSquare, Calendar } from 'lucide-react';
 import { ReservationModal } from '../components/ReservationModal';
 
 interface ExploreViewProps {
-  onStartChat?: (estId: string) => void;
+  onStartChat?: (estId: string, recipient?: 'gerant' | 'dj') => void;
   onNavigate?: (tab: any) => void;
 }
 
 export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
-  const { establishments, currentUser, relationshipRequests, createRelationshipRequest, createServiceRequest, setGlobalError } = useAppStore();
+  const { establishments, currentUser, relationshipRequests, createRelationshipRequest, createServiceRequest, setGlobalError, users } = useAppStore();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string>('all');
   const [reservationEst, setReservationEst] = useState<{ id: string, name: string } | null>(null);
@@ -67,23 +67,36 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
       </div>
 
       <div className="flex flex-col gap-4">
-        {filtered.map(est => (
-          <div key={est.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="h-40 bg-gray-200 relative">
-              <img src={est.photos[0] || 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800'} alt={est.name} className="w-full h-full object-cover" />
-              <div className="absolute top-3 right-3 bg-white/90 backdrop-blur px-2.5 py-1 rounded-lg text-sm font-bold text-gray-900 flex items-center gap-1 shadow-sm">
-                <span className="text-yellow-500">★</span> {est.averageRating.toFixed(1)}
-              </div>
-            </div>
-            <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <div className="text-[10px] font-bold text-orange-600 uppercase tracking-wider mb-1">{est.category.replace(/_/g, ' ')}</div>
-                <h3 className="font-bold text-gray-900 text-lg truncate">{est.name}</h3>
-                <div className="flex items-center gap-1.5 text-sm text-gray-500 mt-2 font-medium truncate">
-                  <MapPin className="w-4 h-4 flex-shrink-0" />
-                  <span>{est.address}, {est.neighborhood}</span>
+        {filtered.map(est => {
+          const djRequests = relationshipRequests.filter(r => r.establishmentId === est.id && r.status === 'acceptee' && r.isDJ);
+          const djs = djRequests.map(r => {
+            const djId = r.type === 'client_join' ? r.initiatorId : r.targetId;
+            return users.find(u => u.id === djId);
+          }).filter(Boolean);
+
+          return (
+            <div key={est.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="h-40 bg-gray-200 relative">
+                <img src={est.photos[0] || 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800'} alt={est.name} className="w-full h-full object-cover" />
+                <div className="absolute top-3 right-3 bg-white/90 backdrop-blur px-2.5 py-1 rounded-lg text-sm font-bold text-gray-900 flex items-center gap-1 shadow-sm">
+                  <span className="text-yellow-500">★</span> {est.averageRating.toFixed(1)}
                 </div>
               </div>
+              <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-bold text-orange-600 uppercase tracking-wider mb-1">{est.category.replace(/_/g, ' ')}</div>
+                  <h3 className="font-bold text-gray-900 text-lg truncate">{est.name}</h3>
+                  <div className="flex items-center gap-1.5 text-sm text-gray-500 mt-2 font-medium truncate">
+                    <MapPin className="w-4 h-4 flex-shrink-0" />
+                    <span>{est.address}, {est.neighborhood}</span>
+                  </div>
+                  {djs.length > 0 && (
+                    <div className="mt-2.5 flex items-center gap-1.5 text-[10px] font-bold text-purple-700 bg-purple-50/70 border border-purple-100 px-2.5 py-1 rounded-lg w-fit">
+                      <span className="text-xs">🎧</span>
+                      <span>DJ : {djs.map(dj => dj?.name).join(', ')}</span>
+                    </div>
+                  )}
+                </div>
               {onStartChat && (
                 <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto justify-end">
                   {(() => {
@@ -136,13 +149,34 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
                       </span>
                     );
                   })()}
-                  <button
-                    onClick={() => onStartChat(est.id)}
-                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-orange-50 hover:bg-orange-100 active:scale-95 text-orange-600 font-bold text-xs px-3 py-2.5 rounded-xl transition-all"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                    Discuter
-                  </button>
+                  {djs.length > 0 ? (
+                    <>
+                      <button
+                        onClick={() => onStartChat(est.id, 'gerant')}
+                        className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-orange-50 hover:bg-orange-100 active:scale-95 text-orange-600 font-bold text-xs px-3 py-2.5 rounded-xl transition-all cursor-pointer"
+                        title="Contacter le Gérant"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                        Gérant
+                      </button>
+                      <button
+                        onClick={() => onStartChat(est.id, 'dj')}
+                        className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-purple-50 hover:bg-purple-100 active:scale-95 text-purple-700 font-bold text-xs px-3 py-2.5 rounded-xl transition-all cursor-pointer"
+                        title="Contacter le DJ"
+                      >
+                        <span>🎧</span>
+                        DJ
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => onStartChat(est.id, 'gerant')}
+                      className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-orange-50 hover:bg-orange-100 active:scale-95 text-orange-600 font-bold text-xs px-3 py-2.5 rounded-xl transition-all cursor-pointer"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      Discuter
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       if (!currentUser) {
@@ -161,7 +195,7 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
               )}
             </div>
           </div>
-        ))}
+        )})}
 
         {filtered.length === 0 && (
           <div className="text-center p-8 bg-gray-50 rounded-2xl border border-gray-100 text-gray-500 font-medium">

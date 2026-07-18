@@ -72,6 +72,7 @@ export interface RelationshipRequest {
   type: 'client_join' | 'gerant_invite';
   status: 'en_attente' | 'acceptee' | 'refusee';
   date: string;
+  isDJ?: boolean;
 }
 
 export interface ServiceRequest {

@@ -51,6 +51,7 @@ interface AppContextType extends AppState {
   createServiceRequest: (req: Omit<ServiceRequest, 'id' | 'status' | 'date'>) => Promise<void>;
   updateServiceRequest: (id: string, status: 'validee' | 'refusee', message?: string) => Promise<void>;
   createConversation: (clientId: string, establishmentId: string, clientName: string, establishmentName: string, ownerId: string) => Promise<string>;
+  toggleDJStatus: (requestId: string, isDJ: boolean) => Promise<void>;
   setGlobalError: (err: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null) => void;
 }
 
@@ -746,6 +747,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return convId;
   };
 
+  const toggleDJStatus = async (requestId: string, isDJ: boolean) => {
+    try {
+      await updateDoc(doc(db, 'relationshipRequests', requestId), { isDJ });
+    } catch (error) {
+      console.error("Erreur toggleDJStatus:", error);
+      throw error;
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       ...state,
@@ -765,6 +775,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createServiceRequest,
       updateServiceRequest,
       createConversation,
+      toggleDJStatus,
       setGlobalError
     }}>
       {children}

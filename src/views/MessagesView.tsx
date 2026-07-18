@@ -23,22 +23,25 @@ interface Conversation {
   establishmentId: string;
   establishmentName: string;
   ownerId: string;
+  djId?: string;
   lastMessage: string;
   lastMessageAt: string;
   lastSenderId: string;
   unreadByClient: boolean;
   unreadByGerant: boolean;
+  unreadByDj?: boolean;
 }
 
 interface MessagesViewProps {
   onBackToHome?: () => void;
   preselectedEstablishmentId?: string | null;
+  preselectedRecipientType?: 'gerant' | 'dj';
   preselectedConvId?: string | null;
   onClearPreselected?: () => void;
 }
 
-export function MessagesView({ onBackToHome, preselectedEstablishmentId, preselectedConvId, onClearPreselected }: MessagesViewProps) {
-  const { currentUser, establishments } = useAppStore();
+export function MessagesView({ onBackToHome, preselectedEstablishmentId, preselectedRecipientType = 'gerant', preselectedConvId, onClearPreselected }: MessagesViewProps) {
+  const { currentUser, establishments, relationshipRequests, users } = useAppStore();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -55,6 +58,7 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
   const myEsts = establishments.filter(e => e.ownerId === currentUser?.id);
   const myEstIds = myEsts.map(e => e.id);
   const isGerant = currentUser?.role === 'gerant';
+  const isDJChatActive = activeConv && (activeConv as any).recipientType === 'dj';
 
   // Automatically scroll to bottom of chat
   useEffect(() => {
@@ -79,8 +83,14 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
     const targetEst = establishments.find(e => e.id === preselectedEstablishmentId);
     if (!targetEst) return;
 
+    const isDJChat = preselectedRecipientType === 'dj';
+
     // Check if conversation already exists in loaded conversations
-    const existingConv = conversations.find(c => c.establishmentId === preselectedEstablishmentId && c.clientId === currentUser.id);
+    const existingConv = conversations.find(c => 
+      c.establishmentId === preselectedEstablishmentId && 
+      c.clientId === currentUser.id &&
+      (isDJChat ? (c as any).recipientType === 'dj' : (c as any).recipientType !== 'dj')
+    );
     
     if (existingConv) {
       setActiveConv(existingConv);
@@ -89,23 +99,32 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
       // Create new temporary/actual conversation document
       const startNewConversation = async () => {
         try {
-          const convId = `${currentUser.id}_${preselectedEstablishmentId}`;
+          const activeDJReq = relationshipRequests.find(r => r.establishmentId === targetEst.id && r.status === 'acceptee' && r.isDJ);
+          const djId = activeDJReq ? (activeDJReq.type === 'client_join' ? activeDJReq.initiatorId : activeDJReq.targetId) : null;
+
+          const convId = isDJChat 
+            ? `${currentUser.id}_${preselectedEstablishmentId}_dj`
+            : `${currentUser.id}_${preselectedEstablishmentId}`;
+
           const newConv = {
             clientId: currentUser.id,
             clientName: currentUser.name || currentUser.email || 'Client',
             establishmentId: targetEst.id,
             establishmentName: targetEst.name,
             ownerId: targetEst.ownerId,
+            recipientType: preselectedRecipientType || 'gerant',
+            ...(djId ? { djId } : {}),
             lastMessage: 'Discussion démarrée',
             lastMessageAt: new Date().toISOString(),
             lastSenderId: currentUser.id,
             unreadByClient: false,
-            unreadByGerant: true
+            unreadByGerant: !isDJChat,
+            unreadByDj: isDJChat
           };
 
           await setDoc(doc(db, 'conversations', convId), newConv);
           
-          setActiveConv({ id: convId, ...newConv });
+          setActiveConv({ id: convId, ...newConv } as any);
           if (onClearPreselected) onClearPreselected();
         } catch (err) {
           console.error("Erreur lors de la création de la conversation:", err);
@@ -113,7 +132,7 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
       };
       startNewConversation();
     }
-  }, [preselectedEstablishmentId, conversations, currentUser, establishments, loadingConvs]);
+  }, [preselectedEstablishmentId, preselectedRecipientType, conversations, currentUser, establishments, loadingConvs, relationshipRequests]);
 
   // Load conversations
   useEffect(() => {
@@ -134,30 +153,67 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
       );
     }
 
-    const unsubscribe = onSnapshot(convQuery, (snapshot) => {
-      const list: Conversation[] = [];
-      snapshot.forEach((d) => {
-        list.push({ id: d.id, ...d.data() } as Conversation);
-      });
-      // Sort conversations by lastMessageAt descending
+    const djQuery = query(
+      collection(db, 'conversations'),
+      where('djId', '==', currentUser.id),
+      where('recipientType', '==', 'dj')
+    );
+
+    let mainConvs: Conversation[] = [];
+    let djConvs: Conversation[] = [];
+
+    const updateCombined = () => {
+      // For manager, filter out DJ chats in memory
+      let filteredMain = isGerant 
+        ? mainConvs.filter(c => (c as any).recipientType !== 'dj')
+        : mainConvs;
+
+      // Merge and sort
+      const combined = [...filteredMain, ...djConvs];
+      
+      // Remove duplicates by ID just in case
+      const uniqueConvsMap = new Map<string, Conversation>();
+      combined.forEach(c => uniqueConvsMap.set(c.id, c));
+      const list = Array.from(uniqueConvsMap.values());
+
       list.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
       setConversations(list);
       setLoadingConvs(false);
 
-      // If there's an active conversation, update it with fresh data
       if (activeConv) {
         const fresh = list.find(c => c.id === activeConv.id);
         if (fresh) {
           setActiveConv(fresh);
         }
       }
+    };
+
+    const unsubscribeMain = onSnapshot(convQuery, (snapshot) => {
+      mainConvs = [];
+      snapshot.forEach((d) => {
+        mainConvs.push({ id: d.id, ...d.data() } as Conversation);
+      });
+      updateCombined();
     }, (err) => {
-      console.error("Erreur chargement des conversations:", err);
+      console.error("Erreur main conversations:", err);
       setLoadingConvs(false);
     });
 
-    return () => unsubscribe();
-  }, [currentUser, isGerant]);
+    const unsubscribeDJ = onSnapshot(djQuery, (snapshot) => {
+      djConvs = [];
+      snapshot.forEach((d) => {
+        djConvs.push({ id: d.id, ...d.data() } as Conversation);
+      });
+      updateCombined();
+    }, (err) => {
+      console.error("Erreur DJ conversations:", err);
+    });
+
+    return () => {
+      unsubscribeMain();
+      unsubscribeDJ();
+    };
+  }, [currentUser, isGerant, activeConv?.id]);
 
   // Load messages for the active conversation
   useEffect(() => {
@@ -180,9 +236,12 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
       setMessages(list);
 
       // Mark messages as read
-      if (isGerant && activeConv.unreadByGerant) {
+      const isDJOfActive = activeConv.djId === currentUser?.id && (activeConv as any).recipientType === 'dj';
+      if (isDJOfActive && (activeConv as any).unreadByDj) {
+        updateDoc(doc(db, 'conversations', activeConv.id), { unreadByDj: false });
+      } else if (isGerant && activeConv.unreadByGerant) {
         updateDoc(doc(db, 'conversations', activeConv.id), { unreadByGerant: false });
-      } else if (!isGerant && activeConv.unreadByClient) {
+      } else if (!isGerant && !isDJOfActive && activeConv.unreadByClient) {
         updateDoc(doc(db, 'conversations', activeConv.id), { unreadByClient: false });
       }
     }, (err) => {
@@ -224,12 +283,14 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
       await addDoc(collection(db, 'conversations', activeConv.id, 'messages'), msgData);
 
       // Update conversation summary
+      const isDJOfActive = activeConv.djId === currentUser?.id && (activeConv as any).recipientType === 'dj';
       const updateData: Partial<Conversation> = {
         lastMessage: fileToSend ? `📎 ${fileToSend.name}` : textToSend,
         lastMessageAt: new Date().toISOString(),
         lastSenderId: currentUser.id,
-        unreadByClient: isGerant, // Unread for client if manager sent it
-        unreadByGerant: !isGerant // Unread for manager if client sent it
+        unreadByClient: isGerant || isDJOfActive, // Unread for client if manager or DJ sent it
+        unreadByGerant: !isGerant && !isDJOfActive && (activeConv as any).recipientType !== 'dj', // Unread for manager if client sent it and it's not a DJ chat
+        unreadByDj: !isDJOfActive && (activeConv as any).recipientType === 'dj' // Unread for DJ if client sent it
       };
 
       await updateDoc(doc(db, 'conversations', activeConv.id), updateData);
@@ -384,9 +445,27 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
             </div>
           ) : (
             conversations.map((conv) => {
-              const isUnread = isGerant ? conv.unreadByGerant : conv.unreadByClient;
-              const titleName = isGerant ? conv.clientName : conv.establishmentName;
-              const subName = isGerant ? `Client` : `Établissement`;
+              const isDJOfConv = conv.djId === currentUser?.id && (conv as any).recipientType === 'dj';
+              const isUnread = isDJOfConv
+                ? (conv as any).unreadByDj
+                : isGerant
+                ? conv.unreadByGerant
+                : conv.unreadByClient;
+
+              let titleName = isGerant ? conv.clientName : conv.establishmentName;
+              if (isDJOfConv) {
+                titleName = conv.clientName;
+              }
+
+              const isDJChat = (conv as any).recipientType === 'dj';
+              const subName = isDJOfConv 
+                ? `Demande de son (DJ)` 
+                : isDJChat
+                ? `🎧 DJ de l'établissement`
+                : isGerant
+                ? `Client`
+                : `Établissement`;
+
               const isActive = activeConv?.id === conv.id;
 
               return (
@@ -399,18 +478,31 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
                     isUnread && "bg-orange-50/10"
                   )}
                 >
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-50 to-orange-100 text-orange-600 font-bold flex items-center justify-center text-lg shadow-sm border border-orange-200/20 flex-shrink-0">
+                  <div className={cn(
+                    "w-12 h-12 rounded-2xl font-bold flex items-center justify-center text-lg shadow-sm border flex-shrink-0",
+                    isDJChat 
+                      ? "bg-gradient-to-br from-purple-50 to-purple-100 text-purple-600 border-purple-200/20"
+                      : "bg-gradient-to-br from-orange-50 to-orange-100 text-orange-600 border-orange-200/20"
+                  )}>
                     {titleName.substring(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0 flex flex-col justify-center">
                     <div className="flex items-center justify-between mb-0.5">
-                      <span className={cn("font-bold text-gray-900 truncate text-sm", isUnread && "text-orange-950 font-black")}>
+                      <span className={cn("font-bold text-gray-900 truncate text-sm flex items-center gap-1.5", isUnread && "text-orange-950 font-black")}>
                         {titleName}
+                        {isDJChat && (
+                          <span className="text-[9px] bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                            🎧 DJ
+                          </span>
+                        )}
                       </span>
                       <span className="text-[10px] text-gray-400 font-medium">
                         {getFormatDate(conv.lastMessageAt)}
                       </span>
                     </div>
+                    <p className={cn("text-xs text-gray-400 font-semibold mb-0.5", isDJChat && "text-purple-600/80")}>
+                      {subName}
+                    </p>
                     <p className={cn("text-xs text-gray-500 truncate", isUnread && "text-orange-600 font-bold")}>
                       {conv.lastMessage}
                     </p>
@@ -441,18 +533,49 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
                 <ChevronLeft className="w-5 h-5" />
               </button>
               
-              <div className="w-10 h-10 rounded-xl bg-orange-600 text-white font-bold flex items-center justify-center">
-                {(isGerant ? activeConv.clientName : activeConv.establishmentName).substring(0, 2).toUpperCase()}
-              </div>
+              {(() => {
+                const isDJOfActive = activeConv.djId === currentUser?.id && (activeConv as any).recipientType === 'dj';
+                const activeTitleName = isDJOfActive
+                  ? activeConv.clientName
+                  : isGerant
+                  ? activeConv.clientName
+                  : activeConv.establishmentName;
 
-              <div>
-                <h3 className="font-bold text-gray-950 text-sm leading-tight">
-                  {isGerant ? activeConv.clientName : activeConv.establishmentName}
-                </h3>
-                <span className="text-[10px] text-gray-400 font-medium capitalize">
-                  {isGerant ? "Discute avec vous" : "Établissement vérifié"}
-                </span>
-              </div>
+                const activeSubName = isDJOfActive
+                  ? "Client (Demande de son DJ)"
+                  : (activeConv as any).recipientType === 'dj'
+                  ? "Discussion avec le DJ"
+                  : isGerant
+                  ? "Discute avec vous"
+                  : "Établissement vérifié";
+
+                const isDJChat = (activeConv as any).recipientType === 'dj';
+
+                return (
+                  <>
+                    <div className={cn(
+                      "w-10 h-10 rounded-xl font-bold flex items-center justify-center text-white",
+                      isDJChat ? "bg-purple-600" : "bg-orange-600"
+                    )}>
+                      {activeTitleName.substring(0, 2).toUpperCase()}
+                    </div>
+
+                    <div>
+                      <h3 className="font-bold text-gray-950 text-sm leading-tight flex items-center gap-1.5">
+                        {activeTitleName}
+                        {isDJChat && (
+                          <span className="text-[9px] bg-purple-100 text-purple-700 font-bold px-1.5 py-0.5 rounded">
+                            🎧 Canal DJ
+                          </span>
+                        )}
+                      </h3>
+                      <span className="text-[10px] text-gray-400 font-semibold uppercase">
+                        {activeSubName}
+                      </span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Chat Message List */}
@@ -472,7 +595,7 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
                       className={cn(
                         "flex flex-col max-w-[80%] rounded-2xl p-3 shadow-sm relative group",
                         isMe 
-                          ? "ml-auto bg-orange-600 text-white rounded-br-none" 
+                          ? (isDJChatActive ? "ml-auto bg-purple-600 text-white rounded-br-none" : "ml-auto bg-orange-600 text-white rounded-br-none") 
                           : "mr-auto bg-white text-gray-900 border border-gray-100 rounded-bl-none"
                       )}
                     >
@@ -494,11 +617,11 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
                               className={cn(
                                 "flex items-center gap-2 p-2.5 rounded-xl border text-xs font-semibold select-none transition-colors",
                                 isMe 
-                                  ? "bg-orange-700/50 border-orange-500/20 text-white hover:bg-orange-700" 
+                                  ? (isDJChatActive ? "bg-purple-700/50 border-purple-500/20 text-white hover:bg-purple-700" : "bg-orange-700/50 border-orange-500/20 text-white hover:bg-orange-700") 
                                   : "bg-gray-50 border-gray-200 text-gray-800 hover:bg-gray-100"
                               )}
                             >
-                              <FileText className="w-4 h-4 flex-shrink-0 text-orange-500" />
+                              <FileText className={cn("w-4 h-4 flex-shrink-0", isDJChatActive ? "text-purple-500" : "text-orange-500")} />
                               <div className="flex-1 min-w-0 text-left">
                                 <p className="truncate leading-tight font-bold">{msg.fileName}</p>
                                 <span className="text-[9px] opacity-70">Télécharger le document</span>
