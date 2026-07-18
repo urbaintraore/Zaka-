@@ -2,7 +2,8 @@ const CACHE_NAME = 'zaka-plus-cache-v1';
 const urlsToCache = [
   '/',
   '/index.html',
-  '/logo.jpg',
+  '/icon-192x192.png',
+  '/icon-512x512.png',
   '/manifest.json'
 ];
 
