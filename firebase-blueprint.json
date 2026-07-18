@@ -85,6 +85,15 @@
         "fileType": { "type": "string" }
       },
       "required": ["senderId", "text", "createdAt"]
+    },
+    "Favorites": {
+      "title": "Favorites",
+      "description": "User's favorite establishments",
+      "type": "object",
+      "properties": {
+        "establishmentIds": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["establishmentIds"]
     }
   },
   "firestore": {
@@ -107,6 +116,10 @@
     "conversations/{conversationId}/messages": {
       "schema": { "$ref": "#/entities/Message" },
       "description": "Messages subcollection"
+    },
+    "favorites/{userId}": {
+      "schema": { "$ref": "#/entities/Favorites" },
+      "description": "Favorites collection per user"
     }
   }
 }

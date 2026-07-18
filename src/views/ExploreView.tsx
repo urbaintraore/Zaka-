@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../store';
-import { Search, MapPin, MessageSquare, Calendar } from 'lucide-react';
+import { Search, MapPin, MessageSquare, Calendar, Heart } from 'lucide-react';
 import { ReservationModal } from '../components/ReservationModal';
 
 interface ExploreViewProps {
@@ -9,7 +9,7 @@ interface ExploreViewProps {
 }
 
 export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
-  const { establishments, currentUser, relationshipRequests, createRelationshipRequest, createServiceRequest, setGlobalError, users } = useAppStore();
+  const { establishments, currentUser, relationshipRequests, createRelationshipRequest, createServiceRequest, setGlobalError, users, favorites, toggleFavorite } = useAppStore();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string>('all');
   const [reservationEst, setReservationEst] = useState<{ id: string, name: string } | null>(null);
@@ -81,6 +81,18 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
                 <div className="absolute top-3 right-3 bg-white/90 backdrop-blur px-2.5 py-1 rounded-lg text-sm font-bold text-gray-900 flex items-center gap-1 shadow-sm">
                   <span className="text-yellow-500">★</span> {est.averageRating.toFixed(1)}
                 </div>
+                {currentUser && (
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      await toggleFavorite(currentUser.id, est.id);
+                    }}
+                    className="absolute top-3 left-3 p-2 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md transition-all active:scale-90 text-white"
+                    title={(favorites[currentUser.id] || []).includes(est.id) ? "Retirer des favoris" : "Ajouter aux favoris"}
+                  >
+                    <Heart className={`w-4 h-4 ${(favorites[currentUser.id] || []).includes(est.id) ? "fill-red-500 text-red-500" : "text-white"}`} />
+                  </button>
+                )}
               </div>
               <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="min-w-0 flex-1">

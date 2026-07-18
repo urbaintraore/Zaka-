@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../store';
-import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users } from 'lucide-react';
+import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart } from 'lucide-react';
 import { stripHtml } from '../utils/htmlHelpers';
 import { ReservationModal } from '../components/ReservationModal';
 import { Publication } from '../types';
@@ -10,7 +10,7 @@ interface HomeViewProps {
 }
 
 export function HomeView({ onStartChat }: HomeViewProps) {
-  const { publications, establishments, currentUser, createServiceRequest, relationshipRequests, setGlobalError } = useAppStore();
+  const { publications, establishments, currentUser, createServiceRequest, relationshipRequests, setGlobalError, favorites, toggleFavorite } = useAppStore();
   const [reservationEst, setReservationEst] = useState<{ id: string, name: string } | null>(null);
   const [selectedPub, setSelectedPub] = useState<Publication | null>(null);
   const [filterMemberOnly, setFilterMemberOnly] = useState(false);
@@ -45,6 +45,10 @@ export function HomeView({ onStartChat }: HomeViewProps) {
   const annonces = filteredPublications.filter(p => p.type === 'annonce');
   
   const topEstablishments = [...establishments].sort((a,b) => b.averageRating - a.averageRating).slice(0, 5);
+
+  const filteredEstablishments = filterMemberOnly
+    ? establishments.filter(e => joinedEstIds.includes(e.id))
+    : topEstablishments;
 
   return (
     <div className="flex flex-col gap-8 pb-24 max-w-3xl mx-auto">
@@ -198,46 +202,72 @@ export function HomeView({ onStartChat }: HomeViewProps) {
         )}
 
         <section>
-          <h2 className="text-xl font-black text-gray-900 mb-4 tracking-tight">Lieux Populaires</h2>
+          <h2 className="text-xl font-black text-gray-900 mb-4 tracking-tight">
+            {filterMemberOnly ? "Mes Clubs Membres" : "Lieux Populaires"}
+          </h2>
           <div className="flex flex-col gap-4">
-            {topEstablishments.map(est => {
-              const imageUrl = est.photos[0] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800';
-              return (
-                <div key={est.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-                  <div className="h-32 relative">
-                     <img src={imageUrl} alt={est.name} className="w-full h-full object-cover" />
-                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                     <div className="absolute bottom-3 right-3 flex items-center gap-1 text-yellow-400 font-bold bg-black/40 backdrop-blur-md px-2.5 py-1 rounded-lg text-sm">
-                       <Star className="w-4 h-4 fill-yellow-400" /> {est.averageRating.toFixed(1)}
-                     </div>
-                  </div>
-                  <div className="p-4 flex gap-4 items-center justify-between">
-                    <div className="flex flex-col justify-center flex-1 min-w-0">
-                      <h3 className="font-bold text-gray-900 text-lg mb-0.5 truncate">{est.name}</h3>
-                      <p className="text-sm text-gray-500 capitalize font-medium truncate">{est.category.replace(/_/g, ' ')} • {est.neighborhood}</p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {onStartChat && (
-                        <button 
-                          onClick={() => onStartChat(est.id)}
-                          className="flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 active:scale-95 text-orange-600 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all flex-shrink-0"
-                          title="Discuter"
-                        >
-                          <MessageSquare className="w-4 h-4" />
-                        </button>
-                      )}
-                      <button 
-                        onClick={() => setReservationEst({ id: est.id, name: est.name })}
-                        className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all flex-shrink-0"
-                        title="Réserver"
-                      >
-                        <Calendar className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+            {filteredEstablishments.length === 0 ? (
+              <div className="bg-white border border-gray-100 rounded-3xl p-8 text-center shadow-sm">
+                <div className="w-12 h-12 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-3 border border-orange-100 animate-bounce">
+                  <Users className="w-6 h-6 text-orange-500" />
                 </div>
-              )
-            })}
+                <h3 className="text-sm font-bold text-gray-900 mb-1">Aucun club membre</h3>
+                <p className="text-xs text-gray-500 leading-relaxed max-w-xs mx-auto">
+                  Vous n'avez pas encore rejoint d'établissement. Allez dans l'onglet <strong className="text-orange-600 font-bold">Explorer</strong> pour demander l'adhésion à des établissements !
+                </p>
+              </div>
+            ) : (
+              filteredEstablishments.map(est => {
+                const imageUrl = est.photos[0] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800';
+                return (
+                  <div key={est.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                    <div className="h-32 relative">
+                       <img src={imageUrl} alt={est.name} className="w-full h-full object-cover" />
+                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                       <div className="absolute bottom-3 right-3 flex items-center gap-1 text-yellow-400 font-bold bg-black/40 backdrop-blur-md px-2.5 py-1 rounded-lg text-sm">
+                         <Star className="w-4 h-4 fill-yellow-400" /> {est.averageRating.toFixed(1)}
+                       </div>
+                       {currentUser && (
+                         <button
+                           onClick={async (e) => {
+                             e.stopPropagation();
+                             await toggleFavorite(currentUser.id, est.id);
+                           }}
+                           className="absolute top-3 right-3 p-2 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md transition-all active:scale-90 text-white"
+                           title={(favorites[currentUser.id] || []).includes(est.id) ? "Retirer des favoris" : "Ajouter aux favoris"}
+                         >
+                           <Heart className={`w-4 h-4 ${(favorites[currentUser.id] || []).includes(est.id) ? "fill-red-500 text-red-500" : "text-white"}`} />
+                         </button>
+                       )}
+                    </div>
+                    <div className="p-4 flex gap-4 items-center justify-between">
+                      <div className="flex flex-col justify-center flex-1 min-w-0">
+                        <h3 className="font-bold text-gray-900 text-lg mb-0.5 truncate">{est.name}</h3>
+                        <p className="text-sm text-gray-500 capitalize font-medium truncate">{est.category.replace(/_/g, ' ')} • {est.neighborhood}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {onStartChat && (
+                          <button 
+                            onClick={() => onStartChat(est.id)}
+                            className="flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 active:scale-95 text-orange-600 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all flex-shrink-0"
+                            title="Discuter"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => setReservationEst({ id: est.id, name: est.name })}
+                          className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all flex-shrink-0"
+                          title="Réserver"
+                        >
+                          <Calendar className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })
+            )}
           </div>
         </section>
       </div>

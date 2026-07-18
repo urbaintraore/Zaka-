@@ -95,6 +95,12 @@ service cloud.firestore {
         && (data.get('fileType', '') is string && data.get('fileType', '').size() <= 100);
     }
 
+    function isValidFavorites(data) {
+      return data.keys().hasAll(['establishmentIds'])
+        && data.establishmentIds is list
+        && data.establishmentIds.size() <= 100;
+    }
+
     match /users/{userId} {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming()) && incoming().role != 'admin';
@@ -154,6 +160,11 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
       allow update: if isSignedIn() && (resource.data.clientId == request.auth.uid || get(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)).data.ownerId == request.auth.uid);
+    }
+
+    match /favorites/{userId} {
+      allow get, delete: if isSignedIn() && request.auth.uid == userId;
+      allow create, update: if isSignedIn() && request.auth.uid == userId && isValidFavorites(incoming());
     }
   }
 }

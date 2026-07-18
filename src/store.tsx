@@ -43,7 +43,7 @@ interface AppContextType extends AppState {
   }) => Promise<void>;
   addEstablishment: (est: Omit<Establishment, 'id' | 'status' | 'averageRating'>) => Promise<void>;
   addPublication: (pub: Omit<Publication, 'id' | 'views' | 'clicks' | 'createdAt'>) => Promise<void>;
-  toggleFavorite: (clientId: string, establishmentId: string) => void;
+  toggleFavorite: (clientId: string, establishmentId: string) => Promise<void>;
   validateEstablishment: (id: string) => Promise<void>;
   upgradeToGerant: (estData: Partial<Establishment>) => Promise<void>;
   createRelationshipRequest: (req: Omit<RelationshipRequest, 'id' | 'status' | 'date'>) => Promise<void>;
@@ -301,7 +301,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.currentUser) {
       // Clear authenticated state data when user logs out
-      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [] }));
+      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], favorites: {} }));
       return;
     }
 
@@ -337,10 +337,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error("Erreur serviceRequests:", error);
     });
 
+    // Listen to favorites
+    const unsubscribeFav = onSnapshot(doc(db, 'favorites', state.currentUser.id), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const establishmentIds = data?.establishmentIds || [];
+        setState(s => ({
+          ...s,
+          favorites: {
+            ...s.favorites,
+            [state.currentUser!.id]: establishmentIds
+          }
+        }));
+      } else {
+        setState(s => ({
+          ...s,
+          favorites: {
+            ...s.favorites,
+            [state.currentUser!.id]: []
+          }
+        }));
+      }
+    }, (error) => {
+      console.error("Erreur listening to favorites:", error);
+    });
+
     return () => {
       unsubscribeUsers();
       unsubscribeRel();
       unsubscribeSer();
+      unsubscribeFav();
     };
   }, [state.currentUser]);
 
@@ -637,20 +663,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const toggleFavorite = (clientId: string, establishmentId: string) => {
-    setState(s => {
-      const userFavs = s.favorites[clientId] || [];
+  const toggleFavorite = async (clientId: string, establishmentId: string) => {
+    try {
+      const userFavs = state.favorites[clientId] || [];
       const isFav = userFavs.includes(establishmentId);
-      return {
+      const updatedFavs = isFav 
+        ? userFavs.filter(id => id !== establishmentId)
+        : [...userFavs, establishmentId];
+
+      setState(s => ({
         ...s,
         favorites: {
           ...s.favorites,
-          [clientId]: isFav 
-            ? userFavs.filter(id => id !== establishmentId)
-            : [...userFavs, establishmentId]
+          [clientId]: updatedFavs
         }
-      };
-    });
+      }));
+
+      await setDoc(doc(db, 'favorites', clientId), {
+        establishmentIds: updatedFavs
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `favorites/${clientId}`);
+    }
   };
 
   const validateEstablishment = async (id: string) => {
