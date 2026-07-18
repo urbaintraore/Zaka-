@@ -1,0 +1,392 @@
+import React, { useState } from 'react';
+import { RichTextEditor } from '../components/RichTextEditor';
+import { ClientsAndRequests } from '../components/ClientsAndRequests';
+import { GerantAnalytics } from '../components/GerantAnalytics';
+import { useAppStore } from '../store';
+import { LogOut, Plus, Store, Eye, MousePointerClick, X, Megaphone, Calendar, Users, FileText, Image as ImageIcon, MessageSquare } from 'lucide-react';
+import { Category, PubType } from '../types';
+import { compressImage } from '../utils/imageCompressor';
+
+export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: { onLogout: () => void; onNavigate?: (tab: any) => void; onStartChatWithConv?: (convId: string) => void }) {
+  const { currentUser, establishments, publications, unreadCount, addEstablishment, addPublication } = useAppStore();
+  const myEsts = establishments.filter(e => e.ownerId === currentUser?.id);
+  
+  const [isAdding, setIsAdding] = useState(false);
+  
+  // Est Form state
+  const [estName, setEstName] = useState('');
+  const [estCategory, setEstCategory] = useState<Category>('maquis');
+  const [estCountry, setEstCountry] = useState(currentUser?.country || 'Burkina Faso');
+  const [estCity, setEstCity] = useState(currentUser?.city || '');
+  const [estNeighborhood, setEstNeighborhood] = useState('');
+  const [estGeolocation, setEstGeolocation] = useState('');
+
+  // Pub Form State
+  const [pubModalEstId, setPubModalEstId] = useState<string | null>(null);
+  const [pubModalType, setPubModalType] = useState<PubType | null>(null);
+  const [pubTitle, setPubTitle] = useState('');
+  const [pubDesc, setPubDesc] = useState('');
+  const [pubImage, setPubImage] = useState('');
+  const [pubStartDate, setPubStartDate] = useState('');
+  const [pubEndDate, setPubEndDate] = useState('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isSubmittingPub, setIsSubmittingPub] = useState(false);
+  const [pubError, setPubError] = useState<string | null>(null);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      try {
+        setIsUploadingImage(true);
+        const base64 = await compressImage(e.target.files[0], 800, 800, 0.7);
+        setPubImage(base64);
+      } catch (error) {
+        console.error("Failed to compress image", error);
+      } finally {
+        setIsUploadingImage(false);
+      }
+    }
+  };
+
+  const handleAddSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    
+    addEstablishment({
+      ownerId: currentUser.id,
+      name: estName,
+      category: estCategory,
+      country: estCountry,
+      city: estCity,
+      neighborhood: estNeighborhood,
+      address: '', // default
+      phone: currentUser.phone || currentUser.email || '',
+      description: '',
+      photos: [],
+      geolocation: estGeolocation
+    });
+    
+    setIsAdding(false);
+    // Reset form
+    setEstName('');
+    setEstCategory('maquis');
+    setEstCountry(currentUser?.country || 'Burkina Faso');
+    setEstCity(currentUser?.city || '');
+    setEstNeighborhood('');
+    setEstGeolocation('');
+  };
+
+  const handlePubSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pubModalEstId || !pubModalType) return;
+    try {
+      setIsSubmittingPub(true);
+      setPubError(null);
+      await addPublication({
+        establishmentId: pubModalEstId,
+        type: pubModalType,
+        title: pubTitle,
+        description: pubDesc,
+        imageUrl: pubImage || undefined,
+        startDate: pubStartDate || undefined,
+        endDate: pubEndDate || undefined,
+        status: 'active'
+      });
+      closePubModal();
+    } catch(err: any) {
+      console.error(err);
+      setPubError("Une erreur est survenue lors de la publication. Veuillez réessayer.");
+    } finally {
+      setIsSubmittingPub(false);
+    }
+  };
+
+  const closePubModal = () => {
+    setPubModalEstId(null);
+    setPubModalType(null);
+    setPubTitle('');
+    setPubDesc('');
+    setPubImage('');
+    setPubStartDate('');
+    setPubEndDate('');
+    setPubError(null);
+  };
+
+  const getPubTypeLabel = (type: PubType) => {
+    switch (type) {
+      case 'promo': return 'Promo / Bon plan';
+      case 'evenement': return 'Événement';
+      case 'recrutement': return 'Recrutement';
+      case 'annonce': return 'Communiqué';
+      default: return type;
+    }
+  };
+
+  if (isAdding) {
+    return (
+      <div className="p-4 max-w-3xl mx-auto pb-24">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-2xl font-black text-gray-900">Nouvel Établissement</h2>
+          <button onClick={() => setIsAdding(false)} className="p-2 text-gray-400 hover:text-gray-600 bg-white rounded-full shadow-sm">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleAddSubmit} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-gray-500 ml-1">Nom de l'établissement</label>
+            <input type="text" required value={estName} onChange={e => setEstName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-gray-500 ml-1">Type d'établissement</label>
+            <select required value={estCategory} onChange={e => setEstCategory(e.target.value as Category)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium text-gray-700">
+              <option value="maquis">Maquis</option>
+              <option value="bar">Bar</option>
+              <option value="restaurant">Restaurant</option>
+              <option value="boite_de_nuit">Boîte de nuit</option>
+              <option value="glacier_pizzeria">Glacier - Pizzeria</option>
+              <option value="hotel">Hôtel</option>
+              <option value="residence">Résidence</option>
+              <option value="autre">Autre</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold text-gray-500 ml-1">Pays</label>
+              <input type="text" required value={estCountry} onChange={e => setEstCountry(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold text-gray-500 ml-1">Ville</label>
+              <input type="text" required value={estCity} onChange={e => setEstCity(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-gray-500 ml-1">Quartier</label>
+            <input type="text" required value={estNeighborhood} onChange={e => setEstNeighborhood(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-gray-500 ml-1">Géolocalisation (Lien Maps - optionnel)</label>
+            <input type="url" placeholder="https://maps.google.com/..." value={estGeolocation} onChange={e => setEstGeolocation(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
+          </div>
+
+          <button type="submit" className="w-full mt-4 py-4 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 active:scale-[0.98] transition-all">
+            Enregistrer l'établissement
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 max-w-3xl mx-auto pb-24">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h2 className="text-2xl font-black text-gray-900">Espace Gérant</h2>
+          <p className="text-gray-500 text-sm">Bienvenue, {currentUser?.name}</p>
+        </div>
+        <button onClick={onLogout} className="p-2 text-gray-400 hover:text-red-500 bg-white rounded-full shadow-sm">
+          <LogOut className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 mb-8">
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
+          <div className="text-2xl font-black text-orange-600 mb-1">{myEsts.length}</div>
+          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Établissements</div>
+        </div>
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
+          <div className="text-2xl font-black text-blue-600 mb-1">
+            {myEsts.reduce((acc, est) => acc + publications.filter(p => p.establishmentId === est.id).length, 0)}
+          </div>
+          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Publications</div>
+        </div>
+        <button 
+          onClick={() => onNavigate && onNavigate('messages')}
+          disabled={!onNavigate}
+          className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center relative hover:bg-orange-50/20 active:scale-95 transition-all group cursor-pointer"
+        >
+          {unreadCount > 0 ? (
+            <div className="relative">
+              <div className="text-2xl font-black text-orange-600 mb-1 animate-bounce">{unreadCount}</div>
+              <span className="absolute -top-1 -right-2 flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500"></span>
+              </span>
+            </div>
+          ) : (
+            <div className="text-2xl font-black text-gray-500 mb-1">0</div>
+          )}
+          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider group-hover:text-orange-600 transition-colors">Messages</div>
+        </button>
+      </div>
+
+      <div className="mb-6 flex items-center justify-between">
+        <h3 className="text-lg font-bold text-gray-900">Mes Établissements</h3>
+        <button onClick={() => setIsAdding(true)} className="flex items-center gap-1.5 text-sm font-bold text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-100">
+          <Plus className="w-4 h-4" /> Ajouter
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        {myEsts.map(est => (
+          <div key={est.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400">
+                  <Store className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-gray-900">{est.name}</h4>
+                  <p className="text-xs text-gray-500 capitalize">{est.category} • {est.city}</p>
+                </div>
+              </div>
+              <div className={`px-2 py-1 rounded text-[10px] uppercase tracking-wider font-bold ${est.status === 'valide' ? 'bg-green-50 text-green-600' : 'bg-yellow-50 text-yellow-600'}`}>
+                {est.status === 'valide' ? 'Validé' : 'En attente'}
+              </div>
+            </div>
+            
+              <div className="border-t border-gray-100 pt-3 mt-3">
+                <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Actions rapides</h5>
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <button onClick={() => { setPubModalEstId(est.id); setPubModalType('promo'); }} className="flex flex-col items-center justify-center p-3 bg-orange-50 text-orange-600 hover:bg-orange-100 font-bold text-xs rounded-xl transition-colors text-center tracking-wide gap-1">
+                    <Megaphone className="w-5 h-5" />
+                    Promo / Bon plan
+                  </button>
+                  <button onClick={() => { setPubModalEstId(est.id); setPubModalType('evenement'); }} className="flex flex-col items-center justify-center p-3 bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold text-xs rounded-xl transition-colors text-center tracking-wide gap-1">
+                    <Calendar className="w-5 h-5" />
+                    Événement
+                  </button>
+                  <button onClick={() => { setPubModalEstId(est.id); setPubModalType('recrutement'); }} className="flex flex-col items-center justify-center p-3 bg-green-50 text-green-600 hover:bg-green-100 font-bold text-xs rounded-xl transition-colors text-center tracking-wide gap-1">
+                    <Users className="w-5 h-5" />
+                    Recrutement
+                  </button>
+                  <button onClick={() => { setPubModalEstId(est.id); setPubModalType('annonce'); }} className="flex flex-col items-center justify-center p-3 bg-purple-50 text-purple-600 hover:bg-purple-100 font-bold text-xs rounded-xl transition-colors text-center tracking-wide gap-1">
+                    <FileText className="w-5 h-5" />
+                    Communiqué
+                  </button>
+                </div>
+                
+                <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Publications récentes</h5>
+                <div className="flex flex-col gap-2">
+                  {publications.filter(p => p.establishmentId === est.id).map(pub => (
+                    <div key={pub.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg">
+                      <div className="flex-1">
+                        <div className="text-sm font-bold text-gray-900 line-clamp-1">{pub.title}</div>
+                        <div className="text-[10px] font-bold tracking-wider text-orange-500 uppercase">{pub.type.replace('_', ' ')}</div>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs font-medium text-gray-400">
+                        <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5"/> {pub.views}</span>
+                        <span className="flex items-center gap-1"><MousePointerClick className="w-3.5 h-3.5"/> {pub.clicks}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t border-gray-100 pt-3.5 mt-4 flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Discussions Clients</span>
+                  <button 
+                    onClick={() => onNavigate && onNavigate('messages')}
+                    className="flex items-center gap-1.5 text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100/80 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Ouvrir la messagerie
+                  </button>
+                </div>
+                <div className="mt-4">
+                  <GerantAnalytics establishmentId={est.id} />
+                  <ClientsAndRequests establishmentId={est.id} onNavigate={onNavigate} onStartChatWithConv={onStartChatWithConv} />
+                </div>
+              </div>
+            </div>
+          ))}
+          {myEsts.length === 0 && (
+            <div className="text-center p-8 bg-gray-50 rounded-2xl border border-gray-100">
+              <Store className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 font-medium">Vous n'avez pas encore d'établissement.</p>
+            </div>
+          )}
+        </div>
+        
+        {/* Pub Modal */}
+      {pubModalEstId && pubModalType && (
+        <div className="fixed inset-0 z-50 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <h2 className="text-xl font-black text-gray-900">
+                Publier : {getPubTypeLabel(pubModalType)}
+              </h2>
+              <button onClick={closePubModal} className="p-2 text-gray-400 hover:text-gray-600 bg-gray-50 rounded-full">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handlePubSubmit} className="p-5 overflow-y-auto flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-500 ml-1">Titre de la publication</label>
+                <input type="text" required value={pubTitle} onChange={e => setPubTitle(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" placeholder="Ex: Soirée spéciale, Recrutement Serveur..." />
+              </div>
+              
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-500 ml-1">Description détaillée</label>
+                <RichTextEditor value={pubDesc} onChange={setPubDesc} placeholder="Donnez tous les détails utiles (menu, artistes, conditions...)" />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-500 ml-1">Image de la publication (optionnel)</label>
+                {pubImage ? (
+                  <div className="relative w-full h-40 rounded-xl overflow-hidden border border-gray-200">
+                    <img src={pubImage} alt="Preview" className="w-full h-full object-cover" />
+                    <button type="button" onClick={() => setPubImage('')} className="absolute top-2 right-2 bg-white/90 p-1.5 rounded-full hover:bg-white text-gray-700 shadow-sm">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-orange-500 hover:bg-orange-50/50 transition-colors bg-gray-50">
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      {isUploadingImage ? (
+                         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-500"></div>
+                      ) : (
+                         <>
+                           <ImageIcon className="w-6 h-6 text-gray-400 mb-2" />
+                           <p className="text-xs font-medium text-gray-500">Cliquez pour ajouter une image</p>
+                         </>
+                      )}
+                    </div>
+                    <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={isUploadingImage} />
+                  </label>
+                )}
+              </div>
+
+              {(pubModalType === 'promo' || pubModalType === 'evenement') && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Date de début</label>
+                    <input type="date" value={pubStartDate} onChange={e => setPubStartDate(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Date de fin</label>
+                    <input type="date" value={pubEndDate} onChange={e => setPubEndDate(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
+                  </div>
+                </div>
+              )}
+
+              {pubError && (
+                <div className="p-3 bg-red-50 text-red-600 text-sm font-medium rounded-xl border border-red-100">
+                  {pubError}
+                </div>
+              )}
+
+              <button type="submit" disabled={isSubmittingPub || isUploadingImage} className="w-full mt-2 py-4 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                {isSubmittingPub && <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>}
+                Publier
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

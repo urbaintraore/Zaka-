@@ -1,0 +1,112 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the application",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string", "enum": ["client", "gerant", "admin"] },
+        "country": { "type": "string" },
+        "city": { "type": "string" }
+      },
+      "required": ["name", "role"]
+    },
+    "Establishment": {
+      "title": "Establishment",
+      "description": "An establishment managed by a gerant",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "country": { "type": "string" },
+        "city": { "type": "string" },
+        "neighborhood": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "description": { "type": "string" },
+        "photos": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["en_attente", "valide", "suspendu"] },
+        "averageRating": { "type": "number" },
+        "geolocation": { "type": "string" }
+      },
+      "required": ["ownerId", "name", "category", "city", "status"]
+    },
+    "Publication": {
+      "title": "Publication",
+      "description": "A publication made by an establishment",
+      "type": "object",
+      "properties": {
+        "establishmentId": { "type": "string" },
+        "type": { "type": "string", "enum": ["annonce", "promo", "bon_plan", "evenement", "recrutement"] },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "views": { "type": "number" },
+        "clicks": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["establishmentId", "type", "title", "description", "status", "createdAt"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "A conversation between a client and an establishment",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "establishmentId": { "type": "string" },
+        "establishmentName": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "lastMessage": { "type": "string" },
+        "lastMessageAt": { "type": "string" },
+        "lastSenderId": { "type": "string" },
+        "unreadByClient": { "type": "boolean" },
+        "unreadByGerant": { "type": "boolean" }
+      },
+      "required": ["clientId", "clientName", "establishmentId", "establishmentName", "ownerId", "lastMessage", "lastMessageAt", "lastSenderId", "unreadByClient", "unreadByGerant"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A single message in a conversation",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileType": { "type": "string" }
+      },
+      "required": ["senderId", "text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Users collection"
+    },
+    "establishments": {
+      "schema": { "$ref": "#/entities/Establishment" },
+      "description": "Establishments collection"
+    },
+    "publications": {
+      "schema": { "$ref": "#/entities/Publication" },
+      "description": "Publications collection"
+    },
+    "conversations": {
+      "schema": { "$ref": "#/entities/Conversation" },
+      "description": "Conversations collection"
+    },
+    "conversations/{conversationId}/messages": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Messages subcollection"
+    }
+  }
+}

@@ -1,0 +1,155 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isUserAdmin() {
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        || request.auth.uid == 'MEr83euFrsWciVN6L5etpGxiWDI3'
+      );
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['name', 'role'])
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.role in ['client', 'gerant', 'admin']
+        && (data.get('email', '') is string && data.get('email', '').size() <= 100)
+        && (data.get('phone', '') is string && data.get('phone', '').size() <= 30)
+        && (data.get('country', '') is string && data.get('country', '').size() <= 100)
+        && (data.get('city', '') is string && data.get('city', '').size() <= 100);
+    }
+
+    function isValidEstablishment(data) {
+      return data.keys().hasAll(['ownerId', 'name', 'category', 'city', 'status'])
+        && data.ownerId is string && data.ownerId.size() > 0 && data.ownerId.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.category is string && data.category.size() > 0 && data.category.size() <= 50
+        && data.city is string && data.city.size() > 0 && data.city.size() <= 100
+        && data.status in ['en_attente', 'valide', 'suspendu']
+        && (data.get('country', '') is string && data.get('country', '').size() <= 100)
+        && (data.get('neighborhood', '') is string && data.get('neighborhood', '').size() <= 100)
+        && (data.get('address', '') is string && data.get('address', '').size() <= 200)
+        && (data.get('phone', '') is string && data.get('phone', '').size() <= 30)
+        && (data.get('description', '') is string && data.get('description', '').size() <= 1000)
+        && (data.get('geolocation', '') is string && data.get('geolocation', '').size() <= 500)
+        && (data.get('averageRating', 0) is number)
+        && (data.get('photos', []) is list && data.get('photos', []).size() <= 10);
+    }
+
+    function isValidPublication(data) {
+      return data.keys().hasAll(['establishmentId', 'type', 'title', 'description', 'status', 'createdAt'])
+        && data.establishmentId is string && data.establishmentId.size() > 0 && data.establishmentId.size() <= 128
+        && data.type in ['annonce', 'promo', 'bon_plan', 'evenement', 'recrutement']
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 200
+        && data.description is string && data.description.size() > 0 && data.description.size() <= 500000
+        && data.status in ['active', 'inactive', 'expiree', 'boostee']
+        && data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 50
+        && (data.get('imageUrl', '') is string && data.get('imageUrl', '').size() <= 1048576)
+        && (data.get('startDate', '') is string && data.get('startDate', '').size() <= 50)
+        && (data.get('endDate', '') is string && data.get('endDate', '').size() <= 50)
+        && (data.get('views', 0) is number)
+        && (data.get('clicks', 0) is number);
+    }
+
+    function isValidConversation(data) {
+      return data.keys().hasAll(['clientId', 'clientName', 'establishmentId', 'establishmentName', 'ownerId', 'lastMessage', 'lastMessageAt', 'lastSenderId', 'unreadByClient', 'unreadByGerant'])
+        && data.clientId is string && data.clientId.size() > 0 && data.clientId.size() <= 128
+        && data.clientName is string && data.clientName.size() > 0 && data.clientName.size() <= 200
+        && data.establishmentId is string && data.establishmentId.size() > 0 && data.establishmentId.size() <= 128
+        && data.establishmentName is string && data.establishmentName.size() > 0 && data.establishmentName.size() <= 200
+        && data.ownerId is string && data.ownerId.size() > 0 && data.ownerId.size() <= 128
+        && data.lastMessage is string && data.lastMessage.size() <= 500000
+        && data.lastMessageAt is string && data.lastMessageAt.size() <= 50
+        && data.lastSenderId is string && data.lastSenderId.size() <= 128
+        && data.unreadByClient is bool
+        && data.unreadByGerant is bool;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['senderId', 'text', 'createdAt'])
+        && data.senderId is string && data.senderId.size() > 0 && data.senderId.size() <= 128
+        && data.text is string && data.text.size() <= 500000
+        && data.createdAt is string && data.createdAt.size() <= 50
+        && (data.get('fileUrl', '') is string && data.get('fileUrl', '').size() <= 1048576)
+        && (data.get('fileName', '') is string && data.get('fileName', '').size() <= 255)
+        && (data.get('fileType', '') is string && data.get('fileType', '').size() <= 100);
+    }
+
+    match /users/{userId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming()) && incoming().role != 'admin';
+      allow update: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming()) && incoming().role == existing().role || isUserAdmin();
+    }
+
+    match /establishments/{estId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isSignedIn() && isValidEstablishment(incoming()) && incoming().ownerId == request.auth.uid;
+      allow update: if isSignedIn() && isValidEstablishment(incoming()) && (
+        (existing().ownerId == request.auth.uid && incoming().ownerId == existing().ownerId)
+        || (get(/databases/$(database)/documents/users/$(existing().ownerId)).data.email == request.auth.token.email && incoming().ownerId == request.auth.uid)
+      ) || isUserAdmin();
+      allow delete: if isSignedIn() && existing().ownerId == request.auth.uid || isUserAdmin();
+    }
+
+    match /publications/{pubId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isSignedIn() && isValidPublication(incoming()) && get(/databases/$(database)/documents/establishments/$(incoming().establishmentId)).data.ownerId == request.auth.uid;
+      allow update: if isSignedIn() && isValidPublication(incoming()) && get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid && incoming().establishmentId == existing().establishmentId
+        || isUserAdmin();
+      allow delete: if isSignedIn() && get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid || isUserAdmin();
+    }
+
+    match /conversations/{convId} {
+      allow get: if isSignedIn() && (resource == null || resource.data.clientId == request.auth.uid || resource.data.ownerId == request.auth.uid);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && (incoming().clientId == request.auth.uid || incoming().ownerId == request.auth.uid) && isValidConversation(incoming());
+      allow update: if isSignedIn() && (existing().clientId == request.auth.uid || existing().ownerId == request.auth.uid) && (incoming().clientId == existing().clientId && incoming().ownerId == existing().ownerId);
+      allow delete: if false;
+      
+      match /messages/{msgId} {
+        allow get, list: if isSignedIn() && (
+          get(/databases/$(database)/documents/conversations/$(convId)).data.clientId == request.auth.uid 
+          || get(/databases/$(database)/documents/conversations/$(convId)).data.ownerId == request.auth.uid
+        );
+        allow create: if isSignedIn() && isValidMessage(incoming()) && incoming().senderId == request.auth.uid && (
+          get(/databases/$(database)/documents/conversations/$(convId)).data.clientId == request.auth.uid 
+          || get(/databases/$(database)/documents/conversations/$(convId)).data.ownerId == request.auth.uid
+        );
+      }
+    }
+
+    match /relationshipRequests/{reqId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.initiatorId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.initiatorId == request.auth.uid || resource.data.targetId == request.auth.uid);
+    }
+
+    match /serviceRequests/{reqId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.clientId == request.auth.uid || get(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)).data.ownerId == request.auth.uid);
+    }
+  }
+}
