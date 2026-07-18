@@ -173,7 +173,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [state.currentUser]);
+  }, [state.currentUser?.id, state.currentUser?.role]);
 
   useEffect(() => {
     let unsubscribeDoc: (() => void) | undefined;
@@ -188,7 +188,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             emailVerified: firebaseUser.emailVerified
           });
           if (unsubscribeDoc) unsubscribeDoc();
-          unsubscribeDoc = onSnapshot(doc(db, 'users', firebaseUser.uid), (docSnap) => {
+          unsubscribeDoc = onSnapshot(doc(db, 'users', firebaseUser.uid), async (docSnap) => {
             if (docSnap.exists()) {
               const userData = docSnap.data() as Partial<Omit<User, 'id'>>;
               
@@ -199,8 +199,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
               
               if (!role || !['client', 'gerant', 'admin'].includes(role)) {
                 console.error(`[onAuthStateChanged] ERREUR CRITIQUE: Le rôle est manquant ou invalide ("${role}") pour l'utilisateur ${firebaseUser.email}`);
-                alert(`Erreur: Votre profil est incomplet ou corrompu (rôle non défini). Veuillez contacter le support. L'application va utiliser un accès limité.`);
-                role = 'client'; // Fallback to avoid crash, but explicit error shown
+                
+                // Attempt to recover role by checking if user has any establishments
+                try {
+                  const { collection, query, where, getDocs, updateDoc, doc } = await import('firebase/firestore');
+                  const estQuery = query(collection(db, 'establishments'), where('ownerId', '==', firebaseUser.uid));
+                  const estSnapshot = await getDocs(estQuery);
+                  if (!estSnapshot.empty) {
+                    console.log(`[onAuthStateChanged] Récupération du rôle: l'utilisateur a des établissements, restauration en tant que 'gerant'`);
+                    role = 'gerant';
+                    await updateDoc(doc(db, 'users', firebaseUser.uid), { role: 'gerant' });
+                  } else {
+                    alert(`Erreur: Votre profil est incomplet ou corrompu (rôle non défini). L'application va utiliser un accès limité.`);
+                    role = 'client'; // Fallback
+                    await updateDoc(doc(db, 'users', firebaseUser.uid), { role: 'client' });
+                  }
+                } catch(e) {
+                  console.error("Failed to recover role:", e);
+                  role = 'client'; // Fallback
+                }
               }
 
               console.log("[onAuthStateChanged] Profil utilisateur chargé avec succès de Firestore :", userData.name, "Rôle:", role);
@@ -209,24 +226,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
               console.warn("[onAuthStateChanged] Aucun profil utilisateur Firestore trouvé pour UID :", firebaseUser.uid);
               
               // Création d'un profil par défaut (self-healing) pour éviter de bloquer l'utilisateur
-              const defaultProfile = {
-                name: firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'Utilisateur'),
-                email: firebaseUser.email || '',
-                phone: firebaseUser.phoneNumber || '',
-                role: 'client' as Role,
-                country: 'Burkina Faso',
-                city: 'Ouagadougou'
-              };
-
-              import('firebase/firestore').then(async ({ setDoc }) => {
+              import('firebase/firestore').then(async ({ setDoc, collection, query, where, getDocs }) => {
                 try {
-                  console.log("[onAuthStateChanged] Création automatique d'un profil 'client' par défaut pour l'UID:", firebaseUser.uid);
+                  const estQuery = query(collection(db, 'establishments'), where('ownerId', '==', firebaseUser.uid));
+                  const estSnapshot = await getDocs(estQuery);
+                  const isGerant = !estSnapshot.empty;
+                  const recoveredRole = isGerant ? 'gerant' : 'client';
+
+                  const defaultProfile = {
+                    name: firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'Utilisateur'),
+                    email: firebaseUser.email || '',
+                    phone: firebaseUser.phoneNumber || '',
+                    role: recoveredRole as Role,
+                    country: 'Burkina Faso',
+                    city: 'Ouagadougou'
+                  };
+
+                  console.log(`[onAuthStateChanged] Création automatique d'un profil '${recoveredRole}' par défaut pour l'UID:`, firebaseUser.uid);
                   await setDoc(doc(db, 'users', firebaseUser.uid), defaultProfile);
                   console.log("[onAuthStateChanged] Profil créé par défaut avec succès.");
                   // L'écouteur onSnapshot va se déclencher à nouveau automatiquement dès que le document sera créé !
                 } catch (err) {
                   console.error("[onAuthStateChanged] Échec de la création automatique du profil par défaut :", err);
-                  setState(s => ({ ...s, currentUser: { id: firebaseUser.uid, ...defaultProfile }, loading: false }));
+                  setState(s => ({ ...s, currentUser: { id: firebaseUser.uid, name: firebaseUser.email || 'Utilisateur', email: firebaseUser.email || '', phone: firebaseUser.phoneNumber || '', role: 'client', country: 'Burkina Faso', city: 'Ouagadougou' }, loading: false }));
                 }
               });
             }
@@ -387,7 +409,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unsubscribeSer();
       unsubscribeFav();
     };
-  }, [state.currentUser]);
+  }, [state.currentUser?.id]);
 
   const translateFirebaseError = (error: any): string => {
     const code = error?.code || 'unknown';
@@ -752,27 +774,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const createRelationshipRequest = async (req: Omit<RelationshipRequest, 'id' | 'status' | 'date'>) => {
-    await addDoc(collection(db, 'relationshipRequests'), {
-      ...req,
-      status: 'en_attente',
-      date: new Date().toISOString()
-    });
+    try {
+      await addDoc(collection(db, 'relationshipRequests'), {
+        ...req,
+        status: 'en_attente',
+        date: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error("Erreur createRelationshipRequest:", error);
+      throw error;
+    }
   };
 
   const updateRelationshipRequest = async (id: string, status: 'acceptee' | 'refusee') => {
-    await updateDoc(doc(db, 'relationshipRequests', id), { status });
+    try {
+      await updateDoc(doc(db, 'relationshipRequests', id), { status });
+    } catch (error: any) {
+      console.error("Erreur updateRelationshipRequest:", error);
+      throw error;
+    }
   };
 
   const createServiceRequest = async (req: Omit<ServiceRequest, 'id' | 'status' | 'date'>) => {
-    await addDoc(collection(db, 'serviceRequests'), {
-      ...req,
-      status: 'en_attente',
-      date: new Date().toISOString()
-    });
+    try {
+      await addDoc(collection(db, 'serviceRequests'), {
+        ...req,
+        status: 'en_attente',
+        date: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error("Erreur createServiceRequest:", error);
+      throw error;
+    }
   };
 
   const updateServiceRequest = async (id: string, status: 'validee' | 'refusee', managerMessage?: string) => {
-    await updateDoc(doc(db, 'serviceRequests', id), { status, managerMessage });
+    try {
+      await updateDoc(doc(db, 'serviceRequests', id), { status, managerMessage });
+    } catch (error: any) {
+      console.error("Erreur updateServiceRequest:", error);
+      throw error;
+    }
   };
 
   const createConversation = async (clientId: string, establishmentId: string, clientName: string, establishmentName: string, ownerId: string) => {
