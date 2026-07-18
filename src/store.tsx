@@ -24,6 +24,7 @@ interface AppState {
   serviceRequests: ServiceRequest[];
   loading: boolean;
   globalError: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null;
+  theme: 'light' | 'dark';
 }
 
 interface AppContextType extends AppState {
@@ -53,6 +54,7 @@ interface AppContextType extends AppState {
   createConversation: (clientId: string, establishmentId: string, clientName: string, establishmentName: string, ownerId: string) => Promise<string>;
   toggleDJStatus: (requestId: string, isDJ: boolean) => Promise<void>;
   setGlobalError: (err: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null) => void;
+  toggleTheme: () => void;
 }
 
 export enum OperationType {
@@ -120,8 +122,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     relationshipRequests: [],
     serviceRequests: [],
     loading: true,
-    globalError: null
+    globalError: null,
+    theme: (localStorage.getItem('app-theme') as 'light' | 'dark') || 'light'
   });
+
+  useEffect(() => {
+    if (state.theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [state.theme]);
+
+  const toggleTheme = () => {
+    setState(s => {
+      const newTheme = s.theme === 'light' ? 'dark' : 'light';
+      localStorage.setItem('app-theme', newTheme);
+      return { ...s, theme: newTheme };
+    });
+  };
 
   const setGlobalError = (err: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null) => {
     setState(s => ({ ...s, globalError: err }));
@@ -810,7 +829,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateServiceRequest,
       createConversation,
       toggleDJStatus,
-      setGlobalError
+      setGlobalError,
+      toggleTheme
     }}>
       {children}
     </AppContext.Provider>

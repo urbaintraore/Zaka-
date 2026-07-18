@@ -1,9 +1,11 @@
 import { useAppStore } from '../store';
-import { LogOut, CheckCircle, XCircle } from 'lucide-react';
+import { LogOut, CheckCircle, XCircle, Download } from 'lucide-react';
+import { useInstallApp } from '../hooks/useInstallApp';
 
 export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const { establishments, validateEstablishment } = useAppStore();
   const pendingEsts = establishments.filter(e => e.status === 'en_attente');
+  const { isInstallable, promptInstall } = useInstallApp();
 
   return (
     <div className="p-4 max-w-3xl mx-auto pb-24">
@@ -12,9 +14,16 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
           <h2 className="text-2xl font-black text-gray-900">Administration</h2>
           <p className="text-gray-500 text-sm">Gestion de la plateforme</p>
         </div>
-        <button onClick={onLogout} className="p-2 text-gray-400 hover:text-red-500 bg-white rounded-full shadow-sm">
-          <LogOut className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {isInstallable && (
+            <button onClick={promptInstall} className="p-2 text-blue-600 hover:bg-blue-50 bg-white rounded-full shadow-sm" title="Installer l'application">
+              <Download className="w-5 h-5" />
+            </button>
+          )}
+          <button onClick={onLogout} className="p-2 text-gray-400 hover:text-red-500 bg-white rounded-full shadow-sm" title="Déconnexion">
+            <LogOut className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       <section>

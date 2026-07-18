@@ -9,17 +9,19 @@ import { ProfileView } from './views/ProfileView';
 import { MessagesView } from './views/MessagesView';
 import { AppProvider, useAppStore } from './store';
 import { Toast } from './components/Toast';
+import { BackToTop } from './components/BackToTop';
 
 function AppContent() {
   const [currentTab, setCurrentTab] = useState<Tab>('home');
   const [preselectedChatEstId, setPreselectedChatEstId] = useState<string | null>(null);
   const [preselectedChatRecipient, setPreselectedChatRecipient] = useState<'gerant' | 'dj'>('gerant');
   const [preselectedConvId, setPreselectedConvId] = useState<string | null>(null);
+
   const { currentUser, loading } = useAppStore();
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
       </div>
     );
@@ -41,7 +43,7 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50/50 font-sans text-gray-900 selection:bg-orange-100 selection:text-orange-900 pb-safe">
+    <div className="min-h-screen bg-gray-50/50 dark:bg-gray-900 font-sans text-gray-900 dark:text-gray-100 selection:bg-orange-100 selection:text-orange-900 pb-safe">
       <TopBar />
       
       <main className="w-full">
@@ -65,6 +67,7 @@ function AppContent() {
         {currentTab === 'profile' && <ProfileView onNavigate={setCurrentTab} onStartChatWithConv={handleStartChatWithConv} />}
       </main>
 
+      <BackToTop />
       <BottomNav currentTab={currentTab} onChange={setCurrentTab} />
       <Toast />
     </div>

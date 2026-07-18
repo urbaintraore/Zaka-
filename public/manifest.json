@@ -1,0 +1,16 @@
+{
+  "name": "Zaka+",
+  "short_name": "Zaka+",
+  "description": "La plateforme pour vos sorties (Maquis, Resto, Boîte de nuit).",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ea580c",
+  "icons": [
+    {
+      "src": "/logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}

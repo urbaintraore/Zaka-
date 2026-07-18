@@ -3,13 +3,15 @@ import { RichTextEditor } from '../components/RichTextEditor';
 import { ClientsAndRequests } from '../components/ClientsAndRequests';
 import { GerantAnalytics } from '../components/GerantAnalytics';
 import { useAppStore } from '../store';
-import { LogOut, Plus, Store, Eye, MousePointerClick, X, Megaphone, Calendar, Users, FileText, Image as ImageIcon, MessageSquare } from 'lucide-react';
+import { LogOut, Plus, Store, Eye, MousePointerClick, X, Megaphone, Calendar, Users, FileText, Image as ImageIcon, MessageSquare, Download } from 'lucide-react';
 import { Category, PubType } from '../types';
 import { compressImage } from '../utils/imageCompressor';
+import { useInstallApp } from '../hooks/useInstallApp';
 
 export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: { onLogout: () => void; onNavigate?: (tab: any) => void; onStartChatWithConv?: (convId: string) => void }) {
   const { currentUser, establishments, publications, unreadCount, addEstablishment, addPublication } = useAppStore();
   const myEsts = establishments.filter(e => e.ownerId === currentUser?.id);
+  const { isInstallable, promptInstall } = useInstallApp();
   
   const [isAdding, setIsAdding] = useState(false);
   
@@ -187,9 +189,16 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
           <h2 className="text-2xl font-black text-gray-900">Espace Gérant</h2>
           <p className="text-gray-500 text-sm">Bienvenue, {currentUser?.name}</p>
         </div>
-        <button onClick={onLogout} className="p-2 text-gray-400 hover:text-red-500 bg-white rounded-full shadow-sm">
-          <LogOut className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {isInstallable && (
+            <button onClick={promptInstall} className="p-2 text-blue-600 hover:bg-blue-50 bg-white rounded-full shadow-sm" title="Installer l'application">
+              <Download className="w-5 h-5" />
+            </button>
+          )}
+          <button onClick={onLogout} className="p-2 text-gray-400 hover:text-red-500 bg-white rounded-full shadow-sm" title="Déconnexion">
+            <LogOut className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-8">

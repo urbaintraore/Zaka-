@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
 import { Role, Category } from '../types';
-import { LogOut, User, Check, X, MessageSquare, Store, Sparkles, Calendar } from 'lucide-react';
+import { LogOut, User, Check, X, MessageSquare, Store, Sparkles, Calendar, Download } from 'lucide-react';
 import { GerantDashboard } from './GerantDashboard';
 import { AdminDashboard } from './AdminDashboard';
+import { useInstallApp } from '../hooks/useInstallApp';
 
 interface ProfileViewProps {
   onNavigate?: (tab: any) => void;
@@ -23,8 +24,11 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
     establishments,
     serviceRequests,
     updateRelationshipRequest,
-    createConversation
+    createConversation,
+    theme,
+    toggleTheme
   } = useAppStore();
+  const { isInstallable, promptInstall } = useInstallApp();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [role, setRole] = useState<Role>('client');
   const [isUpgrading, setIsUpgrading] = useState(false);
@@ -187,6 +191,15 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
           </div>
 
           <div className="mt-8 w-full flex flex-col gap-3">
+            {isInstallable && (
+              <button onClick={promptInstall} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 text-blue-600 font-bold rounded-xl hover:bg-blue-100 transition-colors cursor-pointer">
+                <Download className="w-5 h-5" />
+                Installer l'application
+              </button>
+            )}
+            <button onClick={toggleTheme} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer">
+              {theme === 'dark' ? '☀️ Mode Clair' : '🌙 Mode Sombre'}
+            </button>
             <button onClick={() => setIsUpgrading(true)} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-50 text-orange-600 font-bold rounded-xl hover:bg-orange-100 transition-colors cursor-pointer">
               Devenir Gérant (Ajouter un établissement)
             </button>
