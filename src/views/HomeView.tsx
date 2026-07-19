@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../store';
-import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart } from 'lucide-react';
+import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight } from 'lucide-react';
 import { stripHtml } from '../utils/htmlHelpers';
 import { ReservationModal } from '../components/ReservationModal';
 import { Publication } from '../types';
@@ -14,6 +14,13 @@ export function HomeView({ onStartChat }: HomeViewProps) {
   const [reservationEst, setReservationEst] = useState<{ id: string, name: string } | null>(null);
   const [selectedPub, setSelectedPub] = useState<Publication | null>(null);
   const [filterMemberOnly, setFilterMemberOnly] = useState(false);
+  
+  // Calendar state
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+  // Pre-select today's date format (YYYY-MM-DD)
+  const getTodayStr = () => new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState<string | null>(getTodayStr());
 
   const handleReservationSubmit = (data: { reservationType: string, date: string, time: string, guests: number, details: string }) => {
     if (!currentUser || !reservationEst) return;
@@ -49,6 +56,79 @@ export function HomeView({ onStartChat }: HomeViewProps) {
   const filteredEstablishments = filterMemberOnly
     ? establishments.filter(e => joinedEstIds.includes(e.id))
     : topEstablishments;
+
+  // Calendar helpers
+  const MONTHS_FR = [
+    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+  ];
+
+  const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    // getDay() is 0 for Sunday, 1 for Monday, etc. Adjust to make Monday 0 and Sunday 6
+    const day = new Date(year, month, 1).getDay();
+    return day === 0 ? 6 : day - 1;
+  };
+
+  const daysInMonth = getDaysInMonth(currentMonth);
+  const firstDayIndex = getFirstDayOfMonth(currentMonth);
+
+  const calendarDays: (number | null)[] = [];
+  // Offset empty slots
+  for (let i = 0; i < firstDayIndex; i++) {
+    calendarDays.push(null);
+  }
+  // Days slots
+  for (let i = 1; i <= daysInMonth; i++) {
+    calendarDays.push(i);
+  }
+
+  const formatDateKey = (day: number) => {
+    const year = currentMonth.getFullYear();
+    const month = String(currentMonth.getMonth() + 1).padStart(2, '0');
+    const dayStr = String(day).padStart(2, '0');
+    return `${year}-${month}-${dayStr}`;
+  };
+
+  const isTodayDate = (day: number) => {
+    const today = new Date();
+    return today.getDate() === day &&
+      today.getMonth() === currentMonth.getMonth() &&
+      today.getFullYear() === currentMonth.getFullYear();
+  };
+
+  // Check if a date has events
+  const getEventsForDate = (dateStr: string) => {
+    return events.filter(e => {
+      if (!e.startDate) return false;
+      const start = e.startDate.split('T')[0];
+      const end = e.endDate ? e.endDate.split('T')[0] : start;
+      return dateStr >= start && dateStr <= end;
+    });
+  };
+
+  // Navigate calendar months
+  const prevMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+  };
+
+  const nextMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+  };
+
+  // Get active events based on calendar date filter if in calendar mode
+  const displayedEvents = viewMode === 'calendar' && selectedDate
+    ? getEventsForDate(selectedDate)
+    : events;
 
   return (
     <div className="flex flex-col gap-8 pb-24 max-w-3xl mx-auto">
@@ -114,38 +194,178 @@ export function HomeView({ onStartChat }: HomeViewProps) {
             </p>
           </div>
         )}
+
+        {/* Section Événements ("À la une") */}
         {events.length > 0 && (
-          <section>
-            <div className="flex items-center justify-between mb-4">
+          <section className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
+            <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">
                 <Flame className="w-6 h-6 text-orange-500" />
                 <h2 className="text-xl font-black text-gray-900 tracking-tight">À la une</h2>
               </div>
+
+              {/* Toggle Vue Liste vs Calendrier */}
+              <div className="flex bg-gray-100 p-1 rounded-xl">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${viewMode === 'list' ? 'bg-white text-orange-600 shadow-xs' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Liste
+                </button>
+                <button
+                  onClick={() => setViewMode('calendar')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${viewMode === 'calendar' ? 'bg-white text-orange-600 shadow-xs' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  Calendrier
+                </button>
+              </div>
             </div>
-            <div className="flex gap-4 overflow-x-auto pb-4 snap-x hide-scrollbar -mx-4 px-4">
-              {events.map(event => {
-                const est = getEst(event.establishmentId);
-                const imageUrl = event.imageUrl || 'https://images.unsplash.com/photo-1470229722913-7c090be5c520?auto=format&fit=crop&q=80&w=800';
-                return (
-                  <div key={event.id} onClick={() => setSelectedPub(event)} className="min-w-[280px] w-[280px] snap-start bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden group cursor-pointer hover:shadow-md hover:border-gray-200 transition-all">
-                    <div className="h-48 bg-gray-200 relative overflow-hidden">
-                      <img src={imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-                      <div className="absolute top-3 left-3 bg-red-500 text-white text-[10px] uppercase tracking-wider font-black px-3 py-1.5 rounded-lg shadow-sm">
-                        Événement
-                      </div>
-                      <div className="absolute bottom-3 left-4 right-4 text-white">
-                        <h3 className="font-bold text-lg leading-tight line-clamp-2">{event.title}</h3>
-                        <div className="flex items-center gap-1.5 text-xs text-gray-300 mt-1.5">
-                          <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-                          <span className="truncate font-medium">{est?.name} • {est?.neighborhood}</span>
+
+            {/* VUE CALENDRIER INTERACTIVE */}
+            {viewMode === 'calendar' && (
+              <div className="mb-6 animate-in fade-in duration-200">
+                {/* Calendrier Widget */}
+                <div className="border border-orange-100 rounded-2xl bg-orange-50/25 p-4 mb-4">
+                  {/* Calendar Header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <button onClick={prevMonth} className="p-1.5 hover:bg-orange-100 rounded-lg text-orange-600 transition-colors">
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <span className="font-extrabold text-sm text-gray-800 uppercase tracking-wide">
+                      {MONTHS_FR[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+                    </span>
+                    <button onClick={nextMonth} className="p-1.5 hover:bg-orange-100 rounded-lg text-orange-600 transition-colors">
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Week days Header */}
+                  <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                    {WEEKDAYS.map(day => (
+                      <span key={day} className="text-[10px] font-black text-orange-600/70 uppercase">
+                        {day}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Days Grid */}
+                  <div className="grid grid-cols-7 gap-1 text-center">
+                    {calendarDays.map((day, idx) => {
+                      if (day === null) {
+                        return <div key={`empty-${idx}`} />;
+                      }
+
+                      const dateKey = formatDateKey(day);
+                      const isSelected = selectedDate === dateKey;
+                      const hasEvents = getEventsForDate(dateKey).length > 0;
+                      const isToday = isTodayDate(day);
+
+                      return (
+                        <button
+                          key={`day-${day}`}
+                          onClick={() => setSelectedDate(dateKey)}
+                          className={`h-9 w-9 mx-auto rounded-xl flex flex-col items-center justify-center relative cursor-pointer font-bold text-xs transition-all active:scale-95 ${
+                            isSelected 
+                              ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20' 
+                              : isToday
+                              ? 'bg-orange-100 text-orange-800 border border-orange-300'
+                              : 'hover:bg-orange-50 text-gray-700'
+                          }`}
+                        >
+                          <span>{day}</span>
+                          {hasEvents && (
+                            <span className={`absolute bottom-1 w-1.5 h-1.5 rounded-full ${
+                              isSelected ? 'bg-white' : 'bg-orange-500 animate-pulse'
+                            }`} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Filter Date details */}
+                {selectedDate && (
+                  <div className="flex items-center justify-between bg-orange-50 border border-orange-100 rounded-xl px-4 py-2 text-xs font-black text-orange-800 mb-4">
+                    <span>
+                      🗓️ Événements du {new Date(selectedDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </span>
+                    <button 
+                      onClick={() => setSelectedDate(null)}
+                      className="text-[10px] bg-white border border-orange-200 text-orange-600 font-bold px-2.5 py-1 rounded-lg hover:bg-orange-50 transition-colors"
+                    >
+                      Tout afficher
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* RENDER EVENT LIST (CALENDRIER FILTRÉ OU LISTE HORIZONTALE COMPLÈTE) */}
+            {viewMode === 'list' ? (
+              <div className="flex gap-4 overflow-x-auto pb-4 snap-x hide-scrollbar -mx-4 px-4">
+                {displayedEvents.map(event => {
+                  const est = getEst(event.establishmentId);
+                  const imageUrl = event.imageUrl || 'https://images.unsplash.com/photo-1470229722913-7c090be5c520?auto=format&fit=crop&q=80&w=800';
+                  return (
+                    <div key={event.id} onClick={() => setSelectedPub(event)} className="min-w-[280px] w-[280px] snap-start bg-white rounded-3xl shadow-xs border border-gray-100 overflow-hidden group cursor-pointer hover:shadow-md hover:border-gray-200 transition-all">
+                      <div className="h-48 bg-gray-200 relative overflow-hidden">
+                        <img src={imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+                        <div className="absolute top-3 left-3 bg-red-500 text-white text-[10px] uppercase tracking-wider font-black px-3 py-1.5 rounded-lg shadow-xs">
+                          Événement
+                        </div>
+                        <div className="absolute bottom-3 left-4 right-4 text-white">
+                          <h3 className="font-bold text-lg leading-tight line-clamp-2">{event.title}</h3>
+                          <div className="flex items-center gap-1.5 text-xs text-gray-300 mt-1.5">
+                            <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span className="truncate font-medium">{est?.name} • {est?.neighborhood}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
+            ) : (
+              // GRID VIEW FOR FILTERED CALENDAR EVENTS
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {displayedEvents.length === 0 ? (
+                  <div className="col-span-full py-8 text-center bg-gray-50 rounded-2xl border border-gray-100">
+                    <Calendar className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <h4 className="text-xs font-bold text-gray-800">Aucun événement prévu</h4>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Aucun événement n'est programmé pour cette date.</p>
                   </div>
-                );
-              })}
-            </div>
+                ) : (
+                  displayedEvents.map(event => {
+                    const est = getEst(event.establishmentId);
+                    const imageUrl = event.imageUrl || 'https://images.unsplash.com/photo-1470229722913-7c090be5c520?auto=format&fit=crop&q=80&w=800';
+                    return (
+                      <div key={event.id} onClick={() => setSelectedPub(event)} className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden group cursor-pointer hover:shadow-md hover:border-gray-200 transition-all flex flex-col">
+                        <div className="h-36 bg-gray-200 relative overflow-hidden flex-shrink-0">
+                          <img src={imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+                          <div className="absolute top-2.5 left-2.5 bg-red-500 text-white text-[9px] uppercase tracking-wider font-black px-2 py-1 rounded-md shadow-xs">
+                            Événement
+                          </div>
+                        </div>
+                        <div className="p-3 flex-1 flex flex-col justify-between">
+                          <div>
+                            <h3 className="font-extrabold text-sm text-gray-900 leading-tight line-clamp-2 mb-1">{event.title}</h3>
+                            <span className="text-[10px] text-orange-600 font-extrabold">{est?.name}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[10px] text-gray-400 mt-2 font-medium">
+                            <MapPin className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{est?.neighborhood}, {est?.city}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </section>
         )}
 

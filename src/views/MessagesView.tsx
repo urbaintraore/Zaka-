@@ -5,6 +5,7 @@ import { collection, query, where, onSnapshot, addDoc, updateDoc, setDoc, doc, o
 import { MessageSquare, Send, Paperclip, ChevronLeft, Calendar, FileText, Download, Loader2, X, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { compressImage } from '../utils/imageCompressor';
+import { triggerHapticFeedback } from '../utils/haptics';
 
 interface Message {
   id: string;
@@ -256,6 +257,9 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
     if (e) e.preventDefault();
     if (!currentUser || !activeConv) return;
     if (!inputText.trim() && !attachedFile) return;
+
+    // Trigger vibration feedback for sending messages
+    triggerHapticFeedback(50);
 
     setIsSending(true);
     setErrorMsg(null);

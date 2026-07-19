@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role } from './types';
+import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
 import { 
   signInWithEmailAndPassword, 
@@ -19,6 +20,7 @@ interface AppState {
   publications: Publication[];
   reviews: Review[];
   favorites: Record<string, string[]>;
+  favoriteTags: Record<string, Record<string, string[]>>;
   applications: Application[];
   relationshipRequests: RelationshipRequest[];
   serviceRequests: ServiceRequest[];
@@ -45,6 +47,7 @@ interface AppContextType extends AppState {
   addEstablishment: (est: Omit<Establishment, 'id' | 'status' | 'averageRating'>) => Promise<void>;
   addPublication: (pub: Omit<Publication, 'id' | 'views' | 'clicks' | 'createdAt'>) => Promise<void>;
   toggleFavorite: (clientId: string, establishmentId: string) => Promise<void>;
+  updateFavoriteTags: (clientId: string, establishmentId: string, tags: string[]) => Promise<void>;
   validateEstablishment: (id: string) => Promise<void>;
   upgradeToGerant: (estData: Partial<Establishment>) => Promise<void>;
   createRelationshipRequest: (req: Omit<RelationshipRequest, 'id' | 'status' | 'date'>) => Promise<void>;
@@ -118,6 +121,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     publications: [],
     reviews: [],
     favorites: {},
+    favoriteTags: {},
     applications: [],
     relationshipRequests: [],
     serviceRequests: [],
@@ -383,11 +387,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (docSnap.exists()) {
         const data = docSnap.data();
         const establishmentIds = data?.establishmentIds || [];
+        const tags = data?.tags || {};
         setState(s => ({
           ...s,
           favorites: {
             ...s.favorites,
             [state.currentUser!.id]: establishmentIds
+          },
+          favoriteTags: {
+            ...s.favoriteTags,
+            [state.currentUser!.id]: tags
           }
         }));
       } else {
@@ -396,6 +405,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           favorites: {
             ...s.favorites,
             [state.currentUser!.id]: []
+          },
+          favoriteTags: {
+            ...s.favoriteTags,
+            [state.currentUser!.id]: {}
           }
         }));
       }
@@ -706,22 +719,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleFavorite = async (clientId: string, establishmentId: string) => {
     try {
+      // Trigger haptic feedback vibration for tactile feedback
+      triggerHapticFeedback(60);
+      
       const userFavs = state.favorites[clientId] || [];
+      const userTags = state.favoriteTags[clientId] || {};
       const isFav = userFavs.includes(establishmentId);
       const updatedFavs = isFav 
         ? userFavs.filter(id => id !== establishmentId)
         : [...userFavs, establishmentId];
+
+      const updatedTags = { ...userTags };
+      if (isFav) {
+        delete updatedTags[establishmentId];
+      }
 
       setState(s => ({
         ...s,
         favorites: {
           ...s.favorites,
           [clientId]: updatedFavs
+        },
+        favoriteTags: {
+          ...s.favoriteTags,
+          [clientId]: updatedTags
         }
       }));
 
       await setDoc(doc(db, 'favorites', clientId), {
-        establishmentIds: updatedFavs
+        establishmentIds: updatedFavs,
+        tags: updatedTags
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `favorites/${clientId}`);
+    }
+  };
+
+  const updateFavoriteTags = async (clientId: string, establishmentId: string, tags: string[]) => {
+    try {
+      const userFavs = state.favorites[clientId] || [];
+      const userTags = state.favoriteTags[clientId] || {};
+      
+      const updatedTags = {
+        ...userTags,
+        [establishmentId]: tags
+      };
+
+      setState(s => ({
+        ...s,
+        favoriteTags: {
+          ...s.favoriteTags,
+          [clientId]: updatedTags
+        }
+      }));
+
+      await setDoc(doc(db, 'favorites', clientId), {
+        establishmentIds: userFavs,
+        tags: updatedTags
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `favorites/${clientId}`);
@@ -863,6 +917,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addEstablishment,
       addPublication,
       toggleFavorite,
+      updateFavoriteTags,
       validateEstablishment,
       upgradeToGerant,
       createRelationshipRequest,

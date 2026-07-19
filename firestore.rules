@@ -98,7 +98,8 @@ service cloud.firestore {
     function isValidFavorites(data) {
       return data.keys().hasAll(['establishmentIds'])
         && data.establishmentIds is list
-        && data.establishmentIds.size() <= 100;
+        && data.establishmentIds.size() <= 100
+        && (data.get('tags', {}) is map);
     }
 
     match /users/{userId} {
