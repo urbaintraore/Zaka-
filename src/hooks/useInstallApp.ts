@@ -1,54 +1,42 @@
 import { useState, useEffect } from 'react';
 
-interface BeforeInstallPromptEvent extends Event {
-  readonly platforms: string[];
-  readonly userChoice: Promise<{
-    outcome: 'accepted' | 'dismissed';
-    platform: string;
-  }>;
-  prompt(): Promise<void>;
-}
-
-let deferredPrompt: BeforeInstallPromptEvent | null = null;
-let isInstallableGlobal = false;
-const listeners = new Set<(isInstallable: boolean) => void>();
-
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e as BeforeInstallPromptEvent;
-  isInstallableGlobal = true;
-  listeners.forEach(listener => listener(true));
-});
-
-window.addEventListener('appinstalled', () => {
-  deferredPrompt = null;
-  isInstallableGlobal = false;
-  listeners.forEach(listener => listener(false));
-});
-
 export function useInstallApp() {
-  const [isInstallable, setIsInstallable] = useState(isInstallableGlobal);
+  const [isInstallable, setIsInstallable] = useState(false);
 
   useEffect(() => {
-    const listener = (val: boolean) => setIsInstallable(val);
-    listeners.add(listener);
+    const checkInstallable = () => {
+      if ((window as any).deferredPWAInstallPrompt) {
+        setIsInstallable(true);
+      } else {
+        setIsInstallable(false);
+      }
+    };
+
+    // Initial check
+    checkInstallable();
+
+    // Listeners for events fired by index.html script
+    window.addEventListener('pwa-installable', checkInstallable);
+    window.addEventListener('pwa-installed', checkInstallable);
+
     return () => {
-      listeners.delete(listener);
+      window.removeEventListener('pwa-installable', checkInstallable);
+      window.removeEventListener('pwa-installed', checkInstallable);
     };
   }, []);
 
   const promptInstall = async () => {
-    if (!deferredPrompt) {
+    const promptEvent = (window as any).deferredPWAInstallPrompt;
+    if (!promptEvent) {
       console.log('No deferred prompt available');
       return;
     }
     try {
-      await deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
+      await promptEvent.prompt();
+      const { outcome } = await promptEvent.userChoice;
       console.log(`User interaction outcome: ${outcome}`);
       if (outcome === 'accepted') {
-        deferredPrompt = null;
-        isInstallableGlobal = false;
+        (window as any).deferredPWAInstallPrompt = null;
         setIsInstallable(false);
       }
     } catch (error) {

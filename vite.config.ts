@@ -12,11 +12,10 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'autoUpdate',
         injectRegister: 'auto',
-        includeAssets: ['logo.jpg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
+        includeAssets: ['logo.jpg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'maskable-icon-192.png', 'maskable-icon-512.png'],
         manifest: {
           name: "Zaka+",
           short_name: "Zaka+",
-          id: "/",
           description: "La plateforme pour vos sorties (Maquis, Resto, Boîte de nuit).",
           start_url: "/",
           scope: "/",
@@ -29,13 +28,25 @@ export default defineConfig(() => {
               src: "/icon-192.png",
               sizes: "192x192",
               type: "image/png",
-              purpose: "any maskable"
+              purpose: "any"
+            },
+            {
+              src: "/maskable-icon-192.png",
+              sizes: "192x192",
+              type: "image/png",
+              purpose: "maskable"
             },
             {
               src: "/icon-512.png",
               sizes: "512x512",
               type: "image/png",
-              purpose: "any maskable"
+              purpose: "any"
+            },
+            {
+              src: "/maskable-icon-512.png",
+              sizes: "512x512",
+              type: "image/png",
+              purpose: "maskable"
             }
           ]
         },
