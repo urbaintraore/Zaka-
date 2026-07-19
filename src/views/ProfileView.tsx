@@ -432,6 +432,23 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                     Installer l'application
                   </button>
                 )}
+                {/* For iOS users who cannot use standard beforeinstallprompt but are on mobile and not standalone */}
+                {(!isInstallable && 
+                  typeof window !== 'undefined' && 
+                  !window.matchMedia('(display-mode: standalone)').matches && 
+                  /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase())
+                ) && (
+                  <div className="bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/40 rounded-xl p-4 text-xs text-gray-700 dark:text-gray-300 flex flex-col gap-2">
+                    <p className="font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                      <Download className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                      Comment installer Zaka+ sur iPhone :
+                    </p>
+                    <ol className="list-decimal list-inside flex flex-col gap-1.5 text-gray-600 dark:text-gray-400">
+                      <li>Appuyez sur le bouton de <strong>Partage</strong> de Safari en bas de l'écran.</li>
+                      <li>Faites défiler vers le bas et sélectionnez <strong>« Sur l'écran d'accueil »</strong>.</li>
+                    </ol>
+                  </div>
+                )}
                 <button onClick={toggleTheme} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer">
                   {theme === 'dark' ? '☀️ Mode Clair' : '🌙 Mode Sombre'}
                 </button>

@@ -10,6 +10,7 @@ import { MessagesView } from './views/MessagesView';
 import { AppProvider, useAppStore } from './store';
 import { Toast } from './components/Toast';
 import { BackToTop } from './components/BackToTop';
+import { InstallPrompt } from './components/InstallPrompt';
 
 function AppContent() {
   const [currentTab, setCurrentTab] = useState<Tab>('home');
@@ -69,6 +70,7 @@ function AppContent() {
 
       <BackToTop />
       <BottomNav currentTab={currentTab} onChange={setCurrentTab} />
+      <InstallPrompt />
       <Toast />
     </div>
   );
