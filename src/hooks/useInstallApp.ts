@@ -38,13 +38,21 @@ export function useInstallApp() {
   }, []);
 
   const promptInstall = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      deferredPrompt = null;
-      isInstallableGlobal = false;
-      setIsInstallable(false);
+    if (!deferredPrompt) {
+      console.log('No deferred prompt available');
+      return;
+    }
+    try {
+      await deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`User interaction outcome: ${outcome}`);
+      if (outcome === 'accepted') {
+        deferredPrompt = null;
+        isInstallableGlobal = false;
+        setIsInstallable(false);
+      }
+    } catch (error) {
+      console.error('Error prompting install:', error);
     }
   };
 
