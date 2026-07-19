@@ -32,7 +32,7 @@ export function TopBar() {
       <header className="sticky top-0 z-40 bg-white border-b border-orange-100 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-orange-600">
           <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shadow-sm">
-            <img src="/logo.jpg" alt="Zaka+ Logo" className="w-full h-full object-cover" />
+            <img src="/logo.jpg?v=3" alt="Zaka+ Logo" className="w-full h-full object-cover" />
           </div>
           <h1 className="font-extrabold text-xl tracking-tight">Zaka+</h1>
         </div>
