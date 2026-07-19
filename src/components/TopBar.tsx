@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { MapPin, Bell, LogOut } from 'lucide-react';
 import { useAppStore } from '../store';
 import { NotificationsModal } from './NotificationsModal';
-import logoImg from '../assets/images/zaka_app_logo_1784396233117.jpg';
+import logoImg from '../assets/images/zaka_black_z_logo_1784458806560.jpg';
 
 export function TopBar() {
   const { currentUser, logout, serviceRequests, relationshipRequests, establishments } = useAppStore();
