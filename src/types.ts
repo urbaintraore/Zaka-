@@ -44,6 +44,8 @@ export interface Publication {
   views: number;
   clicks: number;
   createdAt: string;
+  whatsapp?: string;
+  applyEmail?: string;
 }
 
 export interface Review {
@@ -58,7 +60,11 @@ export interface Review {
 export interface Application {
   id: string;
   clientId: string;
+  clientName: string;
   publicationId: string;
+  publicationTitle: string;
+  establishmentId: string;
+  establishmentName: string;
   message: string;
   status: 'en_attente' | 'acceptee' | 'refusee';
   date: string;

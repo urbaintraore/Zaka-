@@ -9,7 +9,17 @@ import { compressImage } from '../utils/imageCompressor';
 import { useInstallApp } from '../hooks/useInstallApp';
 
 export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: { onLogout: () => void; onNavigate?: (tab: any) => void; onStartChatWithConv?: (convId: string) => void }) {
-  const { currentUser, establishments, publications, unreadCount, addEstablishment, addPublication } = useAppStore();
+  const { 
+    currentUser, 
+    establishments, 
+    publications, 
+    unreadCount, 
+    addEstablishment, 
+    addPublication,
+    applications,
+    updateApplicationStatus,
+    createConversation
+  } = useAppStore();
   const myEsts = establishments.filter(e => e.ownerId === currentUser?.id);
   const { isInstallable, promptInstall } = useInstallApp();
   
@@ -31,6 +41,8 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
   const [pubImage, setPubImage] = useState('');
   const [pubStartDate, setPubStartDate] = useState('');
   const [pubEndDate, setPubEndDate] = useState('');
+  const [pubWhatsApp, setPubWhatsApp] = useState('');
+  const [pubApplyEmail, setPubApplyEmail] = useState('');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isSubmittingPub, setIsSubmittingPub] = useState(false);
   const [pubError, setPubError] = useState<string | null>(null);
@@ -91,7 +103,9 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
         imageUrl: pubImage || undefined,
         startDate: pubStartDate || undefined,
         endDate: pubEndDate || undefined,
-        status: 'active'
+        status: 'active',
+        whatsapp: pubModalType === 'recrutement' ? (pubWhatsApp || undefined) : undefined,
+        applyEmail: pubModalType === 'recrutement' ? (pubApplyEmail || undefined) : undefined
       });
       closePubModal();
     } catch(err: any) {
@@ -110,6 +124,8 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
     setPubImage('');
     setPubStartDate('');
     setPubEndDate('');
+    setPubWhatsApp('');
+    setPubApplyEmail('');
     setPubError(null);
   };
 
@@ -307,6 +323,86 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
                 <div className="mt-4">
                   <GerantAnalytics establishmentId={est.id} />
                   <ClientsAndRequests establishmentId={est.id} onNavigate={onNavigate} onStartChatWithConv={onStartChatWithConv} />
+                  
+                  {applications.filter(a => a.establishmentId === est.id).length > 0 && (
+                    <div id={`applications-section-${est.id}`} className="mt-6 border-t border-gray-100 pt-4 animate-in fade-in duration-250">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Users className="w-4 h-4 text-orange-500" />
+                        <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Candidatures reçues ({applications.filter(a => a.establishmentId === est.id).length})</h5>
+                      </div>
+                      <div className="flex flex-col gap-3">
+                        {applications.filter(a => a.establishmentId === est.id).map(app => (
+                          <div key={app.id} id={`app-card-${app.id}`} className="p-4 bg-gray-50 border border-gray-100/50 rounded-xl flex flex-col gap-3">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <div className="font-bold text-gray-900 text-sm">{app.clientName}</div>
+                                <div className="text-[10px] font-bold text-orange-600 uppercase mt-0.5">{app.publicationTitle}</div>
+                              </div>
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider ${
+                                app.status === 'acceptee'
+                                  ? 'bg-green-100 text-green-700 border border-green-200/50'
+                                  : app.status === 'refusee'
+                                  ? 'bg-red-100 text-red-700 border border-red-200/50'
+                                  : 'bg-yellow-100 text-yellow-700 border border-yellow-200/50'
+                              }`}>
+                                {app.status === 'acceptee' ? 'Acceptée' : app.status === 'refusee' ? 'Refusée' : 'En attente'}
+                              </span>
+                            </div>
+
+                            {app.message && (
+                              <p className="text-xs text-gray-600 bg-white p-3 rounded-lg border border-gray-100/50 italic leading-relaxed">
+                                "{app.message}"
+                              </p>
+                            )}
+
+                            <div className="text-[10px] text-gray-400 font-medium">
+                              Reçue le {new Date(app.createdAt).toLocaleDateString('fr-FR')} à {new Date(app.createdAt).toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})}
+                            </div>
+
+                            <div className="flex gap-2">
+                              {app.status === 'en_attente' && (
+                                <>
+                                  <button
+                                    id={`app-accept-${app.id}`}
+                                    onClick={() => updateApplicationStatus(app.id, 'acceptee')}
+                                    className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg active:scale-95 transition-all cursor-pointer"
+                                  >
+                                    Accepter
+                                  </button>
+                                  <button
+                                    id={`app-reject-${app.id}`}
+                                    onClick={() => updateApplicationStatus(app.id, 'refusee')}
+                                    className="flex-1 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-[10px] uppercase tracking-wider rounded-lg active:scale-95 transition-all cursor-pointer"
+                                  >
+                                    Refuser
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                id={`app-contact-${app.id}`}
+                                onClick={async () => {
+                                  try {
+                                    const convId = await createConversation(app.clientId, est.id, app.clientName, est.name, currentUser!.id);
+                                    if (onStartChatWithConv) {
+                                      onStartChatWithConv(convId);
+                                    } else if (onNavigate) {
+                                      onNavigate('messages');
+                                    }
+                                  } catch (err) {
+                                    console.error("Error creating convo with candidate:", err);
+                                  }
+                                }}
+                                className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-[10px] uppercase tracking-wider rounded-lg active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5" />
+                                Contacter
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -368,6 +464,19 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
                   </label>
                 )}
               </div>
+
+              {pubModalType === 'recrutement' && (
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Numéro WhatsApp de contact (optionnel)</label>
+                    <input type="tel" placeholder="Ex: +22670000000" value={pubWhatsApp} onChange={e => setPubWhatsApp(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium text-sm" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">E-mail pour postuler (optionnel)</label>
+                    <input type="email" placeholder="Ex: rh@etablissement.com" value={pubApplyEmail} onChange={e => setPubApplyEmail(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium text-sm" />
+                  </div>
+                </div>
+              )}
 
               {(pubModalType === 'promo' || pubModalType === 'evenement') && (
                 <div className="grid grid-cols-2 gap-3">

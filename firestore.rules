@@ -67,8 +67,23 @@ service cloud.firestore {
         && (data.get('imageUrl', '') is string && data.get('imageUrl', '').size() <= 1048576)
         && (data.get('startDate', '') is string && data.get('startDate', '').size() <= 50)
         && (data.get('endDate', '') is string && data.get('endDate', '').size() <= 50)
+        && (data.get('whatsapp', '') is string && data.get('whatsapp', '').size() <= 50)
+        && (data.get('applyEmail', '') is string && data.get('applyEmail', '').size() <= 100)
         && (data.get('views', 0) is number)
         && (data.get('clicks', 0) is number);
+    }
+
+    function isValidApplication(data) {
+      return data.keys().hasAll(['clientId', 'clientName', 'publicationId', 'publicationTitle', 'establishmentId', 'establishmentName', 'message', 'status', 'createdAt'])
+        && data.clientId is string && data.clientId.size() > 0 && data.clientId.size() <= 128
+        && data.clientName is string && data.clientName.size() > 0 && data.clientName.size() <= 200
+        && data.publicationId is string && data.publicationId.size() > 0 && data.publicationId.size() <= 128
+        && data.publicationTitle is string && data.publicationTitle.size() > 0 && data.publicationTitle.size() <= 200
+        && data.establishmentId is string && data.establishmentId.size() > 0 && data.establishmentId.size() <= 128
+        && data.establishmentName is string && data.establishmentName.size() > 0 && data.establishmentName.size() <= 200
+        && data.message is string && data.message.size() <= 2000
+        && data.status in ['en_attente', 'acceptee', 'refusee']
+        && data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 50;
     }
 
     function isValidConversation(data) {
@@ -126,6 +141,21 @@ service cloud.firestore {
       allow update: if isSignedIn() && isValidPublication(incoming()) && get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid && incoming().establishmentId == existing().establishmentId
         || isUserAdmin();
       allow delete: if isSignedIn() && get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid || isUserAdmin();
+    }
+
+    match /applications/{appId} {
+      allow read: if isSignedIn() && (
+        resource.data.clientId == request.auth.uid 
+        || get(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)).data.ownerId == request.auth.uid
+        || isUserAdmin()
+      );
+      allow create: if isSignedIn() && isValidApplication(incoming()) && incoming().clientId == request.auth.uid;
+      allow update: if isSignedIn() && isValidApplication(incoming()) 
+        && get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid 
+        && incoming().clientId == existing().clientId 
+        && incoming().publicationId == existing().publicationId
+        || isUserAdmin();
+      allow delete: if isUserAdmin();
     }
 
     match /conversations/{convId} {

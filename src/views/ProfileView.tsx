@@ -18,6 +18,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
     register, 
     logout, 
     upgradeToGerant, 
+    updateProfile,
     envoyerCodeOtp, 
     confirmerCodeOtp,
     relationshipRequests,
@@ -26,12 +27,64 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
     updateRelationshipRequest,
     createConversation,
     theme,
-    toggleTheme
+    toggleTheme,
+    applications
   } = useAppStore();
   const { isInstallable, promptInstall } = useInstallApp();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [role, setRole] = useState<Role>('client');
   const [isUpgrading, setIsUpgrading] = useState(false);
+  const [subView, setSubView] = useState<'dashboard' | 'profile'>('dashboard');
+
+  // Profile editing state
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editCountry, setEditCountry] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editError, setEditError] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const startEditing = () => {
+    setEditName(currentUser?.name || '');
+    setEditCity(currentUser?.city || '');
+    setEditCountry(currentUser?.country || '');
+    setEditEmail(currentUser?.email || '');
+    setEditPhone(currentUser?.phone || '');
+    setEditError('');
+    setIsEditingProfile(true);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditError('');
+    setIsSavingProfile(true);
+    try {
+      if (!editName.trim()) {
+        throw new Error("Le nom complet est obligatoire.");
+      }
+      if (!editCity.trim()) {
+        throw new Error("La ville est obligatoire.");
+      }
+      if (!editCountry.trim()) {
+        throw new Error("Le pays est obligatoire.");
+      }
+      await updateProfile({
+        name: editName,
+        city: editCity,
+        country: editCountry,
+        email: editEmail,
+        phone: editPhone
+      });
+      setIsEditingProfile(false);
+    } catch (err: any) {
+      console.error("Erreur lors de la mise à jour du profil :", err);
+      setEditError(err.message || 'Une erreur est survenue lors de la mise à jour du profil.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
   
   // Auth configuration fields
   const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
@@ -82,8 +135,182 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   };
 
   if (currentUser) {
-    if (currentUser.role === 'admin') return <AdminDashboard onLogout={logout} />;
-    if (currentUser.role === 'gerant') return <GerantDashboard onLogout={logout} onNavigate={onNavigate} onStartChatWithConv={onStartChatWithConv} />;
+    if (currentUser.role === 'admin' || currentUser.role === 'gerant') {
+      return (
+        <div className="pb-24">
+          {/* Sub Navigation for Dashboard/Profile */}
+          <div className="bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm">
+            <div className="max-w-md mx-auto px-4 flex">
+              <button 
+                onClick={() => {
+                  setSubView('dashboard');
+                  setIsEditingProfile(false);
+                }}
+                className={`flex-1 py-4 text-center font-bold text-sm border-b-2 transition-all ${subView === 'dashboard' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+              >
+                {currentUser.role === 'gerant' ? 'Espace Gérant' : 'Administration'}
+              </button>
+              <button 
+                onClick={() => {
+                  setSubView('profile');
+                  setEditName(currentUser.name || '');
+                  setEditCity(currentUser.city || '');
+                  setEditCountry(currentUser.country || '');
+                  setEditEmail(currentUser.email || '');
+                  setEditPhone(currentUser.phone || '');
+                  setEditError('');
+                  setIsEditingProfile(false);
+                }}
+                className={`flex-1 py-4 text-center font-bold text-sm border-b-2 transition-all ${subView === 'profile' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+              >
+                Mon Profil
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            {subView === 'dashboard' ? (
+              currentUser.role === 'admin' ? (
+                <AdminDashboard onLogout={logout} />
+              ) : (
+                <GerantDashboard onLogout={logout} onNavigate={onNavigate} onStartChatWithConv={onStartChatWithConv} />
+              )
+            ) : (
+              <div className="p-4 max-w-lg mx-auto flex flex-col gap-6">
+                {/* Profile Card */}
+                <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 flex flex-col">
+                  {!isEditingProfile ? (
+                    <div className="flex flex-col items-center">
+                      <div className="w-24 h-24 bg-orange-100 rounded-full flex items-center justify-center mb-5">
+                        <User className="w-12 h-12 text-orange-500" />
+                      </div>
+                      <h2 className="text-2xl font-black text-gray-900">{currentUser.name}</h2>
+                      <p className="text-gray-500 font-medium">{currentUser.email || currentUser.phone}</p>
+                      <p className="text-gray-400 text-sm mt-1">{currentUser.city}, {currentUser.country}</p>
+                      <div className="mt-4 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold uppercase tracking-wider">
+                        Compte {currentUser.role === 'gerant' ? 'Gérant' : 'Administrateur'}
+                      </div>
+
+                      <div className="mt-8 w-full flex flex-col gap-3">
+                        <button 
+                          onClick={startEditing} 
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors cursor-pointer shadow-md shadow-orange-600/10"
+                        >
+                          Modifier le profil
+                        </button>
+                        <button onClick={toggleTheme} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer">
+                          {theme === 'dark' ? '☀️ Mode Clair' : '🌙 Mode Sombre'}
+                        </button>
+                        <button onClick={logout} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition-colors cursor-pointer">
+                          <LogOut className="w-5 h-5" />
+                          Déconnexion
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSaveProfile} className="flex flex-col gap-4">
+                      <h3 className="text-lg font-black text-gray-900 border-b border-gray-100 pb-3 text-center">Modifier mon profil</h3>
+                      
+                      {editError && (
+                        <div className="p-3 bg-red-50 text-red-600 text-sm rounded-xl font-medium border border-red-100">
+                          {editError}
+                        </div>
+                      )}
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-gray-500 ml-1">Nom complet</label>
+                        <input 
+                          type="text" 
+                          required 
+                          value={editName} 
+                          onChange={e => setEditName(e.target.value)} 
+                          className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium transition-all" 
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs font-bold text-gray-500 ml-1">Ville</label>
+                          <input 
+                            type="text" 
+                            required 
+                            value={editCity} 
+                            onChange={e => setEditCity(e.target.value)} 
+                            className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium transition-all" 
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs font-bold text-gray-500 ml-1">Pays</label>
+                          <input 
+                            type="text" 
+                            required 
+                            value={editCountry} 
+                            onChange={e => setEditCountry(e.target.value)} 
+                            className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium transition-all" 
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-gray-500 ml-1">Adresse E-mail</label>
+                        <input 
+                          type="email" 
+                          value={editEmail} 
+                          onChange={e => setEditEmail(e.target.value)} 
+                          className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium transition-all" 
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-gray-500 ml-1">N° de Téléphone</label>
+                        <input 
+                          type="tel" 
+                          value={editPhone} 
+                          onChange={e => setEditPhone(e.target.value)} 
+                          className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium transition-all" 
+                        />
+                      </div>
+
+                      {/* Immutable Role field */}
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-gray-400 ml-1">Rôle (Non modifiable)</label>
+                        <input 
+                          type="text" 
+                          disabled 
+                          value={currentUser.role === 'gerant' ? 'Gérant' : 'Administrateur'} 
+                          className="w-full px-4 py-3 bg-gray-100 text-gray-400 rounded-xl border border-gray-200 outline-none font-medium cursor-not-allowed select-none" 
+                        />
+                      </div>
+
+                      <div className="flex gap-3 mt-4">
+                        <button 
+                          type="button" 
+                          onClick={() => setIsEditingProfile(false)} 
+                          disabled={isSavingProfile}
+                          className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          Annuler
+                        </button>
+                        <button 
+                          type="submit" 
+                          disabled={isSavingProfile}
+                          className="flex-1 py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {isSavingProfile && (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          )}
+                          Enregistrer
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
     
     if (isUpgrading) {
       return (
@@ -179,35 +406,141 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
     return (
       <div className="p-4 max-w-lg mx-auto pt-8 pb-24 flex flex-col gap-6">
         {/* Profile Card */}
-        <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 flex flex-col items-center">
-          <div className="w-24 h-24 bg-orange-100 rounded-full flex items-center justify-center mb-5">
-            <User className="w-12 h-12 text-orange-500" />
-          </div>
-          <h2 className="text-2xl font-black text-gray-900">{currentUser.name}</h2>
-          <p className="text-gray-500 font-medium">{currentUser.email || currentUser.phone}</p>
-          <p className="text-gray-400 text-sm mt-1">{currentUser.city}, {currentUser.country}</p>
-          <div className="mt-4 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold uppercase tracking-wider">
-            Compte {currentUser.role === 'gerant' ? 'Gérant' : currentUser.role === 'admin' ? 'Administrateur' : 'Client'}
-          </div>
+        <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 flex flex-col">
+          {!isEditingProfile ? (
+            <div className="flex flex-col items-center">
+              <div className="w-24 h-24 bg-orange-100 rounded-full flex items-center justify-center mb-5">
+                <User className="w-12 h-12 text-orange-500" />
+              </div>
+              <h2 className="text-2xl font-black text-gray-900">{currentUser.name}</h2>
+              <p className="text-gray-500 font-medium">{currentUser.email || currentUser.phone}</p>
+              <p className="text-gray-400 text-sm mt-1">{currentUser.city}, {currentUser.country}</p>
+              <div className="mt-4 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold uppercase tracking-wider">
+                Compte {currentUser.role === 'gerant' ? 'Gérant' : currentUser.role === 'admin' ? 'Administrateur' : 'Client'}
+              </div>
 
-          <div className="mt-8 w-full flex flex-col gap-3">
-            {isInstallable && (
-              <button onClick={promptInstall} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 text-blue-600 font-bold rounded-xl hover:bg-blue-100 transition-colors cursor-pointer">
-                <Download className="w-5 h-5" />
-                Installer l'application
-              </button>
-            )}
-            <button onClick={toggleTheme} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer">
-              {theme === 'dark' ? '☀️ Mode Clair' : '🌙 Mode Sombre'}
-            </button>
-            <button onClick={() => setIsUpgrading(true)} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-50 text-orange-600 font-bold rounded-xl hover:bg-orange-100 transition-colors cursor-pointer">
-              Devenir Gérant (Ajouter un établissement)
-            </button>
-            <button onClick={logout} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition-colors cursor-pointer">
-              <LogOut className="w-5 h-5" />
-              Déconnexion
-            </button>
-          </div>
+              <div className="mt-8 w-full flex flex-col gap-3">
+                <button 
+                  onClick={startEditing} 
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors cursor-pointer shadow-md shadow-orange-600/10"
+                >
+                  Modifier le profil
+                </button>
+                {isInstallable && (
+                  <button onClick={promptInstall} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 text-blue-600 font-bold rounded-xl hover:bg-blue-100 transition-colors cursor-pointer">
+                    <Download className="w-5 h-5" />
+                    Installer l'application
+                  </button>
+                )}
+                <button onClick={toggleTheme} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer">
+                  {theme === 'dark' ? '☀️ Mode Clair' : '🌙 Mode Sombre'}
+                </button>
+                <button onClick={() => setIsUpgrading(true)} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-50 text-orange-600 font-bold rounded-xl hover:bg-orange-100 transition-colors cursor-pointer">
+                  Devenir Gérant (Ajouter un établissement)
+                </button>
+                <button onClick={logout} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition-colors cursor-pointer">
+                  <LogOut className="w-5 h-5" />
+                  Déconnexion
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleSaveProfile} className="flex flex-col gap-4">
+              <h3 className="text-lg font-black text-gray-900 border-b border-gray-100 pb-3 text-center">Modifier mon profil</h3>
+              
+              {editError && (
+                <div className="p-3 bg-red-50 text-red-600 text-sm rounded-xl font-medium border border-red-100">
+                  {editError}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-500 ml-1">Nom complet</label>
+                <input 
+                  type="text" 
+                  required 
+                  value={editName} 
+                  onChange={e => setEditName(e.target.value)} 
+                  className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium transition-all" 
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-gray-500 ml-1">Ville</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={editCity} 
+                    onChange={e => setEditCity(e.target.value)} 
+                    className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium transition-all" 
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-gray-500 ml-1">Pays</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={editCountry} 
+                    onChange={e => setEditCountry(e.target.value)} 
+                    className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium transition-all" 
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-500 ml-1">Adresse E-mail</label>
+                <input 
+                  type="email" 
+                  value={editEmail} 
+                  onChange={e => setEditEmail(e.target.value)} 
+                  className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium transition-all" 
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-500 ml-1">N° de Téléphone</label>
+                <input 
+                  type="tel" 
+                  value={editPhone} 
+                  onChange={e => setEditPhone(e.target.value)} 
+                  className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium transition-all" 
+                />
+              </div>
+
+              {/* Immutable Role field */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-400 ml-1">Rôle (Non modifiable)</label>
+                <input 
+                  type="text" 
+                  disabled 
+                  value={currentUser.role === 'gerant' ? 'Gérant' : currentUser.role === 'admin' ? 'Administrateur' : 'Client'} 
+                  className="w-full px-4 py-3 bg-gray-100 text-gray-400 rounded-xl border border-gray-200 outline-none font-medium cursor-not-allowed select-none" 
+                />
+              </div>
+
+              <div className="flex gap-3 mt-4">
+                <button 
+                  type="button" 
+                  onClick={() => setIsEditingProfile(false)} 
+                  disabled={isSavingProfile}
+                  className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isSavingProfile}
+                  className="flex-1 py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isSavingProfile && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  )}
+                  Enregistrer
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
         {/* Invitations reçues */}
@@ -388,6 +721,62 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
             </div>
           )}
         </div>
+        {/* Mes candidatures aux offres d'emploi */}
+        <div id="my-applications-section" className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+          <h3 className="text-sm font-black text-gray-900 mb-1 flex items-center gap-2">
+            <User className="w-4 h-4 text-orange-500" />
+            Mes candidatures d'emploi
+          </h3>
+          <p className="text-[10px] text-gray-400 font-semibold mb-4">Suivez en temps réel l'état de vos candidatures auprès des recruteurs.</p>
+
+          {applications.filter(a => a.clientId === currentUser.id).length === 0 ? (
+            <p className="text-xs text-gray-400 font-bold py-3 text-center bg-gray-50 rounded-2xl">Vous n'avez pas encore postulé à une offre.</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {applications.filter(a => a.clientId === currentUser.id).map(app => {
+                const estDetail = establishments.find(e => e.id === app.establishmentId);
+                return (
+                  <div key={app.id} id={`my-app-card-${app.id}`} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="font-bold text-xs text-gray-900 leading-tight">{app.publicationTitle}</h4>
+                        <p className="text-[10px] text-orange-600 font-bold mt-0.5">{app.establishmentName}</p>
+                      </div>
+
+                      <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded ${
+                        app.status === 'acceptee' ? 'bg-green-100 text-green-700 border border-green-200/50' :
+                        app.status === 'refusee' ? 'bg-red-100 text-red-700 border border-red-200/50' : 'bg-yellow-100 text-yellow-700 border border-yellow-200/50'
+                      }`}>
+                        {app.status === 'acceptee' ? 'Acceptée' : app.status === 'refusee' ? 'Refusée' : 'En attente'}
+                      </span>
+                    </div>
+
+                    {app.message && (
+                      <div className="text-xs text-gray-500 bg-white p-2.5 rounded-lg border border-gray-100 font-medium italic">
+                        "{app.message}"
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-[10px] text-gray-400 font-medium mt-1">
+                      <span>Postulé le {new Date(app.createdAt).toLocaleDateString('fr-FR')}</span>
+                      {estDetail && (
+                        <button 
+                          type="button"
+                          onClick={() => handleStartChat(app.establishmentId, estDetail.name, estDetail.ownerId)}
+                          className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg font-bold transition-all cursor-pointer"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          Contacter le gérant
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
       </div>
     );
   }

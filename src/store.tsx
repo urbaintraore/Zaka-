@@ -48,14 +48,18 @@ interface AppContextType extends AppState {
   addPublication: (pub: Omit<Publication, 'id' | 'views' | 'clicks' | 'createdAt'>) => Promise<void>;
   toggleFavorite: (clientId: string, establishmentId: string) => Promise<void>;
   updateFavoriteTags: (clientId: string, establishmentId: string, tags: string[]) => Promise<void>;
+  saveAllFavoriteTags: (clientId: string, tagsMap: Record<string, string[]>) => Promise<void>;
   validateEstablishment: (id: string) => Promise<void>;
   upgradeToGerant: (estData: Partial<Establishment>) => Promise<void>;
+  updateProfile: (profileData: { name: string; city: string; country: string; email?: string; phone?: string }) => Promise<void>;
   createRelationshipRequest: (req: Omit<RelationshipRequest, 'id' | 'status' | 'date'>) => Promise<void>;
   updateRelationshipRequest: (id: string, status: 'acceptee' | 'refusee') => Promise<void>;
   createServiceRequest: (req: Omit<ServiceRequest, 'id' | 'status' | 'date'>) => Promise<void>;
   updateServiceRequest: (id: string, status: 'validee' | 'refusee', message?: string) => Promise<void>;
   createConversation: (clientId: string, establishmentId: string, clientName: string, establishmentName: string, ownerId: string) => Promise<string>;
   toggleDJStatus: (requestId: string, isDJ: boolean) => Promise<void>;
+  addApplication: (app: Omit<Application, 'id' | 'status' | 'date'>) => Promise<void>;
+  updateApplicationStatus: (id: string, status: 'acceptee' | 'refusee') => Promise<void>;
   setGlobalError: (err: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null) => void;
   toggleTheme: () => void;
 }
@@ -424,6 +428,77 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [state.currentUser?.id]);
 
+  const myEstablishmentIds = state.establishments
+    .filter(e => e.ownerId === state.currentUser?.id)
+    .map(e => e.id)
+    .sort()
+    .join(',');
+
+  useEffect(() => {
+    if (!state.currentUser) {
+      setState(s => ({ ...s, applications: [] }));
+      return;
+    }
+
+    const unsubscribes: (() => void)[] = [];
+
+    // 1. Applications submitted by this user as a candidate
+    const candidateQuery = query(
+      collection(db, 'applications'),
+      where('clientId', '==', state.currentUser.id)
+    );
+    const unsubCandidate = onSnapshot(candidateQuery, (snapshot) => {
+      const candidateApps: Application[] = [];
+      snapshot.forEach(doc => {
+        candidateApps.push({ id: doc.id, ...doc.data() } as Application);
+      });
+      
+      setState(s => {
+        const currentApps = [...s.applications];
+        const updated = currentApps.filter(a => a.clientId !== state.currentUser!.id);
+        return { ...s, applications: [...updated, ...candidateApps] };
+      });
+    }, (error) => {
+      console.error("Erreur listing candidate applications:", error);
+    });
+    unsubscribes.push(unsubCandidate);
+
+    // 2. If gerant, also listen to applications submitted to their establishments
+    const estIds = myEstablishmentIds.split(',').filter(Boolean);
+    if (state.currentUser.role === 'gerant' && estIds.length > 0) {
+      const chunks = [];
+      for (let i = 0; i < estIds.length; i += 10) {
+        chunks.push(estIds.slice(i, i + 10));
+      }
+
+      chunks.forEach((chunk) => {
+        const managerQuery = query(
+          collection(db, 'applications'),
+          where('establishmentId', 'in', chunk)
+        );
+        const unsubManager = onSnapshot(managerQuery, (snapshot) => {
+          const managerApps: Application[] = [];
+          snapshot.forEach(doc => {
+            managerApps.push({ id: doc.id, ...doc.data() } as Application);
+          });
+          
+          setState(s => {
+            const currentApps = [...s.applications];
+            const updated = currentApps.filter(a => !chunk.includes(a.establishmentId));
+            return { ...s, applications: [...updated, ...managerApps] };
+          });
+        }, (error) => {
+          console.error("Erreur listing manager applications:", error);
+        });
+        unsubscribes.push(unsubManager);
+      });
+    }
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+  }, [state.currentUser?.id, state.currentUser?.role, myEstablishmentIds]);
+
   const translateFirebaseError = (error: any): string => {
     const code = error?.code || 'unknown';
     const message = error?.message || '';
@@ -717,6 +792,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const addApplication = async (app: Omit<Application, 'id' | 'status' | 'date'>) => {
+    try {
+      await addDoc(collection(db, 'applications'), {
+        ...app,
+        status: 'en_attente',
+        createdAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Erreur ajout application:", error);
+      throw error;
+    }
+  };
+
+  const updateApplicationStatus = async (id: string, status: 'acceptee' | 'refusee') => {
+    try {
+      await updateDoc(doc(db, 'applications', id), { status });
+    } catch (error) {
+      console.error("Erreur mise à jour statut application:", error);
+      throw error;
+    }
+  };
+
   const toggleFavorite = async (clientId: string, establishmentId: string) => {
     try {
       // Trigger haptic feedback vibration for tactile feedback
@@ -782,6 +879,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const saveAllFavoriteTags = async (clientId: string, tagsMap: Record<string, string[]>) => {
+    try {
+      const userFavs = state.favorites[clientId] || [];
+      
+      setState(s => ({
+        ...s,
+        favoriteTags: {
+          ...s.favoriteTags,
+          [clientId]: tagsMap
+        }
+      }));
+
+      await setDoc(doc(db, 'favorites', clientId), {
+        establishmentIds: userFavs,
+        tags: tagsMap
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `favorites/${clientId}`);
+    }
+  };
+
   const validateEstablishment = async (id: string) => {
     try {
       await updateDoc(doc(db, 'establishments', id), {
@@ -824,6 +942,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Erreur lors de la mise à niveau vers gérant:", error);
       throw error;
+    }
+  };
+
+  const updateProfile = async (profileData: { name: string; city: string; country: string; email?: string; phone?: string }) => {
+    if (!state.currentUser) {
+      throw new Error("Aucun utilisateur n'est connecté.");
+    }
+    try {
+      const userDocRef = doc(db, 'users', state.currentUser.id);
+      const updatedData = {
+        ...state.currentUser,
+        name: profileData.name.trim(),
+        city: profileData.city.trim(),
+        country: profileData.country.trim(),
+        email: profileData.email?.trim() || state.currentUser.email || '',
+        phone: profileData.phone?.trim() || state.currentUser.phone || '',
+      };
+      const { id, ...dataToSave } = updatedData;
+      
+      await setDoc(userDocRef, dataToSave, { merge: true });
+      console.log("[updateProfile] Profil mis à jour avec succès dans Firestore.");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `users/${state.currentUser.id}`);
     }
   };
 
@@ -918,14 +1059,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addPublication,
       toggleFavorite,
       updateFavoriteTags,
+      saveAllFavoriteTags,
       validateEstablishment,
       upgradeToGerant,
+      updateProfile,
       createRelationshipRequest,
       updateRelationshipRequest,
       createServiceRequest,
       updateServiceRequest,
       createConversation,
       toggleDJStatus,
+      addApplication,
+      updateApplicationStatus,
       setGlobalError,
       toggleTheme
     }}>

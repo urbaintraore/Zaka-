@@ -1,6 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { useAppStore } from '../store';
-import { Heart, MapPin, MessageSquare, Calendar, Tag, Plus, X, Filter } from 'lucide-react';
+import { Heart, MapPin, MessageSquare, Calendar, Tag, Plus, X, Filter, Edit2, Trash2, Check } from 'lucide-react';
 import { ReservationModal } from '../components/ReservationModal';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -10,6 +10,25 @@ interface FavoritesViewProps {
 
 const PREDEFINED_TAGS = ['À tester', 'Mes habitudes', 'À visiter', 'En famille', 'Entre amis', 'Pour bosser'];
 
+const getTagStyles = (tag: string) => {
+  switch (tag) {
+    case 'À tester':
+      return 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-100/65 dark:border-amber-900/40';
+    case 'Mes habitudes':
+      return 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100/65 dark:border-emerald-900/40';
+    case 'À visiter':
+      return 'bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 border border-violet-100/65 dark:border-violet-900/40';
+    case 'En famille':
+      return 'bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400 border border-teal-100/65 dark:border-teal-900/40';
+    case 'Entre amis':
+      return 'bg-pink-50 dark:bg-pink-950/40 text-pink-600 dark:text-pink-400 border border-pink-100/65 dark:border-pink-900/40';
+    case 'Pour bosser':
+      return 'bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border border-sky-100/65 dark:border-sky-900/40';
+    default:
+      return 'bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 border border-orange-100/60 dark:border-orange-950/80';
+  }
+};
+
 export function FavoritesView({ onStartChat }: FavoritesViewProps) {
   const { 
     currentUser, 
@@ -18,6 +37,7 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
     establishments, 
     toggleFavorite, 
     updateFavoriteTags,
+    saveAllFavoriteTags,
     createServiceRequest 
   } = useAppStore();
   
@@ -25,6 +45,11 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
   const [editingTagsEst, setEditingTagsEst] = useState<{ id: string, name: string } | null>(null);
   const [newCustomTag, setNewCustomTag] = useState('');
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
+
+  // New Tag management states
+  const [isManagingAllTags, setIsManagingAllTags] = useState(false);
+  const [renamingTag, setRenamingTag] = useState<string | null>(null);
+  const [renamedTagValue, setRenamedTagValue] = useState('');
 
   if (!currentUser) {
     return (
@@ -42,12 +67,15 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
   const myFavs = establishments.filter(e => myFavIds.includes(e.id));
   const myTagsMap = favoriteTags[currentUser.id] || {};
 
-  // Find all unique tags used by this user to populate the filter row
+  // Find all unique tags used by this user to populate the filter row and suggestions
   const allUserTags = Array.from(
     new Set(
       Object.values(myTagsMap).flatMap(tags => (tags as string[]) || [])
     )
   ) as string[];
+
+  // Suggestions for the edit modal includes predefined tags + any custom tags the user has active
+  const SUGGESTIONS = Array.from(new Set([...PREDEFINED_TAGS, ...allUserTags]));
 
   // Filtered list based on selectedTagFilter
   const filteredFavs = myFavs.filter(est => {
@@ -94,17 +122,72 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
     updateFavoriteTags(currentUser.id, estId, updatedTags);
   };
 
+  // Global rename of a tag across all favorites
+  const handleRenameTagGlobally = (oldTag: string, newTag: string) => {
+    const trimmedNew = newTag.trim();
+    if (!trimmedNew || trimmedNew === oldTag) {
+      setRenamingTag(null);
+      return;
+    }
+    
+    const updatedTagsMap = { ...myTagsMap };
+    
+    Object.keys(updatedTagsMap).forEach(estId => {
+      const tags = updatedTagsMap[estId] || [];
+      if (tags.includes(oldTag)) {
+        updatedTagsMap[estId] = tags.map(t => t === oldTag ? trimmedNew : t);
+      }
+    });
+    
+    saveAllFavoriteTags(currentUser.id, updatedTagsMap);
+    
+    if (selectedTagFilter === oldTag) {
+      setSelectedTagFilter(trimmedNew);
+    }
+    
+    setRenamingTag(null);
+  };
+
+  // Global delete of a tag across all favorites
+  const handleDeleteTagGlobally = (tagToDelete: string) => {
+    const updatedTagsMap = { ...myTagsMap };
+    
+    Object.keys(updatedTagsMap).forEach(estId => {
+      const tags = updatedTagsMap[estId] || [];
+      if (tags.includes(tagToDelete)) {
+        updatedTagsMap[estId] = tags.filter(t => t !== tagToDelete);
+      }
+    });
+    
+    saveAllFavoriteTags(currentUser.id, updatedTagsMap);
+    
+    if (selectedTagFilter === tagToDelete) {
+      setSelectedTagFilter(null);
+    }
+  };
+
   return (
     <div className="p-4 max-w-3xl mx-auto pb-24">
       <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-4">Mes Favoris</h2>
       
       {/* Filters bar */}
       {myFavs.length > 0 && (
-        <div className="mb-6 bg-gray-50 dark:bg-gray-900/60 p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
-          <div className="flex items-center gap-2 mb-2 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-            <Filter className="w-3.5 h-3.5" />
-            Filtrer par étiquette
+        <div className="mb-6 bg-gray-50 dark:bg-gray-900/60 p-4 rounded-2xl border border-gray-100 dark:border-gray-800/80">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+              <Filter className="w-3.5 h-3.5" />
+              Filtrer par étiquette
+            </div>
+            
+            <button 
+              onClick={() => setIsManagingAllTags(true)}
+              className="text-xs font-bold text-orange-600 hover:text-orange-700 transition-colors flex items-center gap-1 cursor-pointer bg-orange-50 dark:bg-orange-950/30 px-2.5 py-1 rounded-lg border border-orange-100/30 dark:border-orange-950/50"
+            >
+              <Tag className="w-3 h-3" />
+              Gérer les étiquettes
+            </button>
           </div>
+          
           <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none snap-x">
             <button
               onClick={() => setSelectedTagFilter(null)}
@@ -185,7 +268,7 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
                     {tags.map(t => (
                       <span 
                         key={t} 
-                        className="inline-flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-bold uppercase bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 border border-orange-100/60 dark:border-orange-950/80 rounded"
+                        className={`inline-flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-bold uppercase rounded-md ${getTagStyles(t)}`}
                       >
                         {t}
                         <button 
@@ -193,15 +276,16 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
                             e.stopPropagation();
                             handleRemoveTag(est.id, t);
                           }}
-                          className="hover:bg-orange-100 dark:hover:bg-orange-900 rounded p-0.5 cursor-pointer"
+                          className="hover:bg-black/10 dark:hover:bg-white/10 rounded p-0.5 cursor-pointer"
+                          title="Retirer l'étiquette"
                         >
-                          <X className="w-2 h-2" />
+                          <X className="w-2.5 h-2.5" />
                         </button>
                       </span>
                     ))}
                     <button 
                       onClick={() => setEditingTagsEst({ id: est.id, name: est.name })}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-gray-50 dark:bg-gray-700/50 hover:bg-orange-50 dark:hover:bg-orange-950/30 text-gray-500 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 rounded border border-gray-100 dark:border-gray-700 transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold bg-gray-50 dark:bg-gray-700/50 hover:bg-orange-50 dark:hover:bg-orange-950/30 text-gray-500 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 rounded-md border border-gray-150 dark:border-gray-700 transition-colors cursor-pointer"
                     >
                       <Tag className="w-2.5 h-2.5" />
                       {tags.length > 0 ? 'Gérer' : 'Étiqueter'}
@@ -296,13 +380,13 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
                 Associez des étiquettes pour classer et retrouver cet établissement.
               </p>
 
-              {/* Predefined Tags Toggle */}
+              {/* Suggestions Toggle */}
               <div className="mb-6">
                 <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">
-                  Suggestions populaires
+                  Suggestions populaires & personnalisées
                 </h4>
                 <div className="flex flex-wrap gap-2">
-                  {PREDEFINED_TAGS.map(tag => {
+                  {SUGGESTIONS.map(tag => {
                     const isSelected = (myTagsMap[editingTagsEst.id] || []).includes(tag);
                     return (
                       <button
@@ -332,12 +416,12 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
                     {(myTagsMap[editingTagsEst.id] || []).map(tag => (
                       <span 
                         key={tag}
-                        className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 text-xs font-bold bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 border border-orange-100/60 dark:border-orange-950/80 rounded-lg"
+                        className={`inline-flex items-center gap-1 pl-2.5 pr-1 py-1 text-xs font-bold rounded-lg ${getTagStyles(tag)}`}
                       >
                         {tag}
                         <button 
                           onClick={() => handleRemoveTag(editingTagsEst.id, tag)}
-                          className="hover:bg-orange-100 dark:hover:bg-orange-900 rounded p-0.5 transition-colors cursor-pointer"
+                          className="hover:bg-black/10 dark:hover:bg-white/10 rounded p-0.5 transition-colors cursor-pointer"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -373,6 +457,136 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
               <div className="flex justify-end pt-2 border-t border-gray-100 dark:border-gray-700/60">
                 <button
                   onClick={() => setEditingTagsEst(null)}
+                  className="px-5 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl text-xs font-black transition-colors cursor-pointer"
+                >
+                  Fermer
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Global Tags Management Modal */}
+      <AnimatePresence>
+        {isManagingAllTags && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-55">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-md p-6 shadow-xl relative max-h-[90vh] overflow-y-auto"
+            >
+              <button 
+                onClick={() => {
+                  setIsManagingAllTags(false);
+                  setRenamingTag(null);
+                }}
+                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-2 text-orange-600 mb-2">
+                <Tag className="w-5 h-5" />
+                <span className="text-xs font-black uppercase tracking-wider">Gestion</span>
+              </div>
+              
+              <h3 className="text-lg font-black text-gray-900 dark:text-white mb-1">
+                Gérer mes étiquettes
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
+                Renommez ou supprimez vos étiquettes pour réorganiser tous vos favoris en même temps.
+              </p>
+
+              <div className="flex flex-col gap-3 mb-6 max-h-[45vh] overflow-y-auto pr-1">
+                {SUGGESTIONS.map(tag => {
+                  const count = myFavs.filter(est => (myTagsMap[est.id] || []).includes(tag)).length;
+                  const isEditingThis = renamingTag === tag;
+                  
+                  return (
+                    <div 
+                      key={tag} 
+                      className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-150 dark:border-gray-700/50 gap-2"
+                    >
+                      {isEditingThis ? (
+                        <div className="flex items-center gap-1.5 flex-1">
+                          <input 
+                            type="text" 
+                            value={renamedTagValue}
+                            onChange={(e) => setRenamedTagValue(e.target.value)}
+                            className="flex-1 px-2.5 py-1 text-sm bg-white dark:bg-gray-800 border border-orange-500 rounded-lg focus:outline-none dark:text-white"
+                            maxLength={20}
+                            autoFocus
+                          />
+                          <button 
+                            onClick={() => handleRenameTagGlobally(tag, renamedTagValue)}
+                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-lg cursor-pointer"
+                            title="Confirmer"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => setRenamingTag(null)}
+                            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg cursor-pointer"
+                            title="Annuler"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">
+                          <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded ${getTagStyles(tag)} shrink-0`}>
+                            {tag}
+                          </span>
+                          <span className="text-xs text-gray-400 dark:text-gray-500 font-medium shrink-0">
+                            {count} {count > 1 ? 'établissements' : 'établissement'}
+                          </span>
+                        </div>
+                      )}
+
+                      {!isEditingThis && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button 
+                            onClick={() => {
+                              setRenamingTag(tag);
+                              setRenamedTagValue(tag);
+                            }}
+                            className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors cursor-pointer"
+                            title="Renommer"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          
+                          <button 
+                            onClick={() => {
+                              if (confirm(`Voulez-vous vraiment supprimer l'étiquette "${tag}" de tous vos favoris ?`)) {
+                                handleDeleteTagGlobally(tag);
+                              }
+                            }}
+                            disabled={count === 0}
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                              count === 0 
+                                ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' 
+                                : 'text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20'
+                            }`}
+                            title="Supprimer l'étiquette"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex justify-end pt-3 border-t border-gray-100 dark:border-gray-700/60">
+                <button
+                  onClick={() => {
+                    setIsManagingAllTags(false);
+                    setRenamingTag(null);
+                  }}
                   className="px-5 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl text-xs font-black transition-colors cursor-pointer"
                 >
                   Fermer

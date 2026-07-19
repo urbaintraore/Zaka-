@@ -50,9 +50,28 @@
         "status": { "type": "string", "enum": ["active", "inactive"] },
         "views": { "type": "number" },
         "clicks": { "type": "number" },
-        "createdAt": { "type": "string" }
+        "createdAt": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "applyEmail": { "type": "string" }
       },
       "required": ["establishmentId", "type", "title", "description", "status", "createdAt"]
+    },
+    "Application": {
+      "title": "Application",
+      "description": "A job application made by a user for a recruitment publication",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "publicationId": { "type": "string" },
+        "publicationTitle": { "type": "string" },
+        "establishmentId": { "type": "string" },
+        "establishmentName": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string", "enum": ["en_attente", "acceptee", "refusee"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["clientId", "clientName", "publicationId", "publicationTitle", "establishmentId", "establishmentName", "message", "status", "createdAt"]
     },
     "Conversation": {
       "title": "Conversation",
@@ -121,6 +140,10 @@
     "favorites/{userId}": {
       "schema": { "$ref": "#/entities/Favorites" },
       "description": "Favorites collection per user"
+    },
+    "applications": {
+      "schema": { "$ref": "#/entities/Application" },
+      "description": "Applications collection for recruitment job offers"
     }
   }
 }
