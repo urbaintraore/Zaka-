@@ -27,11 +27,13 @@ export function useInstallApp() {
 
   const promptInstall = async () => {
     const promptEvent = (window as any).deferredPWAInstallPrompt;
+    console.log('promptInstall called, promptEvent:', promptEvent);
     if (!promptEvent) {
-      console.log('No deferred prompt available');
+      console.error('No deferred prompt available. Check beforeinstallprompt event handling.');
       return;
     }
     try {
+      console.log('Attempting to prompt...');
       await promptEvent.prompt();
       const { outcome } = await promptEvent.userChoice;
       console.log(`User interaction outcome: ${outcome}`);
@@ -40,7 +42,7 @@ export function useInstallApp() {
         setIsInstallable(false);
       }
     } catch (error) {
-      console.error('Error prompting install:', error);
+      console.error('Install prompt error (possibly user dismissed or browser restriction):', error);
     }
   };
 
