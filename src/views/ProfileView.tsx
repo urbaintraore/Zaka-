@@ -134,6 +134,21 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
     setError('');
   };
 
+  const forceUpdate = async () => {
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (const registration of registrations) {
+        await registration.unregister();
+      }
+      // Try to clear caches
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
+      }
+      window.location.reload();
+    }
+  };
+
   if (currentUser) {
     if (currentUser.role === 'admin' || currentUser.role === 'gerant') {
       return (
@@ -432,6 +447,10 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                     Installer l'application
                   </button>
                 )}
+                <button onClick={forceUpdate} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition-colors cursor-pointer">
+                  <Download className="w-5 h-5" />
+                  Forcer la mise à jour (PWA)
+                </button>
                 {/* For iOS users who cannot use standard beforeinstallprompt but are on mobile and not standalone */}
                 {(!isInstallable && 
                   typeof window !== 'undefined' && 

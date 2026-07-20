@@ -24,6 +24,8 @@ export default defineConfig(() => {
           orientation: "portrait",
           background_color: "#000000",
           theme_color: "#ea580c",
+          lang: "fr",
+          prefer_related_applications: false,
           icons: [
             {
               src: "/icon-192.png",
