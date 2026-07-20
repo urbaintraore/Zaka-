@@ -16,6 +16,7 @@ export default defineConfig(() => {
         manifest: {
           name: "Zaka+",
           short_name: "Zaka+",
+          id: "/",
           description: "La plateforme pour vos sorties (Maquis, Resto, Boîte de nuit).",
           start_url: "/",
           scope: "/",
@@ -64,6 +65,11 @@ export default defineConfig(() => {
               handler: 'NetworkOnly',
             }
           ]
+        },
+        devOptions: {
+          enabled: true,
+          type: 'module',
+          navigateFallback: 'index.html',
         }
       })
     ],

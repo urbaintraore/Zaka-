@@ -19,7 +19,7 @@ export function InstallPrompt() {
     }
 
     // Check if dismissed in this cache session or permanently
-    const isDismissed = localStorage.getItem('zaka-install-prompt-dismissed') === 'true';
+    const isDismissed = localStorage.getItem('zaka-install-prompt-dismissed-v2') === 'true';
     if (isDismissed) {
       return;
     }
@@ -42,7 +42,7 @@ export function InstallPrompt() {
 
   const handleDismiss = () => {
     setIsVisible(false);
-    localStorage.setItem('zaka-install-prompt-dismissed', 'true');
+    localStorage.setItem('zaka-install-prompt-dismissed-v2', 'true');
   };
 
   const handleInstallClick = async () => {
