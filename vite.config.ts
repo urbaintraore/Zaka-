@@ -12,7 +12,7 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'autoUpdate',
         injectRegister: 'auto',
-        includeAssets: ['logo.jpg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'maskable-icon-192.png', 'maskable-icon-512.png'],
+        includeAssets: ['logo.jpg', 'icon-192x192.png', 'icon-512x512.png', 'apple-touch-icon.png', 'maskable-icon-192.png', 'maskable-icon-512.png'],
         manifest: {
           name: "Zaka+",
           short_name: "Zaka+",
@@ -28,7 +28,7 @@ export default defineConfig(() => {
           prefer_related_applications: false,
           icons: [
             {
-              src: "/icon-192.png",
+              src: "/icon-192x192.png",
               sizes: "192x192",
               type: "image/png",
               purpose: "any"
@@ -40,7 +40,7 @@ export default defineConfig(() => {
               purpose: "maskable"
             },
             {
-              src: "/icon-512.png",
+              src: "/icon-512x512.png",
               sizes: "512x512",
               type: "image/png",
               purpose: "any"
