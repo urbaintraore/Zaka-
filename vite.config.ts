@@ -67,11 +67,6 @@ export default defineConfig(() => {
               handler: 'NetworkOnly',
             }
           ]
-        },
-        devOptions: {
-          enabled: true,
-          type: 'module',
-          navigateFallback: 'index.html',
         }
       })
     ],
