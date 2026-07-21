@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role } from './types';
+import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
 import { 
@@ -24,6 +24,8 @@ interface AppState {
   applications: Application[];
   relationshipRequests: RelationshipRequest[];
   serviceRequests: ServiceRequest[];
+  reservations: Reservation[];
+  menusDuJour: MenuDuJour[];
   loading: boolean;
   globalError: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null;
   theme: 'light' | 'dark';
@@ -33,7 +35,7 @@ interface AppContextType extends AppState {
   unreadCount: number;
   login: (email: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
-  register: (user: Omit<User, 'id'>, pass: string, estData?: Partial<Establishment>) => Promise<void>;
+  register: (user: Omit<User, 'id'>, pass: string, estData?: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] }) => Promise<void>;
   envoyerCodeOtp: (phone: string, containerId: string) => Promise<void>;
   confirmerCodeOtp: (otpCode: string, registrationData?: {
     name: string;
@@ -42,15 +44,16 @@ interface AppContextType extends AppState {
     city: string;
     phone: string;
     email?: string;
-    estData?: Partial<Establishment>;
+    estData?: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] };
   }) => Promise<void>;
   addEstablishment: (est: Omit<Establishment, 'id' | 'status' | 'averageRating'>) => Promise<void>;
+  updateEstablishment: (id: string, data: Partial<Establishment>) => Promise<void>;
   addPublication: (pub: Omit<Publication, 'id' | 'views' | 'clicks' | 'createdAt'>) => Promise<void>;
   toggleFavorite: (clientId: string, establishmentId: string) => Promise<void>;
   updateFavoriteTags: (clientId: string, establishmentId: string, tags: string[]) => Promise<void>;
   saveAllFavoriteTags: (clientId: string, tagsMap: Record<string, string[]>) => Promise<void>;
   validateEstablishment: (id: string) => Promise<void>;
-  upgradeToGerant: (estData: Partial<Establishment>) => Promise<void>;
+  upgradeToGerant: (estData: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] }) => Promise<void>;
   updateProfile: (profileData: { name: string; city: string; country: string; email?: string; phone?: string }) => Promise<void>;
   createRelationshipRequest: (req: Omit<RelationshipRequest, 'id' | 'status' | 'date'>) => Promise<void>;
   updateRelationshipRequest: (id: string, status: 'acceptee' | 'refusee') => Promise<void>;
@@ -60,6 +63,11 @@ interface AppContextType extends AppState {
   toggleDJStatus: (requestId: string, isDJ: boolean) => Promise<void>;
   addApplication: (app: Omit<Application, 'id' | 'status' | 'date'>) => Promise<void>;
   updateApplicationStatus: (id: string, status: 'acceptee' | 'refusee') => Promise<void>;
+  addReview: (review: Omit<Review, 'id' | 'date'>) => Promise<void>;
+  replyToReview: (reviewId: string, reply: string) => Promise<void>;
+  addReservation: (res: Omit<Reservation, 'id' | 'status' | 'createdAt'>) => Promise<void>;
+  updateReservationStatus: (id: string, status: 'en_attente' | 'confirmee' | 'refusee' | 'annulee', managerMessage?: string) => Promise<void>;
+  addMenuDuJour: (menu: Omit<MenuDuJour, 'id' | 'publishedAt'>) => Promise<void>;
   setGlobalError: (err: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null) => void;
   toggleTheme: () => void;
 }
@@ -129,9 +137,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     applications: [],
     relationshipRequests: [],
     serviceRequests: [],
+    reservations: [],
+    menusDuJour: [],
     loading: true,
     globalError: null,
-    theme: (localStorage.getItem('app-theme') as 'light' | 'dark') || 'light'
+    theme: (localStorage.getItem('app-theme') as 'light' | 'dark') || 
+           (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
   });
 
   useEffect(() => {
@@ -141,6 +152,125 @@ export function AppProvider({ children }: { children: ReactNode }) {
       document.documentElement.classList.remove('dark');
     }
   }, [state.theme]);
+
+  useEffect(() => {
+    // Dynamic detection of system color scheme if no user preference is saved
+    const hasLocalTheme = localStorage.getItem('app-theme') !== null;
+    if (!hasLocalTheme && window.matchMedia) {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleSystemThemeChange = (e: MediaQueryListEvent) => {
+        const hasOverride = localStorage.getItem('app-theme') !== null;
+        if (!hasOverride) {
+          const systemTheme = e.matches ? 'dark' : 'light';
+          setState(s => ({ ...s, theme: systemTheme }));
+        }
+      };
+      mediaQuery.addEventListener('change', handleSystemThemeChange);
+      return () => mediaQuery.removeEventListener('change', handleSystemThemeChange);
+    }
+  }, []);
+
+  // Keep track of notified publications and replies to avoid duplicates
+  const [notifiedPubIds, setNotifiedPubIds] = useState<string[]>([]);
+  const [notifiedReplies, setNotifiedReplies] = useState<string[]>([]);
+  const [notifiedResRequests, setNotifiedResRequests] = useState<string[]>([]);
+  const [notifiedResUpdates, setNotifiedResUpdates] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!state.currentUser) return;
+
+    // 1. Notify of new events/publications in favorite establishments
+    const userFavs = state.favorites[state.currentUser.id] || [];
+    if (userFavs.length > 0 && state.publications.length > 0) {
+      state.publications.forEach(pub => {
+        if (userFavs.includes(pub.establishmentId)) {
+          const createdTime = pub.createdAt ? new Date(pub.createdAt).getTime() : 0;
+          const isRecent = createdTime > Date.now() - 60000;
+          if (isRecent && !notifiedPubIds.includes(pub.id)) {
+            const est = state.establishments.find(e => e.id === pub.establishmentId);
+            const estName = est ? est.name : "votre établissement favori";
+            import('./utils/pushNotifications').then(({ sendPushNotification }) => {
+              sendPushNotification(
+                `Nouveauté chez ${estName} !`,
+                `[${pub.type.toUpperCase()}] ${pub.title} - ${pub.description.substring(0, 80)}...`
+              );
+            });
+            setNotifiedPubIds(prev => [...prev, pub.id]);
+          }
+        }
+      });
+    }
+
+    // 2. Notify clients of answers to their reviews/comments
+    if (state.reviews.length > 0) {
+      state.reviews.forEach(review => {
+        const hasReplyDate = 'replyDate' in review && (review as any).replyDate;
+        const replyText = (review as any).reply;
+        const replyDateStr = (review as any).replyDate;
+        if (review.clientId === state.currentUser?.id && replyText && hasReplyDate) {
+          const replyTime = new Date(replyDateStr).getTime();
+          const isRecentReply = replyTime > Date.now() - 60000;
+          const trackingKey = `${review.id}-${replyDateStr}`;
+          if (isRecentReply && !notifiedReplies.includes(trackingKey)) {
+            const est = state.establishments.find(e => e.id === review.establishmentId);
+            const estName = est ? est.name : "l'établissement";
+            import('./utils/pushNotifications').then(({ sendPushNotification }) => {
+              sendPushNotification(
+                `Réponse de ${estName}`,
+                `Le gérant a répondu à votre avis: "${replyText}"`
+              );
+            });
+            setNotifiedReplies(prev => [...prev, trackingKey]);
+          }
+        }
+      });
+    }
+
+    // 3. Notify Gérants of new reservation requests
+    if (state.reservations && state.reservations.length > 0) {
+      state.reservations.forEach(res => {
+        const est = state.establishments.find(e => e.id === res.establishmentId);
+        if (est && est.ownerId === state.currentUser?.id) {
+          const createdTime = res.createdAt ? new Date(res.createdAt).getTime() : 0;
+          const isRecent = createdTime > Date.now() - 60000;
+          if (isRecent && !notifiedResRequests.includes(res.id)) {
+            import('./utils/pushNotifications').then(({ sendPushNotification }) => {
+              sendPushNotification(
+                `Nouvelle réservation chez ${est.name} !`,
+                `Par ${res.clientName} le ${new Date(res.date).toLocaleDateString()} à ${res.time} pour ${res.guestsCount} pers.`
+              );
+            });
+            setNotifiedResRequests(prev => [...prev, res.id]);
+          }
+        }
+      });
+    }
+
+    // 4. Notify Clients of reservation status changes
+    if (state.reservations && state.reservations.length > 0) {
+      state.reservations.forEach(res => {
+        if (res.clientId === state.currentUser?.id) {
+          // Find the latest history update
+          const history = res.history || [];
+          if (history.length > 1) {
+            const latest = history[history.length - 1];
+            const updatedTime = latest.updatedAt ? new Date(latest.updatedAt).getTime() : 0;
+            const isRecentUpdate = updatedTime > Date.now() - 60000;
+            const trackingKey = `${res.id}-${latest.status}-${latest.updatedAt}`;
+            if (isRecentUpdate && !notifiedResUpdates.includes(trackingKey)) {
+              import('./utils/pushNotifications').then(({ sendPushNotification }) => {
+                sendPushNotification(
+                  `Réservation ${latest.status === 'confirmee' ? 'confirmée' : latest.status} !`,
+                  `Votre réservation chez ${res.establishmentName} est désormais ${latest.status === 'confirmee' ? 'confirmée' : latest.status}.`
+                );
+              });
+              setNotifiedResUpdates(prev => [...prev, trackingKey]);
+            }
+          }
+        }
+      });
+    }
+  }, [state.publications, state.reviews, state.favorites, state.currentUser, state.establishments, state.reservations]);
 
   const toggleTheme = () => {
     setState(s => {
@@ -340,9 +470,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setState(s => ({ ...s, publications: DEFAULT_PUBLICATIONS }));
     });
 
+    // Listen to reviews
+    const reviewQuery = query(collection(db, 'reviews'));
+    const unsubscribeReview = onSnapshot(reviewQuery, (snapshot) => {
+      const revs: Review[] = [];
+      snapshot.forEach(doc => revs.push({ id: doc.id, ...doc.data() } as Review));
+      setState(s => ({ ...s, reviews: revs }));
+    }, (error) => {
+      console.error("Erreur reviews:", error);
+    });
+
+    // Listen to menus du jour
+    const menuQuery = query(collection(db, 'menus_du_jour'));
+    const unsubscribeMenu = onSnapshot(menuQuery, (snapshot) => {
+      const menus: MenuDuJour[] = [];
+      snapshot.forEach(doc => menus.push({ id: doc.id, ...doc.data() } as MenuDuJour));
+      setState(s => ({ ...s, menusDuJour: menus }));
+    }, (error) => {
+      console.error("Erreur menus_du_jour:", error);
+    });
+
     return () => {
       unsubscribeEst();
       unsubscribePub();
+      unsubscribeReview();
+      unsubscribeMenu();
     };
   }, []);
 
@@ -350,7 +502,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.currentUser) {
       // Clear authenticated state data when user logs out
-      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], favorites: {} }));
+      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {} }));
       return;
     }
 
@@ -384,6 +536,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setState(s => ({ ...s, serviceRequests: sers }));
     }, (error) => {
       console.error("Erreur serviceRequests:", error);
+    });
+
+    // Listen to reservations
+    const resQuery = query(collection(db, 'reservations'));
+    const unsubscribeRes = onSnapshot(resQuery, (snapshot) => {
+      const resList: Reservation[] = [];
+      snapshot.forEach(doc => resList.push({ id: doc.id, ...doc.data() } as Reservation));
+      setState(s => ({ ...s, reservations: resList }));
+    }, (error) => {
+      console.error("Erreur reservations:", error);
     });
 
     // Listen to favorites
@@ -424,6 +586,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unsubscribeUsers();
       unsubscribeRel();
       unsubscribeSer();
+      unsubscribeRes();
       unsubscribeFav();
     };
   }, [state.currentUser?.id]);
@@ -582,7 +745,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     city: string;
     phone: string;
     email?: string;
-    estData?: Partial<Establishment>;
+    estData?: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] };
   }) => {
     if (!confirmationResult) {
       const msg = "Aucun code de vérification n'a été envoyé. Veuillez d'abord demander un code OTP.";
@@ -626,8 +789,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
               neighborhood: registrationData.estData.neighborhood || '',
               address: registrationData.estData.address || '',
               phone: firebaseUser.phoneNumber || registrationData.phone,
-              description: '',
-              photos: [],
+              description: registrationData.estData.description || '',
+              photos: registrationData.estData.photos || [],
+              tags: registrationData.estData.tags || [],
               geolocation: registrationData.estData.geolocation || '',
               status: 'valide',
               averageRating: 0
@@ -675,7 +839,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (userData: Omit<User, 'id'>, pass: string, estData?: Partial<Establishment>) => {
+  const register = async (userData: Omit<User, 'id'>, pass: string, estData?: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] }) => {
     const emailStr = (userData.email || '').trim();
     if (!emailStr) {
       throw new Error("L'adresse e-mail est obligatoire.");
@@ -718,8 +882,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
             neighborhood: estData.neighborhood || '',
             address: estData.address || '',
             phone: userData.phone || '',
-            description: '',
-            photos: [],
+            description: estData.description || '',
+            photos: estData.photos || [],
+            tags: estData.tags || [],
             geolocation: estData.geolocation || '',
             status: 'valide',
             averageRating: 0
@@ -768,6 +933,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
     } catch (error) {
       console.error("Erreur ajout etablissement:", error);
+    }
+  };
+
+  const updateEstablishment = async (id: string, data: Partial<Establishment>) => {
+    try {
+      const cleanData = Object.entries(data).reduce((acc, [key, val]) => {
+        if (val !== undefined) {
+          acc[key] = val;
+        }
+        return acc;
+      }, {} as any);
+      await updateDoc(doc(db, 'establishments', id), cleanData);
+    } catch (error) {
+      console.error("Erreur mise à jour etablissement:", error);
+      throw error;
     }
   };
 
@@ -910,7 +1090,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const upgradeToGerant = async (estData: Partial<Establishment>) => {
+  const upgradeToGerant = async (estData: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] }) => {
     if (!state.currentUser) return;
     try {
       // Create or update user doc
@@ -933,8 +1113,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         neighborhood: estData.neighborhood || '',
         address: estData.address || '',
         phone: state.currentUser.phone || state.currentUser.email || '',
-        description: '',
-        photos: [],
+        description: estData.description || '',
+        photos: estData.photos || [],
+        tags: estData.tags || [],
         geolocation: estData.geolocation || '',
         status: 'valide',
         averageRating: 0
@@ -990,6 +1171,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const toggleDJStatus = async (requestId: string, isDJ: boolean) => {
+    try {
+      await updateDoc(doc(db, 'relationshipRequests', requestId), { isDJ });
+    } catch (error: any) {
+      console.error("Erreur toggleDJStatus:", error);
+      throw error;
+    }
+  };
+
   const createServiceRequest = async (req: Omit<ServiceRequest, 'id' | 'status' | 'date'>) => {
     try {
       await addDoc(collection(db, 'serviceRequests'), {
@@ -1037,11 +1227,79 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return convId;
   };
 
-  const toggleDJStatus = async (requestId: string, isDJ: boolean) => {
+  const addReview = async (review: Omit<Review, 'id' | 'date'>) => {
     try {
-      await updateDoc(doc(db, 'relationshipRequests', requestId), { isDJ });
+      await addDoc(collection(db, 'reviews'), {
+        ...review,
+        date: new Date().toISOString()
+      });
     } catch (error) {
-      console.error("Erreur toggleDJStatus:", error);
+      console.error("Erreur ajout avis:", error);
+      throw error;
+    }
+  };
+
+  const replyToReview = async (reviewId: string, reply: string) => {
+    try {
+      await updateDoc(doc(db, 'reviews', reviewId), {
+        reply,
+        replyDate: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Erreur reponse avis:", error);
+      throw error;
+    }
+  };
+
+  const addReservation = async (res: Omit<Reservation, 'id' | 'status' | 'createdAt'>) => {
+    try {
+      const now = new Date().toISOString();
+      await addDoc(collection(db, 'reservations'), {
+        ...res,
+        status: 'en_attente',
+        createdAt: now,
+        history: [{ status: 'en_attente', updatedAt: now }]
+      });
+    } catch (error) {
+      console.error("Erreur addReservation:", error);
+      throw error;
+    }
+  };
+
+  const updateReservationStatus = async (id: string, status: 'en_attente' | 'confirmee' | 'refusee' | 'annulee', managerMessage?: string) => {
+    try {
+      const now = new Date().toISOString();
+      const resRef = doc(db, 'reservations', id);
+      const resSnap = await getDoc(resRef);
+      if (!resSnap.exists()) throw new Error("Réservation introuvable");
+      
+      const currentData = resSnap.data() as Reservation;
+      const history = currentData.history || [];
+      const updatedHistory = [...history, { status, updatedAt: now, comment: managerMessage }];
+      
+      const updates: any = {
+        status,
+        history: updatedHistory
+      };
+      if (managerMessage !== undefined) {
+        updates.managerMessage = managerMessage;
+      }
+      await updateDoc(resRef, updates);
+    } catch (error) {
+      console.error("Erreur updateReservationStatus:", error);
+      throw error;
+    }
+  };
+
+  const addMenuDuJour = async (menu: Omit<MenuDuJour, 'id' | 'publishedAt'>) => {
+    try {
+      const now = new Date().toISOString();
+      await addDoc(collection(db, 'menus_du_jour'), {
+        ...menu,
+        publishedAt: now
+      });
+    } catch (error) {
+      console.error("Erreur addMenuDuJour:", error);
       throw error;
     }
   };
@@ -1056,6 +1314,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       envoyerCodeOtp,
       confirmerCodeOtp,
       addEstablishment,
+      updateEstablishment,
       addPublication,
       toggleFavorite,
       updateFavoriteTags,
@@ -1071,6 +1330,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toggleDJStatus,
       addApplication,
       updateApplicationStatus,
+      addReview,
+      replyToReview,
+      addReservation,
+      updateReservationStatus,
+      addMenuDuJour,
       setGlobalError,
       toggleTheme
     }}>

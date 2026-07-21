@@ -24,6 +24,8 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
     relationshipRequests,
     establishments,
     serviceRequests,
+    reservations,
+    updateReservationStatus,
     updateRelationshipRequest,
     createConversation,
     theme,
@@ -109,6 +111,9 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   // Gerant Establishment fields
   const [estName, setEstName] = useState('');
   const [estCategory, setEstCategory] = useState<Category>('maquis');
+  const [estDescription, setEstDescription] = useState('');
+  const [estPhotoUrl, setEstPhotoUrl] = useState('');
+  const [estTags, setEstTags] = useState('');
   const [estNeighborhood, setEstNeighborhood] = useState('');
   const [estGeolocation, setEstGeolocation] = useState('');
 
@@ -119,6 +124,9 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
       await upgradeToGerant({
         name: estName,
         category: estCategory,
+        description: estDescription,
+        photos: estPhotoUrl ? [estPhotoUrl] : [],
+        tags: estTags.split(',').map(t => t.trim()).filter(t => t !== ''),
         neighborhood: estNeighborhood,
         geolocation: estGeolocation
       });
@@ -356,6 +364,36 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 </select>
               </div>
               <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-500 ml-1">Description de l'établissement</label>
+                <textarea 
+                  placeholder="Décrivez votre établissement (ambiance, spécialités...)" 
+                  required 
+                  value={estDescription} 
+                  onChange={e => setEstDescription(e.target.value)} 
+                  className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium min-h-[100px]"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-500 ml-1">Image de description (URL)</label>
+                <input 
+                  type="url" 
+                  placeholder="https://images.unsplash.com/..." 
+                  value={estPhotoUrl} 
+                  onChange={e => setEstPhotoUrl(e.target.value)} 
+                  className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" 
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-500 ml-1">Tags (séparés par des virgules)</label>
+                <input 
+                  type="text" 
+                  placeholder="Wifi, Terrasse, Live music..." 
+                  value={estTags} 
+                  onChange={e => setEstTags(e.target.value)} 
+                  className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" 
+                />
+              </div>
+              <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-gray-500 ml-1">Quartier</label>
                 <input type="text" placeholder="Quartier" required value={estNeighborhood} onChange={e => setEstNeighborhood(e.target.value)} className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" />
               </div>
@@ -377,6 +415,16 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
     const invitationsReceived = clientRequests.filter(r => r.type === 'gerant_invite' && r.targetId === currentUser.id);
     const requestsSent = clientRequests.filter(r => r.type === 'client_join' && r.initiatorId === currentUser.id);
     const myServiceRequests = serviceRequests.filter(r => r.clientId === currentUser.id);
+    const myReservations = reservations ? reservations.filter(r => r.clientId === currentUser.id) : [];
+
+    const canCancelReservation = (resDate: string, resTime: string) => {
+      try {
+        const reservationDateTime = new Date(`${resDate}T${resTime || '00:00'}`);
+        return reservationDateTime > new Date();
+      } catch {
+        return true;
+      }
+    };
 
     const getEstablishmentName = (id: string) => {
       const est = establishments.find(e => e.id === id);
@@ -757,6 +805,98 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
             </div>
           )}
         </div>
+
+        {/* Mes réservations de table (Restaurants) */}
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+          <h3 className="text-sm font-black text-gray-900 mb-1 flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-orange-500" />
+            Mes réservations de table (Restaurants)
+          </h3>
+          <p className="text-[10px] text-gray-400 font-semibold mb-4">Suivez et gérez vos réservations de table dans les restaurants partenaires.</p>
+
+          {!myReservations || myReservations.length === 0 ? (
+            <p className="text-xs text-gray-400 font-bold py-3 text-center bg-gray-50 rounded-2xl">Aucune réservation de table pour le moment.</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {myReservations.map(res => {
+                const estDetail = establishments.find(e => e.id === res.establishmentId);
+                const isPassed = !canCancelReservation(res.date, res.time);
+                const clientCanCancel = res.status !== 'annulee' && res.status !== 'refusee' && !isPassed;
+
+                return (
+                  <div key={res.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                          <span>🍽️</span>
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-xs text-gray-900 truncate">{res.establishmentName}</h4>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                            <span className="text-[9px] font-black uppercase tracking-wide bg-orange-100/50 text-orange-700 px-1.5 py-0.5 rounded">
+                              {res.guestsCount} pers.
+                            </span>
+                            <span className="text-[9px] text-gray-500 font-bold">
+                              {new Date(res.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à {res.time}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${
+                          res.status === 'en_attente' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+                          res.status === 'confirmee' ? 'bg-green-100 text-green-800 border border-green-200' :
+                          res.status === 'refusee' ? 'bg-red-100 text-red-800 border border-red-200' :
+                          'bg-gray-100 text-gray-600 border border-gray-200'
+                        }`}>
+                          {res.status === 'en_attente' ? 'En attente' : 
+                           res.status === 'confirmee' ? 'Confirmée' : 
+                           res.status === 'refusee' ? 'Refusée' : 'Annulée'}
+                        </span>
+                        {estDetail && (
+                          <button 
+                            type="button"
+                            onClick={() => handleStartChat(res.establishmentId, estDetail.name, estDetail.ownerId)}
+                            className="p-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg transition-colors cursor-pointer"
+                            title="Discuter avec l'établissement"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {res.note && (
+                      <div className="text-xs text-gray-600 bg-white p-2.5 rounded-lg border border-gray-100 font-medium">
+                        <span className="text-[10px] font-bold text-gray-400 block uppercase mb-0.5">Votre note :</span>
+                        {res.note}
+                      </div>
+                    )}
+
+                    {res.managerMessage && (
+                      <div className="text-xs text-amber-900 bg-amber-50/50 p-2.5 rounded-lg border border-amber-100 font-medium">
+                        <span className="text-[10px] font-bold text-amber-600 block uppercase mb-0.5">Message du gérant :</span>
+                        {res.managerMessage}
+                      </div>
+                    )}
+
+                    {clientCanCancel && (
+                      <button
+                        type="button"
+                        onClick={() => updateReservationStatus(res.id, 'annulee')}
+                        className="self-end text-[10px] font-black text-red-600 hover:text-red-700 hover:underline uppercase tracking-wide py-1 cursor-pointer"
+                      >
+                        Annuler la réservation
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Mes candidatures aux offres d'emploi */}
         <div id="my-applications-section" className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
           <h3 className="text-sm font-black text-gray-900 mb-1 flex items-center gap-2">
@@ -832,6 +972,9 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
             role === 'gerant' ? {
               name: estName,
               category: estCategory,
+              description: estDescription,
+              photos: estPhotoUrl ? [estPhotoUrl] : [],
+              tags: estTags.split(',').map(t => t.trim()).filter(t => t !== ''),
               neighborhood: estNeighborhood,
               geolocation: estGeolocation
             } : undefined
@@ -874,6 +1017,9 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               estData: role === 'gerant' ? {
                 name: estName,
                 category: estCategory,
+                description: estDescription,
+                photos: estPhotoUrl ? [estPhotoUrl] : [],
+                tags: estTags.split(',').map(t => t.trim()).filter(t => t !== ''),
                 neighborhood: estNeighborhood,
                 geolocation: estGeolocation
               } : undefined
@@ -1004,6 +1150,39 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                       <option value="residence">Résidence</option>
                       <option value="autre">Autre</option>
                     </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Description de l'établissement</label>
+                    <textarea 
+                      placeholder="Décrivez votre établissement (ambiance, spécialités...)" 
+                      required 
+                      value={estDescription} 
+                      onChange={e => setEstDescription(e.target.value)} 
+                      className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium min-h-[100px]"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Image de description (URL)</label>
+                    <input 
+                      type="url" 
+                      placeholder="https://images.unsplash.com/..." 
+                      value={estPhotoUrl} 
+                      onChange={e => setEstPhotoUrl(e.target.value)} 
+                      className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" 
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Tags (séparés par des virgules)</label>
+                    <input 
+                      type="text" 
+                      placeholder="Wifi, Terrasse, Live music..." 
+                      value={estTags} 
+                      onChange={e => setEstTags(e.target.value)} 
+                      className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" 
+                    />
                   </div>
 
                   <div className="flex flex-col gap-1">

@@ -24,9 +24,11 @@ export interface Establishment {
   phone: string;
   description: string;
   photos: string[];
+  tags: string[];
   status: 'en_attente' | 'valide' | 'suspendu';
   averageRating: number;
   geolocation?: string;
+  openingHours?: string;
 }
 
 export type PubType = 'annonce' | 'promo' | 'bon_plan' | 'evenement' | 'recrutement';
@@ -91,3 +93,36 @@ export interface ServiceRequest {
   managerMessage?: string;
   date: string;
 }
+
+export interface Reservation {
+  id: string;
+  establishmentId: string;
+  establishmentName: string;
+  clientId: string;
+  clientName: string;
+  clientPhone?: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:MM
+  guestsCount: number;
+  note?: string;
+  status: 'en_attente' | 'confirmee' | 'refusee' | 'annulee';
+  createdAt: string;
+  history?: { status: string; updatedAt: string; comment?: string }[];
+  managerMessage?: string;
+}
+
+export interface MenuItem {
+  name: string;
+  price: number;
+  category?: 'entree' | 'plat' | 'dessert' | 'boisson' | string;
+  photoUrl?: string;
+}
+
+export interface MenuDuJour {
+  id: string;
+  establishmentId: string;
+  date: string; // YYYY-MM-DD
+  items: MenuItem[];
+  publishedAt: string;
+}
+

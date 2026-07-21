@@ -53,7 +53,18 @@ service cloud.firestore {
         && (data.get('description', '') is string && data.get('description', '').size() <= 1000)
         && (data.get('geolocation', '') is string && data.get('geolocation', '').size() <= 500)
         && (data.get('averageRating', 0) is number)
-        && (data.get('photos', []) is list && data.get('photos', []).size() <= 10);
+        && (data.get('photos', []) is list && data.get('photos', []).size() <= 10)
+        && (data.get('tags', []) is list && data.get('tags', []).size() <= 50)
+        && (data.get('openingHours', '') is string && data.get('openingHours', '').size() <= 500);
+    }
+
+    function isValidReview(data) {
+      return data.keys().hasAll(['clientId', 'establishmentId', 'rating', 'comment', 'date'])
+        && data.clientId is string && data.clientId == request.auth.uid
+        && data.establishmentId is string && data.establishmentId.size() > 0
+        && data.rating is number && data.rating >= 1 && data.rating <= 5
+        && data.comment is string && data.comment.size() <= 1000
+        && data.date is string && data.date.size() > 0;
     }
 
     function isValidPublication(data) {
@@ -115,6 +126,28 @@ service cloud.firestore {
         && data.establishmentIds is list
         && data.establishmentIds.size() <= 100
         && (data.get('tags', {}) is map);
+    }
+
+    function isValidReservation(data) {
+      return data.keys().hasAll(['establishmentId', 'establishmentName', 'clientId', 'clientName', 'clientPhone', 'date', 'time', 'guestsCount', 'status'])
+        && data.establishmentId is string && data.establishmentId.size() > 0
+        && data.establishmentName is string && data.establishmentName.size() > 0
+        && data.clientId is string && data.clientId.size() > 0
+        && data.clientName is string && data.clientName.size() > 0
+        && data.clientPhone is string
+        && data.date is string && data.date.size() > 0
+        && data.time is string && data.time.size() > 0
+        && data.guestsCount is number && data.guestsCount > 0
+        && data.status in ['en_attente', 'confirmee', 'refusee', 'annulee']
+        && (data.get('note', '') is string)
+        && (data.get('managerMessage', '') is string);
+    }
+
+    function isValidMenuDuJour(data) {
+      return data.keys().hasAll(['establishmentId', 'date', 'items'])
+        && data.establishmentId is string && data.establishmentId.size() > 0
+        && data.date is string && data.date.size() > 0
+        && data.items is list;
     }
 
     match /users/{userId} {
@@ -196,6 +229,28 @@ service cloud.firestore {
     match /favorites/{userId} {
       allow get, delete: if isSignedIn() && request.auth.uid == userId;
       allow create, update: if isSignedIn() && request.auth.uid == userId && isValidFavorites(incoming());
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidReview(incoming());
+      allow update: if isSignedIn() && existing().clientId == request.auth.uid && isValidReview(incoming()) && incoming().clientId == existing().clientId && incoming().establishmentId == existing().establishmentId;
+      allow delete: if isSignedIn() && (existing().clientId == request.auth.uid || isUserAdmin());
+    }
+
+    match /reservations/{resId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidReservation(incoming()) && incoming().clientId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        (existing().clientId == request.auth.uid && incoming().clientId == request.auth.uid && incoming().status == 'annulee')
+        || (get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid)
+      );
+    }
+
+    match /menus_du_jour/{menuId} {
+      allow read: if true;
+      allow create, update: if isSignedIn() && isValidMenuDuJour(incoming()) && get(/databases/$(database)/documents/establishments/$(incoming().establishmentId)).data.ownerId == request.auth.uid;
+      allow delete: if isSignedIn() && get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid;
     }
   }
 }
