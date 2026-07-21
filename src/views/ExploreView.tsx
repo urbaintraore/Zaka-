@@ -165,7 +165,7 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
             placeholder="Rechercher un lieu, quartier..." 
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-12 pr-4 py-3.5 bg-white rounded-xl border border-gray-200 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 outline-none font-medium"
+            className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-gray-950 text-gray-900 dark:text-white rounded-xl border border-gray-200 dark:border-gray-900 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 outline-none font-medium transition-all"
           />
         </div>
         <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-2">

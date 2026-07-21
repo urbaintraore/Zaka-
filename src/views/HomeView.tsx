@@ -10,7 +10,7 @@ interface HomeViewProps {
 }
 
 export function HomeView({ onStartChat }: HomeViewProps) {
-  const { publications, establishments, currentUser, createServiceRequest, relationshipRequests, setGlobalError, favorites, toggleFavorite } = useAppStore();
+  const { publications, establishments, currentUser, createServiceRequest, relationshipRequests, setGlobalError, favorites, toggleFavorite, reviews } = useAppStore();
   const [reservationEst, setReservationEst] = useState<{ id: string, name: string } | null>(null);
   const [selectedPub, setSelectedPub] = useState<Publication | null>(null);
   const [filterMemberOnly, setFilterMemberOnly] = useState(false);
@@ -34,6 +34,12 @@ export function HomeView({ onStartChat }: HomeViewProps) {
   };
 
   const getEst = (id: string) => establishments.find(e => e.id === id);
+
+  // Get recent 5-star reviews
+  const recentTopReviews = reviews
+    .filter(r => r.rating === 5)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 3);
 
   // Filter based on member status if active
   const joinedEstIds = currentUser
@@ -148,6 +154,44 @@ export function HomeView({ onStartChat }: HomeViewProps) {
           </button>
         </div>
       </div>
+
+      {/* Dynamic Widget: Recent 5-Star Reviews */}
+      {recentTopReviews.length > 0 && (
+        <div className="px-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="w-5 h-5 text-yellow-500" />
+            <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Coups de cœur récents</h3>
+          </div>
+          <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2">
+            {recentTopReviews.map(review => {
+              const est = getEst(review.establishmentId);
+              if (!est) return null;
+              return (
+                <div key={review.id} className="min-w-[280px] bg-white dark:bg-gray-950 border border-yellow-200 dark:border-yellow-900/40 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+                  <div className="absolute -top-6 -right-6 w-16 h-16 bg-yellow-100/50 dark:bg-yellow-900/20 rounded-full blur-xl"></div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-950/50 flex items-center justify-center font-bold text-orange-600 dark:text-orange-400 text-xs">
+                        {(review.clientName || 'A').charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-gray-900 dark:text-gray-100">{review.clientName || 'Anonyme'}</div>
+                        <div className="text-[10px] text-gray-500 dark:text-gray-400">à {est.name}</div>
+                      </div>
+                    </div>
+                    <div className="flex text-yellow-400">
+                      {[...Array(5)].map((_, i) => <Star key={i} className="w-3 h-3 fill-current" />)}
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 italic line-clamp-3">
+                    "{review.comment}"
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="px-4 flex flex-col gap-8">
         {/* Filtres de flux */}

@@ -40,6 +40,12 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
   const [resActiveEstId, setResActiveEstId] = useState<string | null>(null);
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [menuActiveEstId, setMenuActiveEstId] = useState<string | null>(null);
+  const [showGuide, setShowGuide] = useState(() => !localStorage.getItem('zaka_gerant_guide_seen'));
+
+  const closeGuide = () => {
+    localStorage.setItem('zaka_gerant_guide_seen', 'true');
+    setShowGuide(false);
+  };
   
   // Est Form state
   const [estName, setEstName] = useState('');
@@ -52,7 +58,28 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
   const [estPhotoUrl, setEstPhotoUrl] = useState('');
   const [estOpeningHours, setEstOpeningHours] = useState('');
   const [estTags, setEstTags] = useState('');
+  const [estMenuPdfUrl, setEstMenuPdfUrl] = useState('');
+  const [estMenuImages, setEstMenuImages] = useState<string[]>([]);
+  const [isUploadingMenuImg, setIsUploadingMenuImg] = useState(false);
   const [editingEstId, setEditingEstId] = useState<string | null>(null);
+
+  const handleMenuImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      try {
+        setIsUploadingMenuImg(true);
+        const newImages: string[] = [];
+        for (let i = 0; i < e.target.files.length; i++) {
+          const base64 = await compressImage(e.target.files[i], 800, 800, 0.7);
+          newImages.push(base64);
+        }
+        setEstMenuImages(prev => [...prev, ...newImages]);
+      } catch (error) {
+        console.error("Failed to compress menu image", error);
+      } finally {
+        setIsUploadingMenuImg(false);
+      }
+    }
+  };
 
   // Pub Form State
   const [pubModalEstId, setPubModalEstId] = useState<string | null>(null);
@@ -102,7 +129,9 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
       photos,
       tags,
       geolocation: estGeolocation,
-      openingHours: estOpeningHours
+      openingHours: estOpeningHours,
+      menuPdfUrl: estMenuPdfUrl,
+      menuImages: estMenuImages
     };
 
     try {
@@ -128,6 +157,8 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
     setEstPhotoUrl('');
     setEstOpeningHours('');
     setEstTags('');
+    setEstMenuPdfUrl('');
+    setEstMenuImages([]);
   };
 
   const handlePubSubmit = async (e: React.FormEvent) => {
@@ -294,6 +325,45 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
             <input type="url" placeholder="https://maps.google.com/..." value={estGeolocation} onChange={e => setEstGeolocation(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
           </div>
 
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-gray-500 ml-1">Lien PDF du Menu (optionnel)</label>
+            <input 
+              type="url" 
+              placeholder="https://exemple.com/menu.pdf" 
+              value={estMenuPdfUrl} 
+              onChange={e => setEstMenuPdfUrl(e.target.value)} 
+              className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" 
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-gray-500 ml-1">Galerie d'images du Menu</label>
+            <input 
+              type="file" 
+              accept="image/*" 
+              multiple 
+              onChange={handleMenuImageUpload}
+              className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium text-xs" 
+            />
+            {isUploadingMenuImg && <p className="text-[10px] text-orange-600 font-bold mt-1">Compression en cours...</p>}
+            {estMenuImages.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto py-2">
+                {estMenuImages.map((img, idx) => (
+                  <div key={idx} className="relative w-16 h-16 rounded-lg overflow-hidden shrink-0 border border-gray-200">
+                    <img src={img} alt={`Menu ${idx + 1}`} className="w-full h-full object-cover" />
+                    <button 
+                      type="button" 
+                      onClick={() => setEstMenuImages(prev => prev.filter((_, i) => i !== idx))}
+                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button type="submit" className="w-full mt-4 py-4 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 active:scale-[0.98] transition-all shadow-md shadow-orange-600/10">
             {editingEstId ? "Enregistrer les modifications" : "Créer l'établissement"}
           </button>
@@ -393,6 +463,8 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
                       setEstPhotoUrl(est.photos && est.photos[0] ? est.photos[0] : '');
                       setEstOpeningHours(est.openingHours || '');
                       setEstTags(est.tags ? est.tags.join(', ') : '');
+                      setEstMenuPdfUrl(est.menuPdfUrl || '');
+                      setEstMenuImages(est.menuImages || []);
                       setIsAdding(true);
                     }}
                     className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
@@ -729,6 +801,74 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
           </div>
         </div>
       )}
+
+      {/* Guide visuel (Overlay) pour le premier login du gérant */}
+      {showGuide && myEsts.length > 0 && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/80 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-300 relative">
+            <button 
+              onClick={closeGuide}
+              className="absolute top-4 right-4 p-2 bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:hover:text-white rounded-full transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-2xl flex items-center justify-center mb-4 mx-auto">
+              <Store className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-gray-900 dark:text-white text-center mb-2">Bienvenue Gérant !</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 text-center mb-6 leading-relaxed">
+              Pour commencer, vous pouvez gérer vos <strong className="text-orange-600 dark:text-orange-400">Réservations</strong> et mettre à jour votre <strong className="text-orange-600 dark:text-orange-400">Menu du jour</strong> directement depuis la fiche de votre établissement.
+            </p>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-100 dark:border-orange-900/20">
+                <Calendar className="w-5 h-5 text-orange-500" />
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-200">Gérer les réservations</span>
+              </div>
+              <div className="flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-100 dark:border-orange-900/20">
+                <ChefHat className="w-5 h-5 text-orange-500" />
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-200">Mettre à jour le Menu</span>
+              </div>
+            </div>
+            <button 
+              onClick={closeGuide}
+              className="w-full mt-6 py-3.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold rounded-xl active:scale-[0.98] transition-all"
+            >
+              C'est compris, merci !
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* FAQ Section */}
+      <div className="mt-12 mb-8 bg-white dark:bg-gray-950 rounded-3xl p-6 border border-gray-100 dark:border-gray-900 shadow-sm">
+        <h3 className="text-lg font-black text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+          <FileText className="w-5 h-5 text-orange-500" />
+          Foire Aux Questions (FAQ)
+        </h3>
+        
+        <div className="flex flex-col gap-4">
+          <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+            <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">Comment gérer mes réservations ?</h4>
+            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+              Cliquez sur le bouton "Gérer les réservations" sur la fiche de votre établissement. Vous pourrez y voir toutes les demandes en attente, les accepter ou les refuser, et suivre l'historique. N'oubliez pas de consulter régulièrement cette section.
+            </p>
+          </div>
+
+          <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+            <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">À quelle fréquence dois-je mettre à jour mon Menu du Jour ?</h4>
+            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+              Nous vous conseillons de mettre à jour votre menu chaque jour de la semaine avant 11h. Vous pouvez utiliser le bouton "Menu du jour" et dupliquer un menu précédent pour gagner du temps. Un menu à jour attire jusqu'à 3x plus de clients le midi.
+            </p>
+          </div>
+
+          <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+            <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">Comment répondre aux avis clients ?</h4>
+            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+              Dans la section "Avis des clients" de votre tableau de bord, vous trouverez un champ pour répondre à chaque avis. Une réponse courtoise, même à un avis négatif, montre votre professionnalisme.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Restaurant Reservation Modal */}
       {showResModal && resActiveEstId && (

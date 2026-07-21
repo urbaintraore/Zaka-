@@ -8,6 +8,8 @@ export interface User {
   role: Role;
   country?: string;
   city?: string;
+  points?: number;
+  referralCode?: string;
 }
 
 export type Category = 'maquis' | 'bar' | 'restaurant' | 'boite_de_nuit' | 'glacier_pizzeria' | 'hotel' | 'residence' | 'autre';
@@ -29,6 +31,8 @@ export interface Establishment {
   averageRating: number;
   geolocation?: string;
   openingHours?: string;
+  menuPdfUrl?: string;
+  menuImages?: string[];
 }
 
 export type PubType = 'annonce' | 'promo' | 'bon_plan' | 'evenement' | 'recrutement';

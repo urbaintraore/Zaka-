@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Calendar, Clock, Share2 } from 'lucide-react';
+import { X, Calendar, Clock, Share2, Compass, FileText } from 'lucide-react';
 import { Establishment } from '../types';
 import { ReservationModal } from './ReservationModal';
 import { AvisUtilisateurs } from './AvisUtilisateurs';
@@ -64,6 +64,10 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
     setShowReservation(false);
   };
 
+  const mapsUrl = establishment.geolocation 
+    ? (establishment.geolocation.startsWith('http') ? establishment.geolocation : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(establishment.geolocation)}`) 
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(establishment.name + ' ' + (establishment.neighborhood || ''))}`;
+
   if (showReservation) {
     return <ReservationModal establishmentName={establishment.name} onClose={() => setShowReservation(false)} onSubmit={handleReservationSubmit} />;
   }
@@ -100,7 +104,7 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md overflow-y-auto">
-      <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+      <div className="bg-white dark:bg-gray-950 text-gray-900 dark:text-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
         <div className="relative h-64 bg-gray-200 flex-shrink-0">
           <img 
             src={allPhotos[activePhoto]} 
@@ -148,9 +152,9 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
             </div>
           </div>
 
-          <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
-            <h3 className="text-sm font-black text-gray-900 mb-2 uppercase tracking-wide">À propos</h3>
-            <p className="text-sm text-gray-600 font-medium leading-relaxed">
+          <div className="p-4 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border border-gray-100 dark:border-gray-800">
+            <h3 className="text-sm font-black text-gray-900 dark:text-white mb-2 uppercase tracking-wide">À propos</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 font-medium leading-relaxed">
               {establishment.description || "Aucune description disponible pour cet établissement."}
             </p>
           </div>
@@ -177,6 +181,37 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
                   {tag}
                 </span>
               ))}
+            </div>
+          )}
+
+          {/* Menu Fichiers et Images */}
+          {(establishment.menuPdfUrl || (establishment.menuImages && establishment.menuImages.length > 0)) && (
+            <div className="p-4 bg-orange-50/20 dark:bg-orange-950/10 rounded-2xl border border-orange-100 dark:border-orange-900/30 space-y-3">
+              <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide flex items-center gap-2">
+                <span>📖</span> La Carte & Menu
+              </h3>
+              
+              {establishment.menuPdfUrl && (
+                <a 
+                  href={establishment.menuPdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-xs font-bold text-orange-600 dark:text-orange-400 bg-white dark:bg-gray-900 p-3 rounded-xl border border-orange-200 dark:border-orange-800 shadow-sm hover:bg-orange-50 transition-colors"
+                >
+                  <FileText className="w-4 h-4" />
+                  Voir le Menu complet (PDF)
+                </a>
+              )}
+
+              {establishment.menuImages && establishment.menuImages.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto hide-scrollbar py-2">
+                  {establishment.menuImages.map((img, idx) => (
+                    <a key={idx} href={img} target="_blank" rel="noopener noreferrer" className="shrink-0 w-32 h-40 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800 shadow-sm cursor-pointer hover:opacity-90 transition-opacity">
+                      <img src={img} alt={`Menu ${idx + 1}`} className="w-full h-full object-cover" />
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -256,10 +291,22 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
             <AvisUtilisateurs establishmentId={establishment.id} />
           </div>
           
-          <div className="sticky bottom-0 pt-4 bg-white">
+          <div className="sticky bottom-0 pt-4 bg-white dark:bg-gray-950 flex gap-3 z-10">
+            {mapsUrl && (
+              <a 
+                href={mapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 border-2 border-orange-200 dark:border-orange-900/60 text-orange-600 dark:text-orange-400 font-bold px-5 py-4 rounded-2xl hover:bg-orange-50 dark:hover:bg-orange-950/20 active:scale-[0.98] transition-all cursor-pointer"
+                id={`itinerary-btn-${establishment.id}`}
+              >
+                <Compass className="w-5 h-5" />
+                <span>Itinéraire</span>
+              </a>
+            )}
             <button 
               onClick={() => setShowReservation(true)}
-              className="w-full flex items-center justify-center gap-2 bg-orange-600 text-white font-bold py-4 rounded-2xl hover:bg-orange-700 active:scale-[0.98] transition-all shadow-lg shadow-orange-600/20 cursor-pointer"
+              className="flex-1 flex items-center justify-center gap-2 bg-orange-600 text-white font-bold py-4 rounded-2xl hover:bg-orange-700 active:scale-[0.98] transition-all shadow-lg shadow-orange-600/20 cursor-pointer"
             >
               <Calendar className="w-5 h-5" />
               {establishment.category === 'restaurant' ? 'Réserver une table' : 'Faire une réservation'}

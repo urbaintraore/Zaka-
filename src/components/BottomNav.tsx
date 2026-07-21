@@ -10,7 +10,8 @@ interface BottomNavProps {
 }
 
 export function BottomNav({ currentTab, onChange }: BottomNavProps) {
-  const { unreadCount } = useAppStore();
+  const { unreadCount, favorites } = useAppStore();
+
   const tabs = [
     { id: 'home', label: 'Accueil', icon: Home },
     { id: 'explore', label: 'Explorer', icon: Compass },
@@ -26,7 +27,9 @@ export function BottomNav({ currentTab, onChange }: BottomNavProps) {
         {tabs.map(tab => {
           const Icon = tab.icon;
           const isActive = currentTab === tab.id;
-          const hasBadge = tab.id === 'messages' && unreadCount > 0;
+          const isMessagesBadge = tab.id === 'messages' && unreadCount > 0;
+          const isFavoritesBadge = tab.id === 'favorites' && favorites.length > 0;
+          
           return (
             <button
               key={tab.id}
@@ -38,9 +41,14 @@ export function BottomNav({ currentTab, onChange }: BottomNavProps) {
             >
               <div className="relative">
                 <Icon className={cn("w-6 h-6", isActive && "fill-orange-50")} strokeWidth={isActive ? 2.5 : 2} />
-                {hasBadge && (
+                {isMessagesBadge && (
                   <span className="absolute -top-1 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-orange-600 text-[9px] font-black text-white px-0.5 shadow-sm">
-                    {unreadCount}
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+                {isFavoritesBadge && (
+                  <span className="absolute -top-1 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-orange-600 text-[9px] font-black text-white px-0.5 shadow-sm">
+                    {favorites.length}
                   </span>
                 )}
               </div>

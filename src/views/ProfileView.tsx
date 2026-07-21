@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
 import { Role, Category } from '../types';
-import { LogOut, User, Check, X, MessageSquare, Store, Sparkles, Calendar, Download } from 'lucide-react';
+import { LogOut, User, Check, X, MessageSquare, Store, Sparkles, Calendar, Download, Star } from 'lucide-react';
 import { GerantDashboard } from './GerantDashboard';
 import { AdminDashboard } from './AdminDashboard';
 import { useInstallApp } from '../hooks/useInstallApp';
@@ -37,6 +37,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   const [role, setRole] = useState<Role>('client');
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [subView, setSubView] = useState<'dashboard' | 'profile'>('dashboard');
+  const [resActiveTab, setResActiveTab] = useState<'current' | 'history'>('current');
 
   // Profile editing state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -516,9 +517,56 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                     </ol>
                   </div>
                 )}
-                <button onClick={toggleTheme} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer">
-                  {theme === 'dark' ? '☀️ Mode Clair' : '🌙 Mode Sombre'}
-                </button>
+                {/* Thème avec sélection Manuelle / Auto */}
+                <div className="flex flex-col gap-1.5 w-full">
+                  <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-750">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.setItem('app-theme', 'light');
+                        if (theme === 'dark') toggleTheme();
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        localStorage.getItem('app-theme') === 'light'
+                          ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                      }`}
+                    >
+                      ☀️ Clair
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.setItem('app-theme', 'dark');
+                        if (theme === 'light') toggleTheme();
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        localStorage.getItem('app-theme') === 'dark'
+                          ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                      }`}
+                    >
+                      🌙 Sombre
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.removeItem('app-theme');
+                        const systemTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                        if (theme !== systemTheme) {
+                          toggleTheme();
+                        }
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        localStorage.getItem('app-theme') === null
+                          ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                      }`}
+                    >
+                      ⚙️ Auto
+                    </button>
+                  </div>
+                </div>
                 <button onClick={() => setIsUpgrading(true)} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-50 text-orange-600 font-bold rounded-xl hover:bg-orange-100 transition-colors cursor-pointer">
                   Devenir Gérant (Ajouter un établissement)
                 </button>
@@ -625,6 +673,55 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               </div>
             </form>
           )}
+        </div>
+
+        {/* Parrainage & Fidélité */}
+        <div className="bg-white dark:bg-gray-950 rounded-3xl p-6 shadow-sm border border-orange-100 dark:border-orange-900/30 overflow-hidden relative">
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-orange-100 dark:bg-orange-900/20 rounded-full blur-2xl"></div>
+          <div className="relative z-10 flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl flex items-center justify-center text-white shadow-sm">
+                <Star className="w-5 h-5 fill-current" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Programme Fidélité</h3>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold">Parrainez vos amis et gagnez des points</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-orange-50/50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/30 rounded-2xl">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider">Vos points virtuels</span>
+                <span className="text-2xl font-black text-gray-900 dark:text-white">{currentUser.points || 0} <span className="text-sm text-gray-400 dark:text-gray-500">pts</span></span>
+              </div>
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider">Badge Actuel</span>
+                <span className="text-sm font-black text-gray-900 dark:text-white mt-1 px-2.5 py-1 bg-white dark:bg-gray-900 rounded-lg shadow-xs border border-gray-100 dark:border-gray-800">
+                  {(!currentUser.points || currentUser.points < 100) ? '🌱 Novice' : (currentUser.points < 500 ? '🔥 Habitué' : '👑 Ambassadeur')}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-gray-600 dark:text-gray-300 font-medium">Votre code de parrainage :</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl font-mono text-sm font-bold text-center text-gray-800 dark:text-gray-200">
+                  {currentUser.referralCode || `ZAKA-${currentUser.name.substring(0,3).toUpperCase()}-${currentUser.id.substring(0,4).toUpperCase()}`}
+                </code>
+                <button 
+                  onClick={() => {
+                    const code = currentUser.referralCode || `ZAKA-${currentUser.name.substring(0,3).toUpperCase()}-${currentUser.id.substring(0,4).toUpperCase()}`;
+                    navigator.clipboard.writeText(`Rejoins-moi sur Zaka+ ! Utilise mon code de parrainage: ${code} et gagne tes premiers points.`);
+                    alert("Code de parrainage copié !");
+                  }}
+                  className="px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold text-xs transition-colors active:scale-95 cursor-pointer shadow-sm shadow-orange-600/20"
+                >
+                  Copier
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-1">Partagez ce code avec vos amis pour gagner +50 points par inscription.</p>
+            </div>
+          </div>
         </div>
 
         {/* Invitations reçues */}
@@ -807,94 +904,146 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
         </div>
 
         {/* Mes réservations de table (Restaurants) */}
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-          <h3 className="text-sm font-black text-gray-900 mb-1 flex items-center gap-2">
+        <div className="bg-white dark:bg-gray-950 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-900">
+          <h3 className="text-sm font-black text-gray-900 dark:text-white mb-1 flex items-center gap-2">
             <Calendar className="w-4 h-4 text-orange-500" />
             Mes réservations de table (Restaurants)
           </h3>
-          <p className="text-[10px] text-gray-400 font-semibold mb-4">Suivez et gérez vos réservations de table dans les restaurants partenaires.</p>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold mb-4">Suivez et gérez vos réservations de table dans les restaurants partenaires.</p>
 
-          {!myReservations || myReservations.length === 0 ? (
-            <p className="text-xs text-gray-400 font-bold py-3 text-center bg-gray-50 rounded-2xl">Aucune réservation de table pour le moment.</p>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {myReservations.map(res => {
-                const estDetail = establishments.find(e => e.id === res.establishmentId);
-                const isPassed = !canCancelReservation(res.date, res.time);
-                const clientCanCancel = res.status !== 'annulee' && res.status !== 'refusee' && !isPassed;
-
-                return (
-                  <div key={res.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col gap-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-sm flex-shrink-0">
-                          <span>🍽️</span>
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="font-bold text-xs text-gray-900 truncate">{res.establishmentName}</h4>
-                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                            <span className="text-[9px] font-black uppercase tracking-wide bg-orange-100/50 text-orange-700 px-1.5 py-0.5 rounded">
-                              {res.guestsCount} pers.
-                            </span>
-                            <span className="text-[9px] text-gray-500 font-bold">
-                              {new Date(res.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à {res.time}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${
-                          res.status === 'en_attente' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
-                          res.status === 'confirmee' ? 'bg-green-100 text-green-800 border border-green-200' :
-                          res.status === 'refusee' ? 'bg-red-100 text-red-800 border border-red-200' :
-                          'bg-gray-100 text-gray-600 border border-gray-200'
-                        }`}>
-                          {res.status === 'en_attente' ? 'En attente' : 
-                           res.status === 'confirmee' ? 'Confirmée' : 
-                           res.status === 'refusee' ? 'Refusée' : 'Annulée'}
-                        </span>
-                        {estDetail && (
-                          <button 
-                            type="button"
-                            onClick={() => handleStartChat(res.establishmentId, estDetail.name, estDetail.ownerId)}
-                            className="p-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg transition-colors cursor-pointer"
-                            title="Discuter avec l'établissement"
-                          >
-                            <MessageSquare className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {res.note && (
-                      <div className="text-xs text-gray-600 bg-white p-2.5 rounded-lg border border-gray-100 font-medium">
-                        <span className="text-[10px] font-bold text-gray-400 block uppercase mb-0.5">Votre note :</span>
-                        {res.note}
-                      </div>
-                    )}
-
-                    {res.managerMessage && (
-                      <div className="text-xs text-amber-900 bg-amber-50/50 p-2.5 rounded-lg border border-amber-100 font-medium">
-                        <span className="text-[10px] font-bold text-amber-600 block uppercase mb-0.5">Message du gérant :</span>
-                        {res.managerMessage}
-                      </div>
-                    )}
-
-                    {clientCanCancel && (
-                      <button
-                        type="button"
-                        onClick={() => updateReservationStatus(res.id, 'annulee')}
-                        className="self-end text-[10px] font-black text-red-600 hover:text-red-700 hover:underline uppercase tracking-wide py-1 cursor-pointer"
-                      >
-                        Annuler la réservation
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+          {myReservations && myReservations.length > 0 && (
+            /* Sub-tabs: Actives vs Historique */
+            <div className="flex bg-gray-50 dark:bg-gray-900 p-1 rounded-xl border border-gray-150 dark:border-gray-800 mb-4">
+              <button
+                type="button"
+                onClick={() => setResActiveTab('current')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  resActiveTab === 'current'
+                    ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                En cours ({myReservations.filter(res => {
+                  const isPassed = !canCancelReservation(res.date, res.time);
+                  return res.status !== 'annulee' && res.status !== 'refusee' && !isPassed;
+                }).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setResActiveTab('history')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  resActiveTab === 'history'
+                    ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                Historique ({myReservations.filter(res => {
+                  const isPassed = !canCancelReservation(res.date, res.time);
+                  return res.status === 'annulee' || res.status === 'refusee' || isPassed;
+                }).length})
+              </button>
             </div>
           )}
+
+          {(() => {
+            const displayedReservations = myReservations.filter(res => {
+              const isPassed = !canCancelReservation(res.date, res.time);
+              const isHistory = res.status === 'annulee' || res.status === 'refusee' || isPassed;
+              return resActiveTab === 'history' ? isHistory : !isHistory;
+            });
+
+            if (displayedReservations.length === 0) {
+              return (
+                <p className="text-xs text-gray-400 font-bold py-3 text-center bg-gray-50 dark:bg-gray-900/40 rounded-2xl">
+                  {resActiveTab === 'history' 
+                    ? "Aucun historique de réservation." 
+                    : "Aucune réservation en cours."}
+                </p>
+              );
+            }
+
+            return (
+              <div className="flex flex-col gap-3">
+                {displayedReservations.map(res => {
+                  const estDetail = establishments.find(e => e.id === res.establishmentId);
+                  const isPassed = !canCancelReservation(res.date, res.time);
+                  const clientCanCancel = res.status !== 'annulee' && res.status !== 'refusee' && !isPassed;
+
+                  return (
+                    <div key={res.id} className="p-4 bg-gray-50 dark:bg-gray-900/30 rounded-2xl border border-gray-100 dark:border-gray-800/60 flex flex-col gap-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                            <span>🍽️</span>
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-xs text-gray-900 dark:text-white truncate">{res.establishmentName}</h4>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                              <span className="text-[9px] font-black uppercase tracking-wide bg-orange-100/50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-400 px-1.5 py-0.5 rounded">
+                                {res.guestsCount} pers.
+                              </span>
+                              <span className="text-[9px] text-gray-500 dark:text-gray-400 font-bold">
+                                {new Date(res.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à {res.time}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${
+                            isPassed && res.status === 'confirmee' ? 'bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-350 border-blue-200 dark:border-blue-900/50' :
+                            res.status === 'en_attente' ? 'bg-yellow-100 dark:bg-yellow-950/40 text-yellow-800 dark:text-yellow-350 border-yellow-200 dark:border-yellow-900/50' :
+                            res.status === 'confirmee' ? 'bg-green-100 dark:bg-green-950/40 text-green-800 dark:text-green-350 border-green-200 dark:border-green-900/50' :
+                            res.status === 'refusee' ? 'bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-350 border-red-200 dark:border-red-900/50' :
+                            'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
+                          }`}>
+                            {isPassed && res.status === 'confirmee' ? 'Terminée' :
+                             res.status === 'en_attente' ? 'En attente' : 
+                             res.status === 'confirmee' ? 'Confirmée' : 
+                             res.status === 'refusee' ? 'Refusée' : 'Annulée'}
+                          </span>
+                          {estDetail && (
+                            <button 
+                              type="button"
+                              onClick={() => handleStartChat(res.establishmentId, estDetail.name, estDetail.ownerId)}
+                              className="p-1.5 bg-orange-50 hover:bg-orange-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-orange-600 dark:text-orange-400 rounded-lg transition-colors cursor-pointer"
+                              title="Discuter avec l'établissement"
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {res.note && (
+                        <div className="text-xs text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-900 p-2.5 rounded-lg border border-gray-100 dark:border-gray-800 font-medium">
+                          <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 block uppercase mb-0.5">Votre note :</span>
+                          {res.note}
+                        </div>
+                      )}
+
+                      {res.managerMessage && (
+                        <div className="text-xs text-amber-900 dark:text-amber-300 bg-amber-50/50 dark:bg-amber-955/20 p-2.5 rounded-lg border border-amber-100 dark:border-amber-900/40 font-medium">
+                          <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 block uppercase mb-0.5">Message du gérant :</span>
+                          {res.managerMessage}
+                        </div>
+                      )}
+
+                      {clientCanCancel && (
+                        <button
+                          type="button"
+                          onClick={() => updateReservationStatus(res.id, 'annulee')}
+                          className="self-end text-[10px] font-black text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-350 hover:underline uppercase tracking-wide py-1 cursor-pointer"
+                        >
+                          Annuler la réservation
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Mes candidatures aux offres d'emploi */}
