@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour } from './types';
+import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
 import { 
@@ -18,6 +18,7 @@ interface AppState {
   users: User[];
   establishments: Establishment[];
   publications: Publication[];
+  entreprises: Entreprise[];
   reviews: Review[];
   favorites: Record<string, string[]>;
   favoriteTags: Record<string, Record<string, string[]>>;
@@ -35,7 +36,12 @@ interface AppContextType extends AppState {
   unreadCount: number;
   login: (email: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
-  register: (user: Omit<User, 'id'>, pass: string, estData?: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] }) => Promise<void>;
+  register: (
+    user: Omit<User, 'id'>, 
+    pass: string, 
+    estData?: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] },
+    entrepriseData?: { sector: string; logo: string; philosophy: string; description: string }
+  ) => Promise<void>;
   envoyerCodeOtp: (phone: string, containerId: string) => Promise<void>;
   confirmerCodeOtp: (otpCode: string, registrationData?: {
     name: string;
@@ -45,6 +51,7 @@ interface AppContextType extends AppState {
     phone: string;
     email?: string;
     estData?: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] };
+    entrepriseData?: { sector: string; logo: string; philosophy: string; description: string };
   }) => Promise<void>;
   addEstablishment: (est: Omit<Establishment, 'id' | 'status' | 'averageRating'>) => Promise<void>;
   updateEstablishment: (id: string, data: Partial<Establishment>) => Promise<void>;
@@ -53,6 +60,9 @@ interface AppContextType extends AppState {
   updateFavoriteTags: (clientId: string, establishmentId: string, tags: string[]) => Promise<void>;
   saveAllFavoriteTags: (clientId: string, tagsMap: Record<string, string[]>) => Promise<void>;
   validateEstablishment: (id: string) => Promise<void>;
+  validateEntreprise: (id: string) => Promise<void>;
+  followEntreprise: (clientId: string, entrepriseId: string) => Promise<void>;
+  unfollowEntreprise: (clientId: string, entrepriseId: string) => Promise<void>;
   upgradeToGerant: (estData: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] }) => Promise<void>;
   updateProfile: (profileData: { name: string; city: string; country: string; email?: string; phone?: string }) => Promise<void>;
   createRelationshipRequest: (req: Omit<RelationshipRequest, 'id' | 'status' | 'date'>) => Promise<void>;
@@ -131,6 +141,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     users: [],
     establishments: [],
     publications: [],
+    entreprises: [],
     reviews: [],
     favorites: {},
     favoriteTags: {},
@@ -335,7 +346,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 role = role.toLowerCase().trim() as Role;
               }
               
-              if (!role || !['client', 'gerant', 'admin'].includes(role)) {
+              if (!role || !['client', 'gerant', 'admin', 'entreprise'].includes(role)) {
                 console.error(`[onAuthStateChanged] ERREUR CRITIQUE: Le rôle est manquant ou invalide ("${role}") pour l'utilisateur ${firebaseUser.email}`);
                 
                 // Attempt to recover role by checking if user has any establishments
@@ -490,11 +501,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error("Erreur menus_du_jour:", error);
     });
 
+    // Listen to entreprises
+    const entQuery = query(collection(db, 'entreprises'));
+    const unsubscribeEnt = onSnapshot(entQuery, (snapshot) => {
+      const ents: Entreprise[] = [];
+      snapshot.forEach(docSnap => ents.push({ id: docSnap.id, ...docSnap.data() } as Entreprise));
+      setState(s => ({ ...s, entreprises: ents }));
+    }, (error) => {
+      console.error("Erreur listening to entreprises:", error);
+    });
+
     return () => {
       unsubscribeEst();
       unsubscribePub();
       unsubscribeReview();
       unsubscribeMenu();
+      unsubscribeEnt();
     };
   }, []);
 
@@ -746,6 +768,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     phone: string;
     email?: string;
     estData?: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] };
+    entrepriseData?: { sector: string; logo: string; philosophy: string; description: string };
   }) => {
     if (!confirmationResult) {
       const msg = "Aucun code de vérification n'a été envoyé. Veuillez d'abord demander un code OTP.";
@@ -801,6 +824,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
             handleFirestoreError(error, OperationType.CREATE, 'establishments');
           }
         }
+
+        if (registrationData.role === 'entreprise' && registrationData.entrepriseData) {
+          console.log("[Phone Auth] Rôle entreprise détecté. Création de l'entreprise...");
+          try {
+            await setDoc(doc(db, 'entreprises', firebaseUser.uid), {
+              name: registrationData.name.trim() || 'Entreprise',
+              sector: registrationData.entrepriseData.sector || '',
+              logo: registrationData.entrepriseData.logo || '',
+              description: registrationData.entrepriseData.description || '',
+              philosophy: registrationData.entrepriseData.philosophy || '',
+              status: 'en_attente',
+              createdAt: new Date().toISOString(),
+              followers: []
+            });
+            console.log("[Phone Auth] Entreprise créée avec succès dans Firestore.");
+          } catch (error) {
+            handleFirestoreError(error, OperationType.WRITE, `entreprises/${firebaseUser.uid}`);
+          }
+        }
       }
     } catch (error: any) {
       console.error("[Phone Auth] Échec de la confirmation du code OTP :", error);
@@ -839,7 +881,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (userData: Omit<User, 'id'>, pass: string, estData?: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] }) => {
+  const register = async (
+    userData: Omit<User, 'id'>, 
+    pass: string, 
+    estData?: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] },
+    entrepriseData?: { sector: string; logo: string; philosophy: string; description: string }
+  ) => {
     const emailStr = (userData.email || '').trim();
     if (!emailStr) {
       throw new Error("L'adresse e-mail est obligatoire.");
@@ -892,6 +939,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
           console.log("[Email Register] Établissement créé avec succès dans Firestore.");
         } catch (error) {
           handleFirestoreError(error, OperationType.CREATE, 'establishments');
+        }
+      }
+
+      if (userData.role === 'entreprise' && entrepriseData) {
+        console.log("[Email Register] Rôle entreprise détecté. Création de l'entreprise...");
+        try {
+          await setDoc(doc(db, 'entreprises', firebaseUser.uid), {
+            name: userData.name.trim() || 'Entreprise',
+            sector: entrepriseData.sector || '',
+            logo: entrepriseData.logo || '',
+            description: entrepriseData.description || '',
+            philosophy: entrepriseData.philosophy || '',
+            status: 'en_attente',
+            createdAt: new Date().toISOString(),
+            followers: []
+          });
+          console.log("[Email Register] Entreprise créée avec succès dans Firestore.");
+        } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, `entreprises/${firebaseUser.uid}`);
         }
       }
     } catch (error: any) {
@@ -1087,6 +1153,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
     } catch (error) {
       console.error("Erreur validation etablissement:", error);
+    }
+  };
+
+  const validateEntreprise = async (id: string) => {
+    try {
+      await updateDoc(doc(db, 'entreprises', id), {
+        status: 'valide'
+      });
+    } catch (error) {
+      console.error("Erreur validation entreprise:", error);
+    }
+  };
+
+  const followEntreprise = async (clientId: string, entrepriseId: string) => {
+    try {
+      const entRef = doc(db, 'entreprises', entrepriseId);
+      const entSnap = await getDoc(entRef);
+      if (entSnap.exists()) {
+        const data = entSnap.data();
+        const followers = data.followers || [];
+        if (!followers.includes(clientId)) {
+          await updateDoc(entRef, {
+            followers: [...followers, clientId]
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Erreur followEntreprise:", error);
+    }
+  };
+
+  const unfollowEntreprise = async (clientId: string, entrepriseId: string) => {
+    try {
+      const entRef = doc(db, 'entreprises', entrepriseId);
+      const entSnap = await getDoc(entRef);
+      if (entSnap.exists()) {
+        const data = entSnap.data();
+        const followers = data.followers || [];
+        await updateDoc(entRef, {
+          followers: followers.filter((id: string) => id !== clientId)
+        });
+      }
+    } catch (error) {
+      console.error("Erreur unfollowEntreprise:", error);
     }
   };
 
@@ -1320,6 +1430,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateFavoriteTags,
       saveAllFavoriteTags,
       validateEstablishment,
+      validateEntreprise,
+      followEntreprise,
+      unfollowEntreprise,
       upgradeToGerant,
       updateProfile,
       createRelationshipRequest,

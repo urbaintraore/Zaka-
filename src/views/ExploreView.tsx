@@ -4,6 +4,8 @@ import { Search, MapPin, MessageSquare, Calendar, Heart, Share2, List, Map as Ma
 import { ReservationModal } from '../components/ReservationModal';
 import { EstablishmentDetailModal } from '../components/EstablishmentDetailModal';
 import { getDistance } from '../utils/distance';
+import { getCurrentUserLocation } from '../utils/geolocation';
+import { shareContent } from '../utils/platform';
 import { MapView } from '../components/MapView';
 import { Establishment } from '../types';
 import { HeartButton } from '../components/HeartButton';
@@ -86,17 +88,13 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
   const [filterByProximity, setFilterByProximity] = useState(false);
 
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
-        },
-        (error) => {
-          // Log softly as a warning since frame or browser permissions might be blocked
-          console.warn("Could not retrieve geolocation:", error.message);
-        }
-      );
-    }
+    getCurrentUserLocation()
+      .then((loc) => {
+        setUserLocation(loc);
+      })
+      .catch((error) => {
+        console.warn("Could not retrieve geolocation:", error.message || error);
+      });
   }, []);
 
   const handleReservationSubmit = (data: { reservationType: string, date: string, time: string, guests: number, details: string }) => {
@@ -225,21 +223,14 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
         <h2 className="text-2xl font-black text-gray-900">Explorer</h2>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => {
+            onClick={async () => {
               if (!userLocation) {
-                // Try to request geolocation inline
-                if (navigator.geolocation) {
-                  navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                      setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
-                      setFilterByProximity(prev => !prev);
-                    },
-                    (error) => {
-                      alert("Pour utiliser ce filtre, veuillez autoriser l'accès à votre position géographique.");
-                    }
-                  );
-                } else {
-                  alert("La géolocalisation n'est pas supportée par votre navigateur.");
+                try {
+                  const loc = await getCurrentUserLocation();
+                  setUserLocation(loc);
+                  setFilterByProximity(true);
+                } catch (error) {
+                  alert("Pour utiliser ce filtre, veuillez autoriser l'accès à votre position géographique.");
                 }
                 return;
               }
@@ -280,17 +271,11 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
             }).filter(Boolean);
 
             const handleShare = async () => {
-              if (navigator.share) {
-                try {
-                  await navigator.share({
-                    title: est.name,
-                    text: `Découvrez ${est.name} à ${est.neighborhood}`,
-                    url: window.location.href
-                  });
-                } catch (err) {
-                  console.error('Error sharing:', err);
-                }
-              }
+              await shareContent({
+                title: est.name,
+                text: `Découvrez ${est.name} à ${est.neighborhood}`,
+                url: window.location.href
+              });
             };
 
             return (

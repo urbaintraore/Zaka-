@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { X, Calendar, Clock, Share2, Compass, FileText } from 'lucide-react';
+import { X, Calendar, Clock, Share2, Compass, FileText, MapPin, Save } from 'lucide-react';
 import { Establishment } from '../types';
 import { ReservationModal } from './ReservationModal';
 import { AvisUtilisateurs } from './AvisUtilisateurs';
+import { ReservationsDashboard } from './ReservationsDashboard';
 import { useAppStore } from '../store';
+import { shareContent } from '../utils/platform';
 
 interface EstablishmentDetailModalProps {
   establishment: Establishment;
@@ -11,30 +13,32 @@ interface EstablishmentDetailModalProps {
 }
 
 export function EstablishmentDetailModal({ establishment, onClose }: EstablishmentDetailModalProps) {
-  const { createServiceRequest, addReservation, menusDuJour, currentUser } = useAppStore();
+  const { createServiceRequest, addReservation, menusDuJour, currentUser, updateEstablishment } = useAppStore();
   const [showReservation, setShowReservation] = useState(false);
+  const [showReservationsDashboard, setShowReservationsDashboard] = useState(false);
+  const [isEditingGeo, setIsEditingGeo] = useState(false);
+  const [geoInput, setGeoInput] = useState(establishment.geolocation || '');
+  const [isSavingGeo, setIsSavingGeo] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
 
-  const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: establishment.name,
-          text: establishment.description || `Découvrez ${establishment.name} sur Zaka+`,
-          url: window.location.href,
-        });
-      } catch (error) {
-        console.warn('Erreur lors du partage natif:', error);
-      }
-    } else {
-      // Fallback: Copy to clipboard
-      try {
-        await navigator.clipboard.writeText(window.location.href);
-        alert('Lien de l\'établissement copié dans le presse-papier !');
-      } catch (err) {
-        console.error('Impossible de copier le lien:', err);
-      }
+  const handleSaveGeo = async () => {
+    try {
+      setIsSavingGeo(true);
+      await updateEstablishment(establishment.id, { geolocation: geoInput.trim() });
+      setIsEditingGeo(false);
+    } catch (err) {
+      console.error("Erreur lors de la sauvegarde de la géolocalisation:", err);
+    } finally {
+      setIsSavingGeo(false);
     }
+  };
+
+  const handleShare = async () => {
+    await shareContent({
+      title: establishment.name,
+      text: establishment.description || `Découvrez ${establishment.name} sur Zaka+`,
+      url: window.location.href
+    });
   };
 
   const handleReservationSubmit = (data: { reservationType: string, date: string, time: string, guests: number, details: string }) => {
@@ -67,6 +71,15 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
   const mapsUrl = establishment.geolocation 
     ? (establishment.geolocation.startsWith('http') ? establishment.geolocation : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(establishment.geolocation)}`) 
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(establishment.name + ' ' + (establishment.neighborhood || ''))}`;
+
+  if (showReservationsDashboard) {
+    return (
+      <ReservationsDashboard
+        establishmentId={establishment.id}
+        onClose={() => setShowReservationsDashboard(false)}
+      />
+    );
+  }
 
   if (showReservation) {
     return <ReservationModal establishmentName={establishment.name} onClose={() => setShowReservation(false)} onSubmit={handleReservationSubmit} />;
@@ -151,6 +164,94 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
               <span>{establishment.neighborhood}</span>
             </div>
           </div>
+
+          {currentUser && currentUser.id === establishment.ownerId && (
+            <div className="p-4 bg-orange-50/70 dark:bg-orange-950/20 rounded-2xl border-2 border-orange-200 dark:border-orange-900/60 space-y-4 animate-in fade-in slide-in-from-top-4 duration-200">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-black text-orange-800 dark:text-orange-400 uppercase tracking-wider flex items-center gap-2">
+                  <span>⚙️</span> Espace Gérant d'Établissement
+                </h4>
+              </div>
+
+              {/* Action 1: Gérer les réservations */}
+              <button
+                type="button"
+                onClick={() => setShowReservationsDashboard(true)}
+                className="w-full flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-extrabold py-3 px-4 rounded-xl active:scale-[0.98] transition-all shadow-md shadow-orange-600/10 cursor-pointer"
+              >
+                <Calendar className="w-5 h-5" />
+                <span>Gérer les réservations</span>
+              </button>
+
+              {/* Action 2: Gestion géolocalisation */}
+              <div className="border-t border-orange-100 dark:border-orange-900/40 pt-3">
+                <div className="flex items-center justify-between mb-1">
+                  <h5 className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-orange-500" />
+                    <span>Géolocalisation</span>
+                  </h5>
+                  {!isEditingGeo && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingGeo(true)}
+                      className="text-xs font-bold text-orange-600 hover:text-orange-700 cursor-pointer"
+                    >
+                      {establishment.geolocation ? "Modifier" : "Ajouter"}
+                    </button>
+                  )}
+                </div>
+
+                {isEditingGeo ? (
+                  <div className="space-y-2 mt-2">
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-normal">
+                      Saisissez l'adresse de votre établissement ou collez un lien Google Maps (ex: https://maps.app.goo.gl/...)
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={geoInput}
+                        onChange={e => setGeoInput(e.target.value)}
+                        placeholder="Lien Google Maps ou Adresse"
+                        className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-medium focus:ring-2 focus:ring-orange-500/20 outline-none text-gray-900 dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSaveGeo}
+                        disabled={isSavingGeo}
+                        className="px-3 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-xl active:scale-95 transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingGeo ? "..." : <Save className="w-4 h-4" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditingGeo(false);
+                          setGeoInput(establishment.geolocation || '');
+                        }}
+                        className="px-3 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-xs font-bold rounded-xl hover:bg-gray-200 cursor-pointer"
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    {establishment.geolocation ? (
+                      <p className="text-xs font-medium text-gray-600 dark:text-gray-400 line-clamp-2 bg-white dark:bg-gray-900/50 p-2 rounded-lg border border-gray-150 dark:border-gray-900 mt-1">
+                        {establishment.geolocation}
+                      </p>
+                    ) : (
+                      <div className="p-3 bg-amber-50/60 dark:bg-amber-950/10 border border-amber-100 dark:border-amber-900/40 rounded-xl mt-1">
+                        <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                          ⚠️ Aucune géolocalisation enregistrée. Ajoutez un lien ou une adresse pour guider vos clients.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="p-4 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border border-gray-100 dark:border-gray-800">
             <h3 className="text-sm font-black text-gray-900 dark:text-white mb-2 uppercase tracking-wide">À propos</h3>

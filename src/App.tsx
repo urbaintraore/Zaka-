@@ -137,7 +137,7 @@ function AppContent() {
       <TopBar />
       
       <main className="w-full">
-        {currentTab === 'home' && <HomeView onStartChat={handleStartChat} />}
+        {currentTab === 'home' && <HomeView onStartChat={handleStartChat} onNavigate={setCurrentTab} />}
         {currentTab === 'explore' && <ExploreView onStartChat={handleStartChat} onNavigate={setCurrentTab} />}
         {currentTab === 'favorites' && <FavoritesView onStartChat={handleStartChat} />}
         {currentTab === 'recruitments' && <RecruitmentsView onNavigate={setCurrentTab} onStartChatWithConv={handleStartChatWithConv} />}

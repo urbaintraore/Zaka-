@@ -32,7 +32,7 @@ service cloud.firestore {
     function isValidUser(data) {
       return data.keys().hasAll(['name', 'role'])
         && data.name is string && data.name.size() > 0 && data.name.size() <= 100
-        && data.role in ['client', 'gerant', 'admin']
+        && data.role in ['client', 'gerant', 'admin', 'entreprise']
         && (data.get('email', '') is string && data.get('email', '').size() <= 100)
         && (data.get('phone', '') is string && data.get('phone', '').size() <= 30)
         && (data.get('country', '') is string && data.get('country', '').size() <= 100)
@@ -150,6 +150,18 @@ service cloud.firestore {
         && data.items is list;
     }
 
+    function isValidEntreprise(data) {
+      return data.keys().hasAll(['name', 'sector', 'description', 'philosophy', 'status', 'createdAt'])
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.sector is string && data.sector.size() > 0 && data.sector.size() <= 100
+        && data.description is string && data.description.size() <= 2000
+        && data.philosophy is string && data.philosophy.size() <= 2000
+        && data.status in ['en_attente', 'valide', 'suspendu']
+        && data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 50
+        && (data.get('logo', '') is string && data.get('logo', '').size() <= 1048576)
+        && (data.get('followers', []) is list && data.get('followers', []).size() <= 10000);
+    }
+
     match /users/{userId} {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming()) && incoming().role != 'admin';
@@ -251,6 +263,17 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if isSignedIn() && isValidMenuDuJour(incoming()) && get(/databases/$(database)/documents/establishments/$(incoming().establishmentId)).data.ownerId == request.auth.uid;
       allow delete: if isSignedIn() && get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid;
+    }
+
+    match /entreprises/{entId} {
+      allow read, list: if true;
+      allow create: if isSignedIn() && request.auth.uid == entId && isValidEntreprise(incoming());
+      allow update: if isSignedIn() && (
+        (request.auth.uid == entId && isValidEntreprise(incoming()))
+        || (incoming().diff(existing()).affectedKeys().hasOnly(['followers']) && (incoming().get('followers', []) is list))
+        || isUserAdmin()
+      );
+      allow delete: if isUserAdmin();
     }
   }
 }

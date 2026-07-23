@@ -4,6 +4,7 @@ import { Role, Category } from '../types';
 import { LogOut, User, Check, X, MessageSquare, Store, Sparkles, Calendar, Download, Star } from 'lucide-react';
 import { GerantDashboard } from './GerantDashboard';
 import { AdminDashboard } from './AdminDashboard';
+import { EntrepriseDashboard } from './EntrepriseDashboard';
 import { useInstallApp } from '../hooks/useInstallApp';
 
 interface ProfileViewProps {
@@ -118,6 +119,12 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   const [estNeighborhood, setEstNeighborhood] = useState('');
   const [estGeolocation, setEstGeolocation] = useState('');
 
+  // Entreprise registration details
+  const [entSector, setEntSector] = useState('Boisson & Brasserie');
+  const [entLogo, setEntLogo] = useState('');
+  const [entDescription, setEntDescription] = useState('');
+  const [entPhilosophy, setEntPhilosophy] = useState('');
+
   const handleUpgrade = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -159,6 +166,13 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   };
 
   if (currentUser) {
+    if (currentUser.role === 'entreprise') {
+      return (
+        <div className="pb-24">
+          <EntrepriseDashboard onLogout={logout} />
+        </div>
+      );
+    }
     if (currentUser.role === 'admin' || currentUser.role === 'gerant') {
       return (
         <div className="pb-24">
@@ -1116,7 +1130,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
           await login(identifier, password);
         } else {
           await register(
-            { email: identifier, name, role, country, city, phone: '' },
+            { email: identifier, name, role, country, city, phone: phone },
             password,
             role === 'gerant' ? {
               name: estName,
@@ -1126,6 +1140,12 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               tags: estTags.split(',').map(t => t.trim()).filter(t => t !== ''),
               neighborhood: estNeighborhood,
               geolocation: estGeolocation
+            } : undefined,
+            role === 'entreprise' ? {
+              sector: entSector,
+              logo: entLogo,
+              philosophy: entPhilosophy,
+              description: entDescription
             } : undefined
           );
         }
@@ -1171,6 +1191,12 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 tags: estTags.split(',').map(t => t.trim()).filter(t => t !== ''),
                 neighborhood: estNeighborhood,
                 geolocation: estGeolocation
+              } : undefined,
+              entrepriseData: role === 'entreprise' ? {
+                sector: entSector,
+                logo: entLogo,
+                philosophy: entPhilosophy,
+                description: entDescription
               } : undefined
             });
           } else {
@@ -1194,21 +1220,26 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
         
         {/* Auth Method Selector */}
         {!isOtpSent && (
-          <div className="flex gap-2 mb-6 p-1 bg-gray-100/80 rounded-xl">
-            <button
-              type="button"
-              onClick={() => { setAuthMethod('email'); setError(''); }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${authMethod === 'email' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}
-            >
-              Adresse E-mail
-            </button>
-            <button
-              type="button"
-              onClick={() => { setAuthMethod('phone'); setError(''); }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${authMethod === 'phone' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}
-            >
-              N° de Téléphone (SMS)
-            </button>
+          <div className="mb-6">
+            <span className="text-xs font-extrabold text-gray-500 uppercase tracking-wider block mb-2 text-center">
+              {mode === 'login' ? 'Se connecter via :' : "S'inscrire avec :"}
+            </span>
+            <div className="flex gap-2 p-1 bg-gray-100/80 rounded-xl">
+              <button
+                type="button"
+                onClick={() => { setAuthMethod('email'); setError(''); }}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${authMethod === 'email' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                📧 Adresse E-mail
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAuthMethod('phone'); setError(''); }}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${authMethod === 'phone' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                📱 Téléphone (SMS)
+              </button>
+            </div>
           </div>
         )}
 
@@ -1258,13 +1289,16 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
           {mode === 'register' && !isOtpSent && (
             <>
               <div className="flex gap-2 mb-2 p-1.5 bg-gray-100/80 rounded-xl">
-                <button type="button" onClick={() => setRole('client')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${role === 'client' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Client</button>
-                <button type="button" onClick={() => setRole('gerant')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${role === 'gerant' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Gérant</button>
+                <button type="button" onClick={() => setRole('client')} className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'client' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Client</button>
+                <button type="button" onClick={() => setRole('gerant')} className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'gerant' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Gérant</button>
+                <button type="button" onClick={() => setRole('entreprise')} className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'entreprise' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Entreprise</button>
               </div>
               
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-gray-500 ml-1">Nom complet</label>
-                <input type="text" placeholder="Votre nom" required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
+                <label className="text-xs font-bold text-gray-500 ml-1">
+                  {role === 'entreprise' ? "Nom de l'entreprise" : "Nom complet"}
+                </label>
+                <input type="text" placeholder={role === 'entreprise' ? "Ex: Brakina, Castel, Sobbra..." : "Votre nom"} required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
               </div>
               
               <div className="grid grid-cols-2 gap-3">
@@ -1345,6 +1379,57 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                   </div>
                 </div>
               )}
+
+              {role === 'entreprise' && (
+                <div className="mt-2 p-4 bg-orange-50/50 rounded-2xl border border-orange-100 flex flex-col gap-4 animate-fadeIn">
+                  <h3 className="font-bold text-gray-900 text-sm border-b border-orange-200/50 pb-2">Détails de l'entreprise</h3>
+                  
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Secteur d'activité</label>
+                    <select required value={entSector} onChange={e => setEntSector(e.target.value)} className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium text-gray-700">
+                      <option value="Boisson & Brasserie">Boisson & Brasserie</option>
+                      <option value="Événementiel & Production">Événementiel & Production</option>
+                      <option value="Média & Communication">Média & Communication</option>
+                      <option value="Mode & Lifestyle">Mode & Lifestyle</option>
+                      <option value="Culture & Art">Culture & Art</option>
+                      <option value="Autre">Autre</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Logo (URL de l'image)</label>
+                    <input 
+                      type="url" 
+                      placeholder="https://images.unsplash.com/... (ou vide pour par défaut)" 
+                      value={entLogo} 
+                      onChange={e => setEntLogo(e.target.value)} 
+                      className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" 
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Description de l'entreprise</label>
+                    <textarea 
+                      placeholder="Décrivez votre entreprise, son activité et ses valeurs..." 
+                      required 
+                      value={entDescription} 
+                      onChange={e => setEntDescription(e.target.value)} 
+                      className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium min-h-[90px]"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Pourquoi rejoignez-vous Zaka+ ?</label>
+                    <textarea 
+                      placeholder="Expliquez votre intérêt pour la convivialité, la culture locale et la philosophie Zaka+..." 
+                      required 
+                      value={entPhilosophy} 
+                      onChange={e => setEntPhilosophy(e.target.value)} 
+                      className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium min-h-[90px]"
+                    />
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -1355,6 +1440,13 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 <label className="text-xs font-bold text-gray-500 ml-1">Adresse E-mail</label>
                 <input type="email" placeholder="exemple@email.com" required value={identifier} onChange={e => setIdentifier(e.target.value)} className="w-full px-4 py-3.5 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none transition-all font-medium" />
               </div>
+
+              {mode === 'register' && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-gray-500 ml-1">N° de Téléphone (Optionnel - ex: +22670000000)</label>
+                  <input type="tel" placeholder="+22670000000 (Optionnel)" value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-4 py-3.5 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none transition-all font-medium" />
+                </div>
+              )}
               
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-gray-500 ml-1">Mot de passe</label>

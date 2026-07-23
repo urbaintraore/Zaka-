@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../store';
+import { Tab } from '../components/BottomNav';
 import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight } from 'lucide-react';
 import { stripHtml } from '../utils/htmlHelpers';
 import { ReservationModal } from '../components/ReservationModal';
@@ -7,10 +8,11 @@ import { Publication } from '../types';
 
 interface HomeViewProps {
   onStartChat?: (estId: string) => void;
+  onNavigate?: (tab: Tab) => void;
 }
 
-export function HomeView({ onStartChat }: HomeViewProps) {
-  const { publications, establishments, currentUser, createServiceRequest, relationshipRequests, setGlobalError, favorites, toggleFavorite, reviews } = useAppStore();
+export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
+  const { publications, establishments, entreprises, currentUser, createServiceRequest, relationshipRequests, setGlobalError, favorites, toggleFavorite, reviews } = useAppStore();
   const [reservationEst, setReservationEst] = useState<{ id: string, name: string } | null>(null);
   const [selectedPub, setSelectedPub] = useState<Publication | null>(null);
   const [filterMemberOnly, setFilterMemberOnly] = useState(false);
@@ -34,6 +36,36 @@ export function HomeView({ onStartChat }: HomeViewProps) {
   };
 
   const getEst = (id: string) => establishments.find(e => e.id === id);
+
+  const getPublisher = (id: string) => {
+    const est = establishments.find(e => e.id === id);
+    if (est) {
+      return {
+        name: est.name,
+        neighborhood: est.neighborhood,
+        isEntreprise: false,
+        type: est.category,
+        image: est.photos?.[0]
+      };
+    }
+    const ent = entreprises.find(e => e.id === id);
+    if (ent) {
+      return {
+        name: ent.name,
+        neighborhood: ent.sector,
+        isEntreprise: true,
+        type: 'entreprise',
+        image: ent.logo
+      };
+    }
+    return {
+      name: 'Partenaire',
+      neighborhood: 'Zaka+',
+      isEntreprise: true,
+      type: 'entreprise',
+      image: ''
+    };
+  };
 
   // Get recent 5-star reviews
   const recentTopReviews = reviews
@@ -149,7 +181,10 @@ export function HomeView({ onStartChat }: HomeViewProps) {
           <p className="text-orange-100 mb-6 font-medium text-sm pr-8">
             Découvrez les meilleurs maquis, bars et restaurants près de chez vous.
           </p>
-          <button className="bg-white text-orange-600 px-6 py-3 rounded-full font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-sm flex items-center gap-2">
+          <button 
+            onClick={() => onNavigate?.('explore')}
+            className="bg-white text-orange-600 px-6 py-3 rounded-full font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-sm flex items-center gap-2"
+          >
             <MapPin className="w-4 h-4" /> Explorer la carte
           </button>
         </div>
@@ -350,21 +385,28 @@ export function HomeView({ onStartChat }: HomeViewProps) {
             {viewMode === 'list' ? (
               <div className="flex gap-4 overflow-x-auto pb-4 snap-x hide-scrollbar -mx-4 px-4">
                 {displayedEvents.map(event => {
-                  const est = getEst(event.establishmentId);
+                  const publisher = getPublisher(event.establishmentId);
                   const imageUrl = event.imageUrl || 'https://images.unsplash.com/photo-1470229722913-7c090be5c520?auto=format&fit=crop&q=80&w=800';
                   return (
                     <div key={event.id} onClick={() => setSelectedPub(event)} className="min-w-[280px] w-[280px] snap-start bg-white rounded-3xl shadow-xs border border-gray-100 overflow-hidden group cursor-pointer hover:shadow-md hover:border-gray-200 transition-all">
                       <div className="h-48 bg-gray-200 relative overflow-hidden">
                         <img src={imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-                        <div className="absolute top-3 left-3 bg-red-500 text-white text-[10px] uppercase tracking-wider font-black px-3 py-1.5 rounded-lg shadow-xs">
-                          Événement
+                        <div className="absolute top-3 left-3 flex gap-1.5 items-center">
+                          <span className="bg-red-500 text-white text-[10px] uppercase tracking-wider font-black px-3 py-1.5 rounded-lg shadow-xs">
+                            Événement
+                          </span>
+                          {publisher.isEntreprise && (
+                            <span className="bg-amber-500 text-white text-[10px] uppercase tracking-wider font-black px-2.5 py-1.5 rounded-lg shadow-xs flex items-center gap-1">
+                              🤝 Partenaire
+                            </span>
+                          )}
                         </div>
                         <div className="absolute bottom-3 left-4 right-4 text-white">
                           <h3 className="font-bold text-lg leading-tight line-clamp-2">{event.title}</h3>
                           <div className="flex items-center gap-1.5 text-xs text-gray-300 mt-1.5">
                             <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-                            <span className="truncate font-medium">{est?.name} • {est?.neighborhood}</span>
+                            <span className="truncate font-medium">{publisher.name} • {publisher.neighborhood}</span>
                           </div>
                         </div>
                       </div>
@@ -383,25 +425,32 @@ export function HomeView({ onStartChat }: HomeViewProps) {
                   </div>
                 ) : (
                   displayedEvents.map(event => {
-                    const est = getEst(event.establishmentId);
+                    const publisher = getPublisher(event.establishmentId);
                     const imageUrl = event.imageUrl || 'https://images.unsplash.com/photo-1470229722913-7c090be5c520?auto=format&fit=crop&q=80&w=800';
                     return (
                       <div key={event.id} onClick={() => setSelectedPub(event)} className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden group cursor-pointer hover:shadow-md hover:border-gray-200 transition-all flex flex-col">
                         <div className="h-36 bg-gray-200 relative overflow-hidden flex-shrink-0">
                           <img src={imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-                          <div className="absolute top-2.5 left-2.5 bg-red-500 text-white text-[9px] uppercase tracking-wider font-black px-2 py-1 rounded-md shadow-xs">
-                            Événement
+                          <div className="absolute top-2.5 left-2.5 flex gap-1 items-center">
+                            <span className="bg-red-500 text-white text-[9px] uppercase tracking-wider font-black px-2 py-1 rounded-md shadow-xs">
+                              Événement
+                            </span>
+                            {publisher.isEntreprise && (
+                              <span className="bg-amber-500 text-white text-[9px] uppercase tracking-wider font-black px-2 py-1 rounded-md shadow-xs">
+                                🤝 Partenaire
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div className="p-3 flex-1 flex flex-col justify-between">
                           <div>
                             <h3 className="font-extrabold text-sm text-gray-900 leading-tight line-clamp-2 mb-1">{event.title}</h3>
-                            <span className="text-[10px] text-orange-600 font-extrabold">{est?.name}</span>
+                            <span className="text-[10px] text-orange-600 font-extrabold">{publisher.name}</span>
                           </div>
                           <div className="flex items-center gap-1 text-[10px] text-gray-400 mt-2 font-medium">
                             <MapPin className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                            <span className="truncate">{est?.neighborhood}, {est?.city}</span>
+                            <span className="truncate">{publisher.neighborhood}</span>
                           </div>
                         </div>
                       </div>
@@ -421,14 +470,21 @@ export function HomeView({ onStartChat }: HomeViewProps) {
             </div>
             <div className="flex flex-col gap-3">
               {annonces.map(annonce => {
-                const est = getEst(annonce.establishmentId);
+                const publisher = getPublisher(annonce.establishmentId);
                 return (
-                  <div key={annonce.id} onClick={() => setSelectedPub(annonce)} className="bg-white rounded-2xl shadow-sm border border-blue-100 hover:border-blue-300 transition-colors p-4 flex gap-4 cursor-pointer">
+                  <div key={annonce.id} onClick={() => setSelectedPub(annonce)} className="bg-white rounded-2xl shadow-sm border border-blue-100 hover:border-blue-300 transition-colors p-4 flex gap-4 cursor-pointer relative overflow-hidden">
                     <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 flex-shrink-0 flex items-center justify-center border border-blue-200/50">
                       <Megaphone className="w-6 h-6 text-blue-500" />
                     </div>
                     <div className="flex flex-col justify-center flex-1">
-                      <div className="text-[11px] font-black text-blue-600 mb-0.5 uppercase tracking-wide">{est?.name}</div>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <div className="text-[11px] font-black text-blue-600 uppercase tracking-wide">{publisher.name}</div>
+                        {publisher.isEntreprise && (
+                          <span className="bg-amber-100 text-amber-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-amber-200">
+                            🤝 Partenaire
+                          </span>
+                        )}
+                      </div>
                       <h3 className="font-bold text-gray-900 leading-tight text-[15px]">{annonce.title}</h3>
                       <p className="text-sm text-gray-500 mt-1 line-clamp-1">{stripHtml(annonce.description)}</p>
                     </div>
@@ -447,14 +503,21 @@ export function HomeView({ onStartChat }: HomeViewProps) {
             </div>
             <div className="flex flex-col gap-3">
               {promos.map(promo => {
-                const est = getEst(promo.establishmentId);
+                const publisher = getPublisher(promo.establishmentId);
                 return (
-                  <div key={promo.id} onClick={() => setSelectedPub(promo)} className="bg-white rounded-2xl shadow-sm border border-orange-100 hover:border-orange-300 transition-colors p-4 flex gap-4 cursor-pointer">
+                  <div key={promo.id} onClick={() => setSelectedPub(promo)} className="bg-white rounded-2xl shadow-sm border border-orange-100 hover:border-orange-300 transition-colors p-4 flex gap-4 cursor-pointer relative overflow-hidden">
                     <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-50 to-orange-100 flex-shrink-0 flex items-center justify-center border border-orange-200/50">
                       <Tag className="w-6 h-6 text-orange-500" />
                     </div>
                     <div className="flex flex-col justify-center flex-1">
-                      <div className="text-[11px] font-black text-orange-600 mb-0.5 uppercase tracking-wide">{est?.name}</div>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <div className="text-[11px] font-black text-orange-600 uppercase tracking-wide">{publisher.name}</div>
+                        {publisher.isEntreprise && (
+                          <span className="bg-amber-100 text-amber-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-amber-200">
+                            🤝 Partenaire
+                          </span>
+                        )}
+                      </div>
                       <h3 className="font-bold text-gray-900 leading-tight text-[15px]">{promo.title}</h3>
                       <p className="text-sm text-gray-500 mt-1 line-clamp-1">{stripHtml(promo.description)}</p>
                     </div>
@@ -554,7 +617,7 @@ export function HomeView({ onStartChat }: HomeViewProps) {
                   {selectedPub.type === 'evenement' ? 'Événement' : selectedPub.type === 'annonce' ? 'Communiqué' : 'Promo / Bon plan'}
                 </span>
                 <h2 className="text-lg font-black text-gray-900 leading-tight mt-1.5 truncate">{selectedPub.title}</h2>
-                <p className="text-xs text-gray-500 font-bold mt-0.5">Par {getEst(selectedPub.establishmentId)?.name || 'Établissement'}</p>
+                <p className="text-xs text-gray-500 font-bold mt-0.5">Par {getPublisher(selectedPub.establishmentId).name}</p>
               </div>
               <button onClick={() => setSelectedPub(null)} className="p-2 text-gray-400 hover:text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-full cursor-pointer flex-shrink-0 ml-4">
                 <X className="w-5 h-5" />
@@ -600,7 +663,7 @@ export function HomeView({ onStartChat }: HomeViewProps) {
                   className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl active:scale-[0.98] transition-all cursor-pointer text-xs flex items-center justify-center gap-2"
                 >
                   <MessageSquare className="w-4 h-4" />
-                  Contacter l'établissement
+                  {getPublisher(selectedPub.establishmentId).isEntreprise ? "Contacter le partenaire" : "Contacter l'établissement"}
                 </button>
               )}
             </div>

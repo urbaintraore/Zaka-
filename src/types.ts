@@ -1,4 +1,4 @@
-export type Role = 'client' | 'gerant' | 'admin';
+export type Role = 'client' | 'gerant' | 'admin' | 'entreprise';
 
 export interface User {
   id: string;
@@ -10,6 +10,18 @@ export interface User {
   city?: string;
   points?: number;
   referralCode?: string;
+}
+
+export interface Entreprise {
+  id: string; // matches User id (UID)
+  name: string;
+  sector: string;
+  logo: string;
+  description: string;
+  philosophy: string;
+  status: 'en_attente' | 'valide' | 'suspendu';
+  createdAt: string;
+  followers?: string[]; // list of clientIds who follow
 }
 
 export type Category = 'maquis' | 'bar' | 'restaurant' | 'boite_de_nuit' | 'glacier_pizzeria' | 'hotel' | 'residence' | 'autre';

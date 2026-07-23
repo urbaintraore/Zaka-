@@ -114,6 +114,22 @@
         "tags": { "type": "object", "description": "Mapping of establishment ID to lists of tags" }
       },
       "required": ["establishmentIds"]
+    },
+    "Entreprise": {
+      "title": "Entreprise",
+      "description": "An enterprise/company profile",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "sector": { "type": "string" },
+        "logo": { "type": "string" },
+        "description": { "type": "string" },
+        "philosophy": { "type": "string" },
+        "status": { "type": "string", "enum": ["en_attente", "valide", "suspendu"] },
+        "createdAt": { "type": "string" },
+        "followers": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["name", "sector", "description", "philosophy", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -144,6 +160,10 @@
     "applications": {
       "schema": { "$ref": "#/entities/Application" },
       "description": "Applications collection for recruitment job offers"
+    },
+    "entreprises": {
+      "schema": { "$ref": "#/entities/Entreprise" },
+      "description": "Entreprises collection"
     }
   }
 }
