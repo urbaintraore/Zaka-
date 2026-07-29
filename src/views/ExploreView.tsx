@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../store';
-import { Search, MapPin, MessageSquare, Calendar, Heart, Share2, List, Map as MapIcon, Clock } from 'lucide-react';
+import { Search, MapPin, MessageSquare, Calendar, Heart, Share2, List, Map as MapIcon, Clock, Flame } from 'lucide-react';
 import { ReservationModal } from '../components/ReservationModal';
 import { EstablishmentDetailModal } from '../components/EstablishmentDetailModal';
 import { getDistance } from '../utils/distance';
@@ -9,6 +9,7 @@ import { shareContent } from '../utils/platform';
 import { MapView } from '../components/MapView';
 import { Establishment } from '../types';
 import { HeartButton } from '../components/HeartButton';
+import { OuagadougouHeatmap } from '../components/OuagadougouHeatmap';
 
 function isEstablishmentOpen(openingHours?: string): boolean {
   if (!openingHours) return true;
@@ -83,7 +84,7 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
   const [priceFilter, setPriceFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all');
   const [openNowFilter, setOpenNowFilter] = useState(false);
   const [selectedEst, setSelectedEst] = useState<Establishment | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'map' | 'heatmap'>('list');
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [filterByProximity, setFilterByProximity] = useState(false);
 
@@ -246,21 +247,35 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
             <button
               onClick={() => setViewMode('list')}
               className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${viewMode === 'list' ? 'bg-white text-orange-600 shadow-xs' : 'text-gray-500 hover:text-gray-700'}`}
+              title="Liste"
             >
               <List className="w-4 h-4" />
             </button>
             <button
               onClick={() => setViewMode('map')}
               className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${viewMode === 'map' ? 'bg-white text-orange-600 shadow-xs' : 'text-gray-500 hover:text-gray-700'}`}
+              title="Carte"
             >
               <MapIcon className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('heatmap')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${viewMode === 'heatmap' ? 'bg-white text-orange-600 shadow-xs' : 'text-gray-500 hover:text-gray-700'}`}
+              title="Carte Thermique"
+            >
+              <Flame className="w-4 h-4" />
             </button>
           </div>
         </div>
       </div>
       
       {viewMode === 'map' ? (
-        <MapView establishments={filtered} onEstClick={(id) => console.log(id)} />
+        <MapView establishments={filtered} onEstClick={(id) => {
+          const est = establishments.find(e => e.id === id);
+          if (est) setSelectedEst(est);
+        }} />
+      ) : viewMode === 'heatmap' ? (
+        <OuagadougouHeatmap />
       ) : (
         <div className="flex flex-col gap-4">
           {filtered.map(est => {

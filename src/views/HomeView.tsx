@@ -10,6 +10,8 @@ import { EstablishmentDetailModal } from '../components/EstablishmentDetailModal
 import { StoriesSection } from '../components/StoriesSection';
 import { ParticipationButtons } from '../components/ParticipationButtons';
 import { EventAIAnalytics } from '../components/EventAIAnalytics';
+import { ChallengePhoto } from '../components/ChallengePhoto';
+import { EventSocialMur } from '../components/EventSocialMur';
 
 interface HomeViewProps {
   onStartChat?: (estId: string) => void;
@@ -21,6 +23,11 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
   const [reservationEst, setReservationEst] = useState<{ id: string, name: string } | null>(null);
   const [selectedPub, setSelectedPub] = useState<Publication | null>(null);
   const [filterMemberOnly, setFilterMemberOnly] = useState(false);
+  const [activePubTab, setActivePubTab] = useState<'info' | 'photos' | 'wall'>('info');
+
+  useEffect(() => {
+    setActivePubTab('info');
+  }, [selectedPub]);
 
   useEffect(() => {
     if (selectedPub) {
@@ -1191,37 +1198,75 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
             </div>
 
             <div className="p-6 overflow-y-auto flex-1 space-y-4">
-              {selectedPub.imageUrl && (
-                <div className="w-full h-56 rounded-2xl overflow-hidden border border-gray-100 shadow-sm flex-shrink-0">
-                  <img src={selectedPub.imageUrl} alt={selectedPub.title} className="w-full h-full object-cover" />
-                </div>
-              )}
-
-              {(selectedPub.startDate || selectedPub.endDate) && (
-                <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-3.5 flex items-center gap-3 text-xs text-orange-800 font-bold">
-                  <Calendar className="w-4 h-4 text-orange-600 animate-pulse" />
-                  <span>
-                    {selectedPub.startDate && `Du ${new Date(selectedPub.startDate).toLocaleDateString('fr-FR')}`}
-                    {selectedPub.endDate && ` au ${new Date(selectedPub.endDate).toLocaleDateString('fr-FR')}`}
-                  </span>
-                </div>
-              )}
-
-              <div className="text-gray-600 text-sm mb-5 leading-relaxed prose prose-sm max-w-none">
-                <div dangerouslySetInnerHTML={{ __html: selectedPub.description }} />
-              </div>
-
               {selectedPub.type === 'evenement' && (
+                <div className="flex bg-gray-100 dark:bg-gray-800 rounded-2xl p-1 gap-1 border border-gray-150 dark:border-gray-800 flex-shrink-0">
+                  {[
+                    { id: 'info', label: 'ℹ️ Détails' },
+                    { id: 'photos', label: '📸 Challenge' },
+                    { id: 'wall', label: '💬 Mur Social' }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActivePubTab(tab.id as any)}
+                      className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl transition-all cursor-pointer text-center ${
+                        activePubTab === tab.id
+                          ? 'bg-orange-600 text-white shadow-sm font-extrabold'
+                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {activePubTab === 'info' ? (
                 <>
-                  <ParticipationButtons
-                    event={selectedPub}
-                    establishment={establishments.find(e => e.id === selectedPub.establishmentId) || null}
-                  />
-                  <EventAIAnalytics
-                    event={selectedPub}
-                    establishment={establishments.find(e => e.id === selectedPub.establishmentId) || null}
-                  />
+                  {selectedPub.imageUrl && (
+                    <div className="w-full h-56 rounded-2xl overflow-hidden border border-gray-100 shadow-sm flex-shrink-0">
+                      <img src={selectedPub.imageUrl} alt={selectedPub.title} className="w-full h-full object-cover" />
+                    </div>
+                  )}
+
+                  {(selectedPub.startDate || selectedPub.endDate) && (
+                    <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-3.5 flex items-center gap-3 text-xs text-orange-800 font-bold">
+                      <Calendar className="w-4 h-4 text-orange-600 animate-pulse" />
+                      <span>
+                        {selectedPub.startDate && `Du ${new Date(selectedPub.startDate).toLocaleDateString('fr-FR')}`}
+                        {selectedPub.endDate && ` au ${new Date(selectedPub.endDate).toLocaleDateString('fr-FR')}`}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="text-gray-600 text-sm mb-5 leading-relaxed prose prose-sm max-w-none">
+                    <div dangerouslySetInnerHTML={{ __html: selectedPub.description }} />
+                  </div>
+
+                  {selectedPub.type === 'evenement' && (
+                    <>
+                      <ParticipationButtons
+                        event={selectedPub}
+                        establishment={establishments.find(e => e.id === selectedPub.establishmentId) || null}
+                      />
+                      <EventAIAnalytics
+                        event={selectedPub}
+                        establishment={establishments.find(e => e.id === selectedPub.establishmentId) || null}
+                      />
+                    </>
+                  )}
                 </>
+              ) : activePubTab === 'photos' ? (
+                <ChallengePhoto eventId={selectedPub.id} eventTitle={selectedPub.title} />
+              ) : (
+                <EventSocialMur 
+                  eventId={selectedPub.id} 
+                  isOwnerOrDJ={
+                    !!(currentUser && (
+                      currentUser.id === establishments.find(e => e.id === selectedPub.establishmentId)?.ownerId ||
+                      currentUser.role === 'dj'
+                    ))
+                  } 
+                />
               )}
             </div>
 

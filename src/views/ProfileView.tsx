@@ -6,6 +6,7 @@ import { GerantDashboard } from './GerantDashboard';
 import { AdminDashboard } from './AdminDashboard';
 import { EntrepriseDashboard } from './EntrepriseDashboard';
 import { useInstallApp } from '../hooks/useInstallApp';
+import { PersonalTimelineAndRecs } from '../components/PersonalTimelineAndRecs';
 
 interface ProfileViewProps {
   onNavigate?: (tab: any) => void;
@@ -737,6 +738,9 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
             </div>
           </div>
         </div>
+
+        {/* Historique Personnel & Recommandations IA */}
+        <PersonalTimelineAndRecs />
 
         {/* Invitations reçues */}
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">

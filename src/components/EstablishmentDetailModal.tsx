@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { X, Calendar, Clock, Share2, Compass, FileText, MapPin, Save } from 'lucide-react';
+import { X, Calendar, Clock, Share2, Compass, FileText, MapPin, Save, Disc, Video, Users } from 'lucide-react';
 import { Establishment } from '../types';
 import { ReservationModal } from './ReservationModal';
 import { AvisUtilisateurs } from './AvisUtilisateurs';
 import { ReservationsDashboard } from './ReservationsDashboard';
+import { LiveDAmbiance } from './LiveDAmbiance';
+import { AffluenceTracker } from './AffluenceTracker';
+import { PlaylistDJ } from './PlaylistDJ';
 import { useAppStore } from '../store';
 import { shareContent } from '../utils/platform';
 
@@ -20,6 +23,7 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
   const [geoInput, setGeoInput] = useState(establishment.geolocation || '');
   const [isSavingGeo, setIsSavingGeo] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
+  const [activeSubTab, setActiveSubTab] = useState<'info' | 'live' | 'affluence' | 'dj'>('info');
 
   React.useEffect(() => {
     trackEstablishmentView(establishment.id);
@@ -257,8 +261,32 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
             </div>
           )}
 
-          <div className="p-4 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border border-gray-100 dark:border-gray-800">
-            <h3 className="text-sm font-black text-gray-900 dark:text-white mb-2 uppercase tracking-wide">À propos</h3>
+          {/* Sub Tab Navigation */}
+          <div className="flex bg-gray-100 dark:bg-gray-900 rounded-2xl p-1 gap-1 border border-gray-150 dark:border-gray-800 flex-shrink-0">
+            {[
+              { id: 'info', label: 'ℹ️ Infos' },
+              { id: 'live', label: '📺 Live d\'Ambiance' },
+              { id: 'affluence', label: '⚡ Affluence' },
+              { id: 'dj', label: '🎵 Playlist DJ' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSubTab(tab.id as any)}
+                className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl transition-all cursor-pointer text-center ${
+                  activeSubTab === tab.id
+                    ? 'bg-orange-600 text-white shadow-sm font-extrabold'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {activeSubTab === 'info' ? (
+            <>
+              <div className="p-4 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border border-gray-100 dark:border-gray-800">
+                <h3 className="text-sm font-black text-gray-900 dark:text-white mb-2 uppercase tracking-wide">À propos</h3>
             <p className="text-sm text-gray-600 dark:text-gray-300 font-medium leading-relaxed">
               {establishment.description || "Aucune description disponible pour cet établissement."}
             </p>
@@ -395,6 +423,14 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
             <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">Avis clients</h3>
             <AvisUtilisateurs establishmentId={establishment.id} />
           </div>
+            </>
+          ) : activeSubTab === 'live' ? (
+            <LiveDAmbiance establishmentId={establishment.id} establishmentName={establishment.name} />
+          ) : activeSubTab === 'affluence' ? (
+            <AffluenceTracker establishmentId={establishment.id} />
+          ) : (
+            <PlaylistDJ establishmentId={establishment.id} />
+          )}
           
           <div className="sticky bottom-0 pt-4 bg-white dark:bg-gray-950 flex gap-3 z-10">
             {mapsUrl && (
