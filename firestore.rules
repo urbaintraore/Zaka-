@@ -162,6 +162,35 @@ service cloud.firestore {
         && (data.get('followers', []) is list && data.get('followers', []).size() <= 10000);
     }
 
+    function isValidStory(data) {
+      return data.keys().hasAll(['creatorId', 'creatorName', 'creatorType', 'mediaType', 'createdAt'])
+        && data.creatorId is string && data.creatorId.size() > 0
+        && data.creatorName is string && data.creatorName.size() > 0
+        && data.creatorType in ['establishment', 'dj', 'influencer', 'organizer']
+        && data.mediaType in ['image', 'video']
+        && data.createdAt is string && data.createdAt.size() > 0
+        && (data.get('mediaUrl', '') is string && data.get('mediaUrl', '').size() <= 1048576)
+        && (data.get('text', '') is string && data.get('text', '').size() <= 1000)
+        && (data.get('emoji', '') is string && data.get('emoji', '').size() <= 10)
+        && (data.get('music', '') is string && data.get('music', '').size() <= 100)
+        && (data.get('location', '') is string && data.get('location', '').size() <= 100)
+        && (data.get('views', []) is list)
+        && (data.get('reactions', {}) is map)
+        && (data.get('responsesCount', 0) is number)
+        && (data.get('establishmentId', '') is string);
+    }
+
+    function isValidEventParticipation(data) {
+      return data.keys().hasAll(['eventId', 'userId', 'status', 'timestamp'])
+        && data.eventId is string && data.eventId.size() > 0
+        && data.userId is string && data.userId == request.auth.uid
+        && data.status in ['interested', 'going', 'present']
+        && data.timestamp is string && data.timestamp.size() > 0
+        && (data.get('userName', '') is string)
+        && (data.get('userPhoto', '') is string)
+        && (data.get('isVisible', true) is bool);
+    }
+
     match /users/{userId} {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming()) && incoming().role != 'admin';
@@ -274,6 +303,36 @@ service cloud.firestore {
         || isUserAdmin()
       );
       allow delete: if isUserAdmin();
+    }
+
+    match /establishment_views/{viewId} {
+      allow read, list: if true;
+      allow create: if true;
+      allow update, delete: if false;
+    }
+
+    match /publication_views/{viewId} {
+      allow read, list: if true;
+      allow create: if true;
+      allow update, delete: if false;
+    }
+
+    match /rankings/{rankingDoc} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if false;
+    }
+
+    match /stories/{storyId} {
+      allow read: if true;
+      allow create, update: if isSignedIn() && isValidStory(incoming());
+      allow delete: if isSignedIn() && (existing().creatorId == request.auth.uid || isUserAdmin());
+    }
+
+    match /event_participations/{participationId} {
+      allow read: if true;
+      allow create, update: if isSignedIn() && incoming().userId == request.auth.uid && isValidEventParticipation(incoming());
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
     }
   }
 }

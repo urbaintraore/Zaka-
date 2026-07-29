@@ -142,3 +142,33 @@ export interface MenuDuJour {
   publishedAt: string;
 }
 
+export interface Story {
+  id: string;
+  creatorId: string; // establishmentId, user(dj)Id, influencerId, partnerId
+  creatorName: string;
+  creatorAvatar: string;
+  creatorType: 'establishment' | 'dj' | 'influencer' | 'organizer';
+  mediaUrl?: string;
+  mediaType: 'image' | 'video';
+  text?: string;
+  emoji?: string;
+  music?: string;
+  location?: string;
+  createdAt: string; // ISO String
+  views: string[]; // List of user IDs
+  reactions: Record<string, string>; // userId -> emoji
+  responsesCount: number;
+  establishmentId?: string; // Associated establishment (if any)
+}
+
+export interface EventParticipation {
+  id: string;
+  eventId: string;
+  userId: string;
+  userName: string;
+  userPhoto?: string;
+  status: 'interested' | 'going' | 'present';
+  timestamp: string; // ISO String
+  isVisible: boolean;
+}
+

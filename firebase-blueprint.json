@@ -130,6 +130,44 @@
         "followers": { "type": "array", "items": { "type": "string" } }
       },
       "required": ["name", "sector", "description", "philosophy", "status", "createdAt"]
+    },
+    "Story": {
+      "title": "Story",
+      "description": "An ephemeral story that lasts 24 hours",
+      "type": "object",
+      "properties": {
+        "creatorId": { "type": "string" },
+        "creatorName": { "type": "string" },
+        "creatorAvatar": { "type": "string" },
+        "creatorType": { "type": "string", "enum": ["establishment", "dj", "influencer", "organizer"] },
+        "mediaUrl": { "type": "string" },
+        "mediaType": { "type": "string", "enum": ["image", "video"] },
+        "text": { "type": "string" },
+        "emoji": { "type": "string" },
+        "music": { "type": "string" },
+        "location": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "views": { "type": "array", "items": { "type": "string" } },
+        "reactions": { "type": "object" },
+        "responsesCount": { "type": "integer" },
+        "establishmentId": { "type": "string" }
+      },
+      "required": ["creatorId", "creatorName", "creatorType", "mediaType", "createdAt"]
+    },
+    "EventParticipation": {
+      "title": "EventParticipation",
+      "description": "A status tracking user participation in an event",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "status": { "type": "string", "enum": ["interested", "going", "present"] },
+        "timestamp": { "type": "string" },
+        "isVisible": { "type": "boolean" }
+      },
+      "required": ["eventId", "userId", "status", "timestamp"]
     }
   },
   "firestore": {
@@ -164,6 +202,14 @@
     "entreprises": {
       "schema": { "$ref": "#/entities/Entreprise" },
       "description": "Entreprises collection"
+    },
+    "stories": {
+      "schema": { "$ref": "#/entities/Story" },
+      "description": "Stories collection"
+    },
+    "event_participations": {
+      "schema": { "$ref": "#/entities/EventParticipation" },
+      "description": "Event participation status collection"
     }
   }
 }

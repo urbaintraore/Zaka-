@@ -13,13 +13,17 @@ interface EstablishmentDetailModalProps {
 }
 
 export function EstablishmentDetailModal({ establishment, onClose }: EstablishmentDetailModalProps) {
-  const { createServiceRequest, addReservation, menusDuJour, currentUser, updateEstablishment } = useAppStore();
+  const { createServiceRequest, addReservation, menusDuJour, currentUser, updateEstablishment, trackEstablishmentView } = useAppStore();
   const [showReservation, setShowReservation] = useState(false);
   const [showReservationsDashboard, setShowReservationsDashboard] = useState(false);
   const [isEditingGeo, setIsEditingGeo] = useState(false);
   const [geoInput, setGeoInput] = useState(establishment.geolocation || '');
   const [isSavingGeo, setIsSavingGeo] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
+
+  React.useEffect(() => {
+    trackEstablishmentView(establishment.id);
+  }, [establishment.id, trackEstablishmentView]);
 
   const handleSaveGeo = async () => {
     try {

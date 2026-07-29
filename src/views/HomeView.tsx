@@ -1,10 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore } from '../store';
 import { Tab } from '../components/BottomNav';
 import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight } from 'lucide-react';
 import { stripHtml } from '../utils/htmlHelpers';
 import { ReservationModal } from '../components/ReservationModal';
-import { Publication } from '../types';
+import { Publication, Establishment } from '../types';
+import { db } from '../lib/firebase';
+import { EstablishmentDetailModal } from '../components/EstablishmentDetailModal';
+import { StoriesSection } from '../components/StoriesSection';
+import { ParticipationButtons } from '../components/ParticipationButtons';
+import { EventAIAnalytics } from '../components/EventAIAnalytics';
 
 interface HomeViewProps {
   onStartChat?: (estId: string) => void;
@@ -12,10 +17,266 @@ interface HomeViewProps {
 }
 
 export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
-  const { publications, establishments, entreprises, currentUser, createServiceRequest, relationshipRequests, setGlobalError, favorites, toggleFavorite, reviews } = useAppStore();
+  const { publications, establishments, entreprises, currentUser, createServiceRequest, relationshipRequests, setGlobalError, favorites, toggleFavorite, reviews, trackPublicationView } = useAppStore();
   const [reservationEst, setReservationEst] = useState<{ id: string, name: string } | null>(null);
   const [selectedPub, setSelectedPub] = useState<Publication | null>(null);
   const [filterMemberOnly, setFilterMemberOnly] = useState(false);
+
+  useEffect(() => {
+    if (selectedPub) {
+      trackPublicationView(selectedPub.id);
+    }
+  }, [selectedPub, trackPublicationView]);
+
+  // Rankings state
+  const [rankings, setRankings] = useState<{
+    mostViewed: { establishmentId: string; count: number }[];
+    bestRated: { establishmentId: string; rating: number; reviewsCount: number }[];
+    popularEvents: { publicationId: string; count: number }[];
+    updatedAt: string | null;
+  } | null>(null);
+  const [isRankingsLoading, setIsRankingsLoading] = useState(true);
+  const [activeRankTab, setActiveRankTab] = useState<'views' | 'rating' | 'events'>('views');
+  const [isRecalculating, setIsRecalculating] = useState(false);
+  const [selectedRankEst, setSelectedRankEst] = useState<Establishment | null>(null);
+  const [recalcTrigger, setRecalcTrigger] = useState(0);
+
+  // Simulation Panel state
+  const [showSimPanel, setShowSimPanel] = useState(false);
+  const [simMessage, setSimMessage] = useState<string | null>(null);
+
+  // Rankings loading & daily recalculation
+  useEffect(() => {
+    let active = true;
+    const fetchRankings = async () => {
+      try {
+        setIsRankingsLoading(true);
+        const { getDoc, doc } = await import('firebase/firestore');
+        const docRef = doc(db, 'rankings', 'cache');
+        const docSnap = await getDoc(docRef);
+        
+        let needsRecalculate = false;
+        let cachedData = null;
+        
+        if (docSnap.exists()) {
+          cachedData = docSnap.data();
+          const updatedAtStr = cachedData.updatedAt;
+          if (updatedAtStr) {
+            const updatedAt = new Date(updatedAtStr);
+            const now = new Date();
+            const isSameDay = updatedAt.toDateString() === now.toDateString();
+            const diffHours = Math.abs(now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60);
+            if (!isSameDay && diffHours >= 24) {
+              needsRecalculate = true;
+            }
+          } else {
+            needsRecalculate = true;
+          }
+        } else {
+          needsRecalculate = true;
+        }
+
+        if (needsRecalculate) {
+          console.log("[Rankings] Stale or missing cache, recalculating...");
+          await runRecalculate();
+        } else if (cachedData) {
+          if (active) {
+            setRankings({
+              mostViewed: cachedData.mostViewed || [],
+              bestRated: cachedData.bestRated || [],
+              popularEvents: cachedData.popularEvents || [],
+              updatedAt: cachedData.updatedAt || null,
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Erreur lors du chargement des classements:", err);
+        await runRecalculate();
+      } finally {
+        if (active) setIsRankingsLoading(false);
+      }
+    };
+
+    const runRecalculate = async () => {
+      if (isRecalculating) return;
+      setIsRecalculating(true);
+      try {
+        const { getDocs, collection, setDoc, doc } = await import('firebase/firestore');
+        const nowStr = new Date().toISOString();
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        
+        let rawEstViews: any[] = [];
+        try {
+          const estViewsSnap = await getDocs(collection(db, 'establishment_views'));
+          estViewsSnap.forEach(d => {
+            const data = d.data();
+            if (data.timestamp && data.timestamp >= sevenDaysAgo) {
+              rawEstViews.push(data);
+            }
+          });
+        } catch (e) {
+          console.error("Erreur query establishment_views:", e);
+        }
+
+        let rawPubViews: any[] = [];
+        try {
+          const pubViewsSnap = await getDocs(collection(db, 'publication_views'));
+          pubViewsSnap.forEach(d => {
+            const data = d.data();
+            if (data.timestamp && data.timestamp >= sevenDaysAgo) {
+              rawPubViews.push(data);
+            }
+          });
+        } catch (e) {
+          console.error("Erreur query publication_views:", e);
+        }
+
+        // --- CALCULATE ESTABLISHMENT VIEWS RANKING ---
+        const viewCounts: Record<string, number> = {};
+        rawEstViews.forEach(v => {
+          const estId = v.establishmentId;
+          const est = establishments.find(e => e.id === estId);
+          if (!est) return;
+          if (v.userId && v.userId === est.ownerId) {
+            return; // Skip views by owner
+          }
+          viewCounts[estId] = (viewCounts[estId] || 0) + 1;
+        });
+
+        const mostViewed = Object.entries(viewCounts)
+          .map(([establishmentId, count]) => ({ establishmentId, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 10);
+
+        // --- CALCULATE BEST RATED RANKING ---
+        const bestRatedList = establishments
+          .map(est => {
+            const estReviews = reviews.filter(r => r.establishmentId === est.id);
+            if (estReviews.length < 3) return null;
+            const average = estReviews.reduce((sum, r) => sum + r.rating, 0) / estReviews.length;
+            return {
+              establishmentId: est.id,
+              rating: average,
+              reviewsCount: estReviews.length
+            };
+          })
+          .filter((item): item is { establishmentId: string; rating: number; reviewsCount: number } => item !== null)
+          .sort((a, b) => {
+            if (b.rating !== a.rating) return b.rating - a.rating;
+            return b.reviewsCount - a.reviewsCount;
+          })
+          .slice(0, 10);
+
+        // --- CALCULATE POPULAR EVENTS RANKING ---
+        const todayStr = new Date().toISOString().split('T')[0];
+        const activeEvents = publications.filter(pub => {
+          if (pub.type !== 'evenement') return false;
+          const dateCheck = pub.endDate || pub.startDate;
+          if (!dateCheck) return true;
+          return dateCheck.split('T')[0] >= todayStr;
+        });
+
+        const eventViewCounts: Record<string, number> = {};
+        rawPubViews.forEach(v => {
+          const pubId = v.publicationId;
+          const pub = activeEvents.find(p => p.id === pubId);
+          if (!pub) return;
+          
+          const est = establishments.find(e => e.id === pub.establishmentId);
+          if (est && v.userId && v.userId === est.ownerId) {
+            return;
+          }
+          eventViewCounts[pubId] = (eventViewCounts[pubId] || 0) + 1;
+        });
+
+        const popularEvents = activeEvents
+          .map(pub => ({
+            publicationId: pub.id,
+            count: eventViewCounts[pub.id] || 0
+          }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 10);
+
+        const newRankings = {
+          mostViewed,
+          bestRated: bestRatedList,
+          popularEvents,
+          updatedAt: nowStr
+        };
+
+        await setDoc(doc(db, 'rankings', 'cache'), newRankings);
+        
+        if (active) {
+          setRankings(newRankings);
+        }
+      } catch (err) {
+        console.error("Erreur lors de la réévaluation des classements:", err);
+      } finally {
+        if (active) {
+          setIsRecalculating(false);
+        }
+      }
+    };
+
+    fetchRankings();
+
+    return () => {
+      active = false;
+    };
+  }, [establishments, publications, reviews, recalcTrigger]);
+
+  const handleSimulateViews = async (recent: boolean) => {
+    try {
+      const { addDoc, collection } = await import('firebase/firestore');
+      if (establishments.length === 0) {
+        setSimMessage("Aucun établissement disponible pour simuler.");
+        return;
+      }
+      
+      const targetEsts = establishments.slice(0, 2);
+      const daysOffset = recent ? 2 : 10;
+      const timestamp = new Date(Date.now() - daysOffset * 24 * 60 * 60 * 1000).toISOString();
+      
+      for (const est of targetEsts) {
+        for (let i = 0; i < 3; i++) {
+          await addDoc(collection(db, 'establishment_views'), {
+            establishmentId: est.id,
+            userId: 'test-user-' + Math.random().toString(36).substring(2, 6),
+            timestamp
+          });
+        }
+      }
+      
+      setSimMessage(`Succès: 6 vues ${recent ? 'récentes (<7j)' : 'anciennes (>7j)'} ajoutées.`);
+    } catch (err) {
+      console.error(err);
+      setSimMessage("Erreur lors de la simulation des vues.");
+    }
+  };
+
+  const handleSimulateOwnerView = async () => {
+    try {
+      const { addDoc, collection } = await import('firebase/firestore');
+      if (establishments.length === 0) {
+        setSimMessage("Aucun établissement disponible.");
+        return;
+      }
+      const est = establishments[0];
+      await addDoc(collection(db, 'establishment_views'), {
+        establishmentId: est.id,
+        userId: est.ownerId,
+        timestamp: new Date().toISOString()
+      });
+      setSimMessage(`Succès: Vue Gérant sur sa propre fiche ajoutée pour ${est.name} (exclue du classement).`);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleForceRecalculate = () => {
+    setSimMessage("Mise à jour lancée...");
+    setRecalcTrigger(prev => prev + 1);
+  };
   
   // Calendar state
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
@@ -190,6 +451,9 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
         </div>
       </div>
 
+      {/* Ephemeral Stories (Style Instagram) */}
+      <StoriesSection onStartChat={onStartChat} />
+
       {/* Dynamic Widget: Recent 5-Star Reviews */}
       {recentTopReviews.length > 0 && (
         <div className="px-4">
@@ -229,6 +493,308 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
       )}
 
       <div className="px-4 flex flex-col gap-8">
+        {/* SECTION CLASSEMENTS HEBDOMADAIRES */}
+        <section className="bg-white dark:bg-gray-950 p-6 rounded-3xl border border-gray-100 dark:border-gray-900 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+            <div>
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-yellow-500 animate-pulse" />
+                <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">Le Top de la Semaine</h2>
+              </div>
+              <p className="text-xs text-gray-500 mt-1 font-medium">
+                Découvrez nos classements mis à jour quotidiennement
+              </p>
+            </div>
+            {rankings?.updatedAt && (
+              <span className="text-[10px] self-start sm:self-center font-bold px-2.5 py-1 rounded-full bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-100 dark:border-green-900/40">
+                🔄 Mis à jour aujourd'hui
+              </span>
+            )}
+          </div>
+
+          {/* Tabs navigation */}
+          <div className="grid grid-cols-3 gap-1 bg-gray-100 dark:bg-gray-900 p-1 rounded-2xl mb-6">
+            <button
+              onClick={() => setActiveRankTab('views')}
+              className={`py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+                activeRankTab === 'views'
+                  ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs'
+                  : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              <span className="text-base">👁️</span>
+              <span>Plus vus</span>
+            </button>
+            <button
+              onClick={() => setActiveRankTab('rating')}
+              className={`py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+                activeRankTab === 'rating'
+                  ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs'
+                  : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              <span className="text-base">⭐</span>
+              <span>Mieux notés</span>
+            </button>
+            <button
+              onClick={() => setActiveRankTab('events')}
+              className={`py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+                activeRankTab === 'events'
+                  ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs'
+                  : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              <span className="text-base">🔥</span>
+              <span>Ça bouge</span>
+            </button>
+          </div>
+
+          {/* Rankings List */}
+          {isRankingsLoading ? (
+            <div className="py-12 text-center text-sm text-gray-500 animate-pulse">
+              Chargement des classements en cours...
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {activeRankTab === 'views' && (
+                <>
+                  {(!rankings?.mostViewed || rankings.mostViewed.length === 0) ? (
+                    <div className="text-center py-8 text-xs text-gray-500">
+                      Aucune donnée de visite récente pour le moment.
+                    </div>
+                  ) : (
+                    rankings.mostViewed.map((item, index) => {
+                      const est = getEst(item.establishmentId);
+                      if (!est) return null;
+                      const imageUrl = est.photos?.[0] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400';
+                      return (
+                        <div
+                          key={est.id}
+                          onClick={() => setSelectedRankEst(est)}
+                          className="flex items-center gap-4 p-3 rounded-2xl border border-gray-50 dark:border-gray-900 hover:border-orange-100 hover:bg-orange-50/20 transition-all cursor-pointer group"
+                        >
+                          {/* Rank badge */}
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm flex-shrink-0 ${
+                            index === 0 ? 'bg-yellow-100 text-yellow-700 ring-2 ring-yellow-400' :
+                            index === 1 ? 'bg-slate-100 text-slate-700 ring-2 ring-slate-300' :
+                            index === 2 ? 'bg-orange-100 text-orange-700 ring-2 ring-orange-300' :
+                            'bg-gray-50 text-gray-400 dark:bg-gray-900 dark:text-gray-500'
+                          }`}>
+                            {index === 0 ? '👑' : index + 1}
+                          </div>
+
+                          {/* Photo */}
+                          <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
+                            <img src={imageUrl} alt={est.name} className="w-full h-full object-cover" />
+                          </div>
+
+                          {/* Text */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <h4 className="font-bold text-gray-900 dark:text-gray-100 group-hover:text-orange-600 transition-colors truncate text-sm sm:text-base">{est.name}</h4>
+                              {index === 0 && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-yellow-100 text-yellow-800 uppercase animate-bounce">
+                                  #1 cette semaine
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 capitalize truncate mt-0.5">
+                              {est.category.replace(/_/g, ' ')} • {est.neighborhood}
+                            </p>
+                          </div>
+
+                          {/* Count Metric badge */}
+                          <div className="flex flex-col items-end flex-shrink-0">
+                            <span className="text-xs font-extrabold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-lg">
+                              {item.count} vue{item.count > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </>
+              )}
+
+              {activeRankTab === 'rating' && (
+                <>
+                  {(!rankings?.bestRated || rankings.bestRated.length === 0) ? (
+                    <div className="text-center py-8 text-xs text-gray-500">
+                      Pas assez d'avis pour établir le classement (seuil : 3 avis minimum).
+                    </div>
+                  ) : (
+                    rankings.bestRated.map((item, index) => {
+                      const est = getEst(item.establishmentId);
+                      if (!est) return null;
+                      const imageUrl = est.photos?.[0] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400';
+                      return (
+                        <div
+                          key={est.id}
+                          onClick={() => setSelectedRankEst(est)}
+                          className="flex items-center gap-4 p-3 rounded-2xl border border-gray-50 dark:border-gray-900 hover:border-orange-100 hover:bg-orange-50/20 transition-all cursor-pointer group"
+                        >
+                          {/* Rank badge */}
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm flex-shrink-0 ${
+                            index === 0 ? 'bg-yellow-100 text-yellow-700 ring-2 ring-yellow-400' :
+                            index === 1 ? 'bg-slate-100 text-slate-700 ring-2 ring-slate-300' :
+                            index === 2 ? 'bg-orange-100 text-orange-700 ring-2 ring-orange-300' :
+                            'bg-gray-50 text-gray-400 dark:bg-gray-900 dark:text-gray-500'
+                          }`}>
+                            {index === 0 ? '👑' : index + 1}
+                          </div>
+
+                          {/* Photo */}
+                          <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
+                            <img src={imageUrl} alt={est.name} className="w-full h-full object-cover" />
+                          </div>
+
+                          {/* Text */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <h4 className="font-bold text-gray-900 dark:text-gray-100 group-hover:text-orange-600 transition-colors truncate text-sm sm:text-base">{est.name}</h4>
+                              {index === 0 && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-yellow-100 text-yellow-800 uppercase">
+                                  mieux noté
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 capitalize truncate mt-0.5">
+                              {est.category.replace(/_/g, ' ')} • {est.neighborhood}
+                            </p>
+                          </div>
+
+                          {/* Metric Rating badge */}
+                          <div className="flex flex-col items-end flex-shrink-0">
+                            <div className="flex items-center gap-1 text-xs font-extrabold text-yellow-600 bg-yellow-50 px-2.5 py-1 rounded-lg">
+                              <Star className="w-3.5 h-3.5 fill-yellow-500 text-yellow-500" />
+                              <span>{item.rating.toFixed(1)}</span>
+                            </div>
+                            <span className="text-[10px] text-gray-400 mt-1 font-bold">
+                              {item.reviewsCount} avis
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </>
+              )}
+
+              {activeRankTab === 'events' && (
+                <>
+                  {(!rankings?.popularEvents || rankings.popularEvents.length === 0) ? (
+                    <div className="text-center py-8 text-xs text-gray-500">
+                      Aucun événement en cours ou à venir à afficher cette semaine.
+                    </div>
+                  ) : (
+                    rankings.popularEvents.map((item, index) => {
+                      const pub = publications.find(p => p.id === item.publicationId);
+                      if (!pub) return null;
+                      const est = getEst(pub.establishmentId);
+                      const imageUrl = pub.imageUrl || (est?.photos?.[0]) || 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=400';
+                      return (
+                        <div
+                          key={pub.id}
+                          onClick={() => setSelectedPub(pub)}
+                          className="flex items-center gap-4 p-3 rounded-2xl border border-gray-50 dark:border-gray-900 hover:border-orange-100 hover:bg-orange-50/20 transition-all cursor-pointer group"
+                        >
+                          {/* Rank badge */}
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm flex-shrink-0 ${
+                            index === 0 ? 'bg-yellow-100 text-yellow-700 ring-2 ring-yellow-400' :
+                            index === 1 ? 'bg-slate-100 text-slate-700 ring-2 ring-slate-300' :
+                            index === 2 ? 'bg-orange-100 text-orange-700 ring-2 ring-orange-300' :
+                            'bg-gray-50 text-gray-400 dark:bg-gray-900 dark:text-gray-500'
+                          }`}>
+                            {index === 0 ? '👑' : index + 1}
+                          </div>
+
+                          {/* Photo */}
+                          <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
+                            <img src={imageUrl} alt={pub.title} className="w-full h-full object-cover" />
+                          </div>
+
+                          {/* Text */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <h4 className="font-bold text-gray-900 dark:text-gray-100 group-hover:text-orange-600 transition-colors truncate text-sm sm:text-base">{pub.title}</h4>
+                            </div>
+                            <p className="text-xs text-gray-500 truncate mt-0.5 font-bold">
+                              Chez {est?.name || 'Partenaire'} • {pub.startDate ? new Date(pub.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : 'Cette semaine'}
+                            </p>
+                          </div>
+
+                          {/* Metric Pop badge */}
+                          <div className="flex flex-col items-end flex-shrink-0">
+                            <span className="text-xs font-extrabold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
+                              {item.count} clic{item.count > 1 ? 's' : ''}/vue{item.count > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Simulation/Test panel helper */}
+          <div className="mt-6 border-t border-gray-100 dark:border-gray-900 pt-4">
+            <button
+              onClick={() => {
+                setShowSimPanel(!showSimPanel);
+                setSimMessage(null);
+              }}
+              className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-bold flex items-center gap-1.5"
+            >
+              <span>🛠️</span>
+              <span>{showSimPanel ? "Masquer le simulateur de test" : "Afficher le simulateur de test (vues / exclusions Gérant)"}</span>
+            </button>
+
+            {showSimPanel && (
+              <div className="mt-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800">
+                <h4 className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2">Simulateur de Données de Classement</h4>
+                <p className="text-[11px] text-gray-500 leading-relaxed mb-3">
+                  Utilisez ces boutons pour simuler des vues ou avis conformément aux tests requis, puis cliquez sur "Forcer la mise à jour".
+                </p>
+                
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <button
+                    onClick={() => handleSimulateViews(true)}
+                    className="px-2.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                  >
+                    +6 Vues Récentes (&lt;7j)
+                  </button>
+                  <button
+                    onClick={() => handleSimulateViews(false)}
+                    className="px-2.5 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                  >
+                    +6 Vues Anciennes (&gt;7j)
+                  </button>
+                  <button
+                    onClick={handleSimulateOwnerView}
+                    className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                  >
+                    Vue Gérant (Exclue)
+                  </button>
+                  <button
+                    onClick={handleForceRecalculate}
+                    className="px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    🔄 Forcer la mise à jour
+                  </button>
+                </div>
+
+                {simMessage && (
+                  <div className="p-2 bg-white dark:bg-gray-950 rounded-lg text-[11px] font-semibold text-orange-600 border border-orange-100 dark:border-orange-950/40">
+                    {simMessage}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+
         {/* Filtres de flux */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-2">
           <div className="flex gap-2">
@@ -644,6 +1210,19 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
               <div className="text-gray-600 text-sm mb-5 leading-relaxed prose prose-sm max-w-none">
                 <div dangerouslySetInnerHTML={{ __html: selectedPub.description }} />
               </div>
+
+              {selectedPub.type === 'evenement' && (
+                <>
+                  <ParticipationButtons
+                    event={selectedPub}
+                    establishment={establishments.find(e => e.id === selectedPub.establishmentId) || null}
+                  />
+                  <EventAIAnalytics
+                    event={selectedPub}
+                    establishment={establishments.find(e => e.id === selectedPub.establishmentId) || null}
+                  />
+                </>
+              )}
             </div>
 
             <div className="p-6 border-t border-gray-100 bg-gray-50/30 flex-shrink-0 flex gap-3">
@@ -669,6 +1248,13 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedRankEst && (
+        <EstablishmentDetailModal
+          establishment={selectedRankEst}
+          onClose={() => setSelectedRankEst(null)}
+        />
       )}
     </div>
   );

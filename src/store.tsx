@@ -78,6 +78,8 @@ interface AppContextType extends AppState {
   addReservation: (res: Omit<Reservation, 'id' | 'status' | 'createdAt'>) => Promise<void>;
   updateReservationStatus: (id: string, status: 'en_attente' | 'confirmee' | 'refusee' | 'annulee', managerMessage?: string) => Promise<void>;
   addMenuDuJour: (menu: Omit<MenuDuJour, 'id' | 'publishedAt'>) => Promise<void>;
+  trackEstablishmentView: (establishmentId: string) => Promise<void>;
+  trackPublicationView: (publicationId: string) => Promise<void>;
   setGlobalError: (err: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null) => void;
   toggleTheme: () => void;
 }
@@ -1414,6 +1416,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const trackEstablishmentView = async (establishmentId: string) => {
+    try {
+      const est = state.establishments.find(e => e.id === establishmentId);
+      if (!est) return;
+      if (state.currentUser && state.currentUser.id === est.ownerId) {
+        console.log("[trackEstablishmentView] Skipping view since current user is owner.");
+        return;
+      }
+      const now = new Date().toISOString();
+      await addDoc(collection(db, 'establishment_views'), {
+        establishmentId,
+        userId: state.currentUser?.id || null,
+        timestamp: now
+      });
+      console.log("[trackEstablishmentView] Registered view for", establishmentId);
+    } catch (error) {
+      console.error("Erreur trackEstablishmentView:", error);
+    }
+  };
+
+  const trackPublicationView = async (publicationId: string) => {
+    try {
+      const pub = state.publications.find(p => p.id === publicationId);
+      if (!pub) return;
+      const est = state.establishments.find(e => e.id === pub.establishmentId);
+      if (est && state.currentUser && state.currentUser.id === est.ownerId) {
+        console.log("[trackPublicationView] Skipping view since current user is owner.");
+        return;
+      }
+      const now = new Date().toISOString();
+      await addDoc(collection(db, 'publication_views'), {
+        publicationId,
+        userId: state.currentUser?.id || null,
+        timestamp: now
+      });
+      await updateDoc(doc(db, 'publications', publicationId), {
+        views: (pub.views || 0) + 1
+      });
+      console.log("[trackPublicationView] Registered view for publication", publicationId);
+    } catch (error) {
+      console.error("Erreur trackPublicationView:", error);
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       ...state,
@@ -1448,6 +1494,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addReservation,
       updateReservationStatus,
       addMenuDuJour,
+      trackEstablishmentView,
+      trackPublicationView,
       setGlobalError,
       toggleTheme
     }}>
