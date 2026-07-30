@@ -10,6 +10,7 @@ export interface User {
   city?: string;
   points?: number;
   referralCode?: string;
+  avatar?: string;
 }
 
 export interface Entreprise {
@@ -73,6 +74,15 @@ export interface Review {
   rating: number;
   comment: string;
   date: string;
+}
+
+export interface CarnetEntry {
+  id: string;
+  clientId: string;
+  establishmentId: string;
+  type: 'visite' | 'favori' | 'avis';
+  date: string;
+  privateNote?: string;
 }
 
 export interface Application {

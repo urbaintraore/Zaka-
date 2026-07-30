@@ -12,6 +12,7 @@ import { ParticipationButtons } from '../components/ParticipationButtons';
 import { EventAIAnalytics } from '../components/EventAIAnalytics';
 import { ChallengePhoto } from '../components/ChallengePhoto';
 import { EventSocialMur } from '../components/EventSocialMur';
+import { motion } from 'motion/react';
 
 interface HomeViewProps {
   onStartChat?: (estId: string) => void;
@@ -19,7 +20,7 @@ interface HomeViewProps {
 }
 
 export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
-  const { publications, establishments, entreprises, currentUser, createServiceRequest, relationshipRequests, setGlobalError, favorites, toggleFavorite, reviews, trackPublicationView } = useAppStore();
+  const { publications, establishments, entreprises, currentUser, createServiceRequest, relationshipRequests, setGlobalError, favorites, toggleFavorite, reviews, trackPublicationView, users } = useAppStore();
   const [reservationEst, setReservationEst] = useState<{ id: string, name: string } | null>(null);
   const [selectedPub, setSelectedPub] = useState<Publication | null>(null);
   const [filterMemberOnly, setFilterMemberOnly] = useState(false);
@@ -335,11 +336,19 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
     };
   };
 
-  // Get recent 5-star reviews
-  const recentTopReviews = reviews
-    .filter(r => r.rating === 5)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 3);
+  // Get recent 5-star reviews on popular establishments (averageRating top 6)
+  const popularEstsList = [...establishments]
+    .sort((a, b) => b.averageRating - a.averageRating);
+  const popularEstIdsSet = new Set(popularEstsList.slice(0, 6).map(e => e.id));
+
+  const popularFiveStarReviews = reviews
+    .filter(r => r.rating === 5 && popularEstIdsSet.has(r.establishmentId))
+    .sort((a, b) => {
+      const dateA = new Date((a as any).createdAt || a.date || 0).getTime();
+      const dateB = new Date((b as any).createdAt || b.date || 0).getTime();
+      return dateB - dateA;
+    })
+    .slice(0, 6);
 
   // Filter based on member status if active
   const joinedEstIds = currentUser
@@ -462,37 +471,88 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
       <StoriesSection onStartChat={onStartChat} />
 
       {/* Dynamic Widget: Recent 5-Star Reviews */}
-      {recentTopReviews.length > 0 && (
-        <div className="px-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="w-5 h-5 text-yellow-500" />
-            <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Coups de cœur récents</h3>
+      {popularFiveStarReviews.length > 0 && (
+        <div className="px-4" id="popular-reviews-widget">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-yellow-500 animate-pulse" />
+              <div>
+                <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">La Crème de Zaka 🔥</h3>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Derniers avis 5★ sur les adresses phares</p>
+              </div>
+            </div>
           </div>
-          <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2">
-            {recentTopReviews.map(review => {
+          <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-3.5 px-0.5">
+            {popularFiveStarReviews.map(review => {
               const est = getEst(review.establishmentId);
               if (!est) return null;
+              
+              // Resolve reviewer name and avatar from users list
+              const reviewerUser = users?.find(u => u.id === review.clientId);
+              const reviewerName = reviewerUser?.name || 'Initié Club';
+              const reviewerAvatar = reviewerUser?.avatar || '';
+              
               return (
-                <div key={review.id} className="min-w-[280px] bg-white dark:bg-gray-950 border border-yellow-200 dark:border-yellow-900/40 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-                  <div className="absolute -top-6 -right-6 w-16 h-16 bg-yellow-100/50 dark:bg-yellow-900/20 rounded-full blur-xl"></div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-950/50 flex items-center justify-center font-bold text-orange-600 dark:text-orange-400 text-xs">
-                        {(review.clientName || 'A').charAt(0).toUpperCase()}
+                <motion.div
+                  key={review.id}
+                  whileHover={{ y: -4, scale: 1.01 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                  onClick={() => setSelectedRankEst(est)}
+                  className="min-w-[300px] max-w-[320px] bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-900 rounded-3xl p-5 shadow-xs hover:shadow-md transition-all relative overflow-hidden flex flex-col justify-between cursor-pointer group"
+                >
+                  {/* Subtle decorative background gradient */}
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-yellow-400/10 to-transparent rounded-bl-full pointer-events-none"></div>
+
+                  <div className="space-y-3">
+                    {/* Header: User & Stars */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-500 to-red-500 p-[1.5px] flex-shrink-0">
+                          {reviewerAvatar ? (
+                            <img src={reviewerAvatar} alt={reviewerName} className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
+                          ) : (
+                            <div className="w-full h-full bg-white dark:bg-gray-950 rounded-full flex items-center justify-center font-black text-orange-600 dark:text-orange-400 text-xs">
+                              {reviewerName.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-xs font-black text-gray-900 dark:text-gray-100 group-hover:text-orange-600 transition-colors">
+                            {reviewerName}
+                          </div>
+                          <div className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
+                            {new Date(review.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-xs font-bold text-gray-900 dark:text-gray-100">{review.clientName || 'Anonyme'}</div>
-                        <div className="text-[10px] text-gray-500 dark:text-gray-400">à {est.name}</div>
+                      <div className="flex items-center gap-0.5 bg-yellow-50 dark:bg-yellow-950/40 px-2 py-0.5 rounded-full border border-yellow-100 dark:border-yellow-900/30">
+                        <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
+                        <span className="text-[10px] font-black text-yellow-700 dark:text-yellow-400">5.0</span>
                       </div>
                     </div>
-                    <div className="flex text-yellow-400">
-                      {[...Array(5)].map((_, i) => <Star key={i} className="w-3 h-3 fill-current" />)}
-                    </div>
+
+                    {/* Review text */}
+                    <p className="text-xs text-gray-600 dark:text-gray-300 font-medium leading-relaxed italic line-clamp-3 pl-1 relative">
+                      “ {review.comment} ”
+                    </p>
                   </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-300 italic line-clamp-3">
-                    "{review.comment}"
-                  </p>
-                </div>
+
+                  {/* Footer: Establishment & Popular Badge */}
+                  <div className="mt-4 pt-3.5 border-t border-gray-100 dark:border-gray-900 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-xs font-black text-gray-900 dark:text-white truncate">
+                        {est.name}
+                      </div>
+                      <div className="text-[9px] text-gray-400 font-bold uppercase tracking-wider truncate">
+                        📍 {est.neighborhood}
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-[8px] font-black uppercase bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-400 px-2 py-0.5 rounded-full border border-orange-200 dark:border-orange-900/30 flex items-center gap-0.5">
+                      <span>Populaire</span>
+                      <Flame className="w-2.5 h-2.5 fill-current animate-pulse" />
+                    </span>
+                  </div>
+                </motion.div>
               );
             })}
           </div>
@@ -500,6 +560,81 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
       )}
 
       <div className="px-4 flex flex-col gap-8">
+        {/* WIDGET DES DERNIERS AVIS 5 ÉTOILES */}
+        {(() => {
+          const popularEsts = (establishments || [])
+            .filter(e => e.status === 'valide' && e.averageRating >= 4.0)
+            .map(e => e.id);
+
+          const latestFiveStarReviews = (reviews || [])
+            .filter(r => r.rating === 5 && popularEsts.includes(r.establishmentId))
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 5);
+
+          if (latestFiveStarReviews.length === 0) return null;
+
+          return (
+            <section className="bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent p-6 rounded-3xl border border-orange-100/60 dark:border-orange-900/30 shadow-xs">
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="w-9 h-9 bg-yellow-400 text-white rounded-xl flex items-center justify-center shadow-md shadow-yellow-400/20">
+                  <Star className="w-5 h-5 fill-current text-white" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-gray-950 dark:text-white uppercase tracking-wider">Avis d'Exception 🌟</h3>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold">Les derniers 5★ sur vos adresses populaires</p>
+                </div>
+              </div>
+
+              <div className="flex gap-4 overflow-x-auto hide-scrollbar py-1">
+                {latestFiveStarReviews.map(review => {
+                  const est = establishments.find(e => e.id === review.establishmentId);
+                  if (!est) return null;
+                  const author = users.find(u => u.id === review.clientId);
+                  const authorName = author ? author.name : 'Membre Zaka+';
+
+                  return (
+                    <div 
+                      key={review.id}
+                      className="shrink-0 w-64 bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs flex flex-col justify-between space-y-3 cursor-pointer hover:border-orange-200 dark:hover:border-orange-950 transition-all active:scale-[0.98]"
+                      onClick={() => {
+                        setSelectedRankEst(est);
+                      }}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-extrabold text-orange-600 bg-orange-50 dark:bg-orange-950/40 px-2 py-0.5 rounded-full uppercase">
+                            {est.category.replace(/_/g, ' ')}
+                          </span>
+                          <div className="flex gap-0.5 text-yellow-400">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <Star key={i} className="w-3 h-3 fill-current" />
+                            ))}
+                          </div>
+                        </div>
+
+                        <h4 className="font-extrabold text-xs text-gray-950 dark:text-white truncate">{est.name}</h4>
+                        <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-2 font-medium leading-relaxed italic">
+                          💬 "{review.comment}"
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between text-[9px] font-bold text-gray-400">
+                        <span className="text-gray-800 dark:text-gray-300 font-extrabold truncate max-w-[120px]">{authorName}</span>
+                        <span>
+                          {new Date(review.date).toLocaleDateString('fr-FR', {
+                            day: 'numeric',
+                            month: 'short'
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })()}
+
         {/* SECTION CLASSEMENTS HEBDOMADAIRES */}
         <section className="bg-white dark:bg-gray-950 p-6 rounded-3xl border border-gray-100 dark:border-gray-900 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">

@@ -168,6 +168,19 @@
         "isVisible": { "type": "boolean" }
       },
       "required": ["eventId", "userId", "status", "timestamp"]
+    },
+    "CarnetEntry": {
+      "title": "CarnetEntry",
+      "description": "An entry in the user's personal outing journal",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "establishmentId": { "type": "string" },
+        "type": { "type": "string", "enum": ["visite", "favori", "avis"] },
+        "date": { "type": "string" },
+        "privateNote": { "type": "string" }
+      },
+      "required": ["clientId", "establishmentId", "type", "date"]
     }
   },
   "firestore": {
@@ -210,6 +223,10 @@
     "event_participations": {
       "schema": { "$ref": "#/entities/EventParticipation" },
       "description": "Event participation status collection"
+    },
+    "carnet_entrees": {
+      "schema": { "$ref": "#/entities/CarnetEntry" },
+      "description": "User personal outing journal entries"
     }
   }
 }

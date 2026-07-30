@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise } from './types';
+import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
 import { 
@@ -11,7 +11,7 @@ import {
   RecaptchaVerifier,
   ConfirmationResult
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, collection, onSnapshot, query, addDoc, updateDoc, where } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, onSnapshot, query, addDoc, updateDoc, where, deleteDoc } from 'firebase/firestore';
 
 interface AppState {
   currentUser: User | null;
@@ -27,6 +27,7 @@ interface AppState {
   serviceRequests: ServiceRequest[];
   reservations: Reservation[];
   menusDuJour: MenuDuJour[];
+  carnetEntrees: CarnetEntry[];
   loading: boolean;
   globalError: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null;
   theme: 'light' | 'dark';
@@ -80,6 +81,9 @@ interface AppContextType extends AppState {
   addMenuDuJour: (menu: Omit<MenuDuJour, 'id' | 'publishedAt'>) => Promise<void>;
   trackEstablishmentView: (establishmentId: string) => Promise<void>;
   trackPublicationView: (publicationId: string) => Promise<void>;
+  addCarnetEntry: (entry: Omit<CarnetEntry, 'id'>) => Promise<void>;
+  updateCarnetEntryNote: (id: string, note: string) => Promise<void>;
+  deleteCarnetEntry: (id: string) => Promise<void>;
   setGlobalError: (err: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null) => void;
   toggleTheme: () => void;
 }
@@ -152,6 +156,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     serviceRequests: [],
     reservations: [],
     menusDuJour: [],
+    carnetEntrees: [],
     loading: true,
     globalError: null,
     theme: (localStorage.getItem('app-theme') as 'light' | 'dark') || 
@@ -526,7 +531,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.currentUser) {
       // Clear authenticated state data when user logs out
-      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {} }));
+      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {}, carnetEntrees: [] }));
       return;
     }
 
@@ -606,12 +611,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error("Erreur listening to favorites:", error);
     });
 
+    // Listen to carnet_entrees
+    const carnetQuery = query(collection(db, 'carnet_entrees'), where('clientId', '==', state.currentUser.id));
+    const unsubscribeCarnet = onSnapshot(carnetQuery, (snapshot) => {
+      const carnet: CarnetEntry[] = [];
+      snapshot.forEach(docSnap => carnet.push({ id: docSnap.id, ...docSnap.data() } as CarnetEntry));
+      setState(s => ({ ...s, carnetEntrees: carnet }));
+    }, (error) => {
+      console.error("Erreur listening to carnet_entrees:", error);
+    });
+
     return () => {
       unsubscribeUsers();
       unsubscribeRel();
       unsubscribeSer();
       unsubscribeRes();
       unsubscribeFav();
+      unsubscribeCarnet();
     };
   }, [state.currentUser?.id]);
 
@@ -1460,6 +1476,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const addCarnetEntry = async (entry: Omit<CarnetEntry, 'id'>) => {
+    try {
+      await addDoc(collection(db, 'carnet_entrees'), {
+        ...entry,
+        date: entry.date || new Date().toISOString()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'carnet_entrees');
+    }
+  };
+
+  const updateCarnetEntryNote = async (id: string, note: string) => {
+    try {
+      await updateDoc(doc(db, 'carnet_entrees', id), {
+        privateNote: note
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `carnet_entrees/${id}`);
+    }
+  };
+
+  const deleteCarnetEntry = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'carnet_entrees', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `carnet_entrees/${id}`);
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       ...state,
@@ -1496,6 +1541,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addMenuDuJour,
       trackEstablishmentView,
       trackPublicationView,
+      addCarnetEntry,
+      updateCarnetEntryNote,
+      deleteCarnetEntry,
       setGlobalError,
       toggleTheme
     }}>

@@ -78,12 +78,40 @@ export default defineConfig(() => {
               }
             },
             {
+              urlPattern: /^https:\/\/images\.unsplash\.com\/.*(?:w=150|avatar|profile|user|client|person|face|member|id).*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'zaka-profile-images',
+                expiration: {
+                  maxEntries: 300,
+                  maxAgeSeconds: 60 * 60 * 24 * 90 // 90 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
+              urlPattern: /^https:\/\/images\.unsplash\.com\/.*(?:w=400|w=800|photo|restaurant|pub|bar|club|drink|beer|dj|maquis|nightclub|disco|venue|food|meal|glass|cocktail|lounge).*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'zaka-establishment-banners',
+                expiration: {
+                  maxEntries: 300,
+                  maxAgeSeconds: 60 * 60 * 24 * 90 // 90 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
               urlPattern: /^https:\/\/images\.unsplash\.com\/.*/i,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'unsplash-images',
+                cacheName: 'unsplash-images-general',
                 expiration: {
-                  maxEntries: 50,
+                  maxEntries: 100,
                   maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
                 },
                 cacheableResponse: {
@@ -95,10 +123,10 @@ export default defineConfig(() => {
               urlPattern: /^https:\/\/firebasestorage\.googleapis\.com\/.*/i,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'firebase-profile-images',
+                cacheName: 'zaka-firebase-storage-assets',
                 expiration: {
-                  maxEntries: 100,
-                  maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                  maxEntries: 250,
+                  maxAgeSeconds: 60 * 60 * 24 * 45 // 45 days
                 },
                 cacheableResponse: {
                   statuses: [0, 200]
@@ -111,8 +139,8 @@ export default defineConfig(() => {
               options: {
                 cacheName: 'static-images',
                 expiration: {
-                  maxEntries: 100,
-                  maxAgeSeconds: 60 * 60 * 24 * 15 // 15 days
+                  maxEntries: 150,
+                  maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
                 }
               }
             }

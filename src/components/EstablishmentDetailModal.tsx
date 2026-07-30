@@ -16,7 +16,7 @@ interface EstablishmentDetailModalProps {
 }
 
 export function EstablishmentDetailModal({ establishment, onClose }: EstablishmentDetailModalProps) {
-  const { createServiceRequest, addReservation, menusDuJour, currentUser, updateEstablishment, trackEstablishmentView } = useAppStore();
+  const { createServiceRequest, addReservation, menusDuJour, currentUser, updateEstablishment, trackEstablishmentView, addCarnetEntry, carnetEntrees } = useAppStore();
   const [showReservation, setShowReservation] = useState(false);
   const [showReservationsDashboard, setShowReservationsDashboard] = useState(false);
   const [isEditingGeo, setIsEditingGeo] = useState(false);
@@ -24,6 +24,27 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
   const [isSavingGeo, setIsSavingGeo] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
   const [activeSubTab, setActiveSubTab] = useState<'info' | 'live' | 'affluence' | 'dj'>('info');
+  const [justVisited, setJustVisited] = useState(false);
+
+  const visitCount = carnetEntrees 
+    ? carnetEntrees.filter(e => e.establishmentId === establishment.id && e.type === 'visite').length
+    : 0;
+
+  const handleBeenHereClick = async () => {
+    if (!currentUser) return;
+    try {
+      await addCarnetEntry({
+        clientId: currentUser.id,
+        establishmentId: establishment.id,
+        type: 'visite',
+        date: new Date().toISOString()
+      });
+      setJustVisited(true);
+      setTimeout(() => setJustVisited(false), 3000);
+    } catch (err) {
+      console.error("Erreur ajout visite carnet:", err);
+    }
+  };
 
   React.useEffect(() => {
     trackEstablishmentView(establishment.id);
@@ -171,6 +192,30 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
               <span className="text-gray-300">•</span>
               <span>{establishment.neighborhood}</span>
             </div>
+
+            {currentUser && currentUser.role === 'client' && (
+              <button
+                type="button"
+                onClick={handleBeenHereClick}
+                className={`mt-4 w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl text-xs font-black uppercase transition-all duration-300 border-2 ${
+                  justVisited 
+                    ? 'bg-green-600 border-green-600 text-white animate-pulse'
+                    : 'bg-white hover:bg-orange-50 border-orange-200 text-orange-600 dark:bg-gray-900 dark:border-gray-800 dark:text-orange-400 dark:hover:bg-gray-850'
+                } cursor-pointer active:scale-95`}
+              >
+                {justVisited ? (
+                  <>
+                    <span>✅</span>
+                    <span>Visite enregistrée !</span>
+                  </>
+                ) : (
+                  <>
+                    <span>📍</span>
+                    <span>J'y suis allé {visitCount > 0 ? `(${visitCount} ${visitCount > 1 ? 'visites' : 'visite'})` : ''}</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
           {currentUser && currentUser.id === establishment.ownerId && (
