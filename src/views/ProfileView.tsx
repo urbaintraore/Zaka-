@@ -1286,6 +1286,19 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 <span>• Si vous possédez déjà un compte, vérifiez l'orthographe de votre e-mail et de votre mot de passe, ou assurez-vous que vous utilisez la bonne méthode de connexion (E-mail ou Téléphone).</span>
               </div>
             )}
+            {(error.includes('email') && error.includes('déjà')) || error.includes('auth/email-already-in-use') && (
+              <div className="mt-2 pt-2 border-t border-red-100/60 text-xs text-red-600/90 flex flex-col gap-1.5 leading-relaxed">
+                <span className="font-bold text-red-800">💡 Compte existant :</span>
+                <span>Cette adresse e-mail est déjà associée à un compte existant.</span>
+                <button 
+                  type="button"
+                  onClick={() => { setMode('login'); setError(''); }}
+                  className="mt-1 px-3 py-1.5 bg-orange-600 text-white font-bold rounded-lg self-start text-xs hover:bg-orange-700 transition-colors cursor-pointer"
+                >
+                  Se connecter avec cet e-mail
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1295,15 +1308,13 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               <div className="grid grid-cols-2 gap-2 mb-2 p-1.5 bg-gray-100/80 rounded-xl">
                 <button type="button" onClick={() => setRole('client')} className={`py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'client' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Client</button>
                 <button type="button" onClick={() => setRole('gerant')} className={`py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'gerant' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Gérant</button>
-                <button type="button" onClick={() => setRole('entreprise')} className={`py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'entreprise' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Entreprise</button>
-                <button type="button" onClick={() => setRole('salon_coiffure')} className={`py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'salon_coiffure' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Salon Coiffure</button>
               </div>
               
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-gray-500 ml-1">
-                  {role === 'entreprise' ? "Nom de l'entreprise" : role === 'salon_coiffure' ? "Nom du salon" : "Nom complet"}
+                  Nom complet
                 </label>
-                <input type="text" placeholder={role === 'entreprise' ? "Ex: Brakina, Castel, Sobbra..." : role === 'salon_coiffure' ? "Ex: Coiffure Moderne..." : "Votre nom"} required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
+                <input type="text" placeholder="Votre nom" required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
               </div>
               
               <div className="grid grid-cols-2 gap-3">
@@ -1322,8 +1333,8 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                   <h3 className="font-bold text-gray-900 text-sm border-b border-orange-200/50 pb-2">Détails de l'établissement</h3>
                   
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-gray-500 ml-1">Nom de l'établissement</label>
-                    <input type="text" placeholder="Nom du lieu" required value={estName} onChange={e => setEstName(e.target.value)} className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" />
+                    <label className="text-xs font-bold text-gray-500 ml-1">Nom de l'établissement / Salon</label>
+                    <input type="text" placeholder="Nom du lieu ou du salon" required value={estName} onChange={e => setEstName(e.target.value)} className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" />
                   </div>
 
                   <div className="flex flex-col gap-1">
@@ -1336,51 +1347,9 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                       <option value="glacier_pizzeria">Glacier - Pizzeria</option>
                       <option value="hotel">Hôtel</option>
                       <option value="residence">Résidence</option>
+                      <option value="salon_de_coiffure">Salon de Coiffure</option>
                       <option value="autre">Autre</option>
                     </select>
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-gray-500 ml-1">Description de l'établissement</label>
-                    <textarea 
-                      placeholder="Décrivez votre établissement (ambiance, spécialités...)" 
-                      required 
-                      value={estDescription} 
-                      onChange={e => setEstDescription(e.target.value)} 
-                      className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium min-h-[100px]"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-gray-500 ml-1">Image de description (URL)</label>
-                    <input 
-                      type="url" 
-                      placeholder="https://images.unsplash.com/..." 
-                      value={estPhotoUrl} 
-                      onChange={e => setEstPhotoUrl(e.target.value)} 
-                      className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" 
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-gray-500 ml-1">Tags (séparés par des virgules)</label>
-                    <input 
-                      type="text" 
-                      placeholder="Wifi, Terrasse, Live music..." 
-                      value={estTags} 
-                      onChange={e => setEstTags(e.target.value)} 
-                      className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" 
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-gray-500 ml-1">Quartier</label>
-                    <input type="text" placeholder="Quartier" required value={estNeighborhood} onChange={e => setEstNeighborhood(e.target.value)} className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-gray-500 ml-1">Géolocalisation (Lien Maps - optionnel)</label>
-                    <input type="url" placeholder="https://maps.google.com/..." value={estGeolocation} onChange={e => setEstGeolocation(e.target.value)} className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" />
                   </div>
                 </div>
               )}

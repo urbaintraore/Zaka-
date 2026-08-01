@@ -3,7 +3,7 @@ import { RichTextEditor } from '../components/RichTextEditor';
 import { ClientsAndRequests } from '../components/ClientsAndRequests';
 import { GerantAnalytics } from '../components/GerantAnalytics';
 import { useAppStore } from '../store';
-import { LogOut, Plus, Store, Eye, MousePointerClick, X, Megaphone, Calendar, Users, FileText, Image as ImageIcon, MessageSquare, Download, Settings, ChefHat } from 'lucide-react';
+import { LogOut, Plus, Store, Eye, MousePointerClick, X, Megaphone, Calendar, Users, FileText, Image as ImageIcon, MessageSquare, Download, Settings, ChefHat, Scissors } from 'lucide-react';
 import { Category, PubType } from '../types';
 import { compressImage } from '../utils/imageCompressor';
 import { useInstallApp } from '../hooks/useInstallApp';
@@ -50,7 +50,7 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
   
   // Est Form state
   const [estName, setEstName] = useState('');
-  const [estCategory, setEstCategory] = useState<Category>('maquis');
+  const [estCategory, setEstCategory] = useState<Category>(currentUser?.category || 'maquis');
   const [estCountry, setEstCountry] = useState(currentUser?.country || 'Burkina Faso');
   const [estCity, setEstCity] = useState(currentUser?.city || '');
   const [estNeighborhood, setEstNeighborhood] = useState('');
@@ -249,16 +249,13 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
 
           <div className="flex flex-col gap-1">
             <label className="text-xs font-bold text-gray-500 ml-1">Type d'établissement</label>
-            <select required value={estCategory} onChange={e => setEstCategory(e.target.value as Category)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium text-gray-700">
-              <option value="maquis">Maquis</option>
-              <option value="bar">Bar</option>
-              <option value="restaurant">Restaurant</option>
-              <option value="boite_de_nuit">Boîte de nuit</option>
-              <option value="glacier_pizzeria">Glacier - Pizzeria</option>
-              <option value="hotel">Hôtel</option>
-              <option value="residence">Résidence</option>
-              <option value="autre">Autre</option>
-            </select>
+            <input 
+              type="text" 
+              disabled 
+              value={estCategory === 'salon_de_coiffure' ? 'Salon de Coiffure' : (estCategory === 'restaurant' ? 'Restaurant' : (estCategory === 'maquis' ? 'Maquis' : estCategory))} 
+              className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-xl border border-gray-200 font-bold cursor-not-allowed capitalize" 
+            />
+            <span className="text-[11px] text-gray-400 ml-1">Type défini lors de la création de votre compte.</span>
           </div>
 
           <div className="flex flex-col gap-1">
@@ -820,19 +817,40 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
             <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-2xl flex items-center justify-center mb-4 mx-auto">
               <Store className="w-8 h-8" />
             </div>
-            <h3 className="text-xl font-black text-gray-900 dark:text-white text-center mb-2">Bienvenue Gérant !</h3>
+            <h3 className="text-xl font-black text-gray-900 dark:text-white text-center mb-2">
+              {currentUser?.category === 'salon_de_coiffure' || myEsts.some(e => e.category === 'salon_de_coiffure') ? "Bienvenue Gérant de Salon !" : "Bienvenue Gérant !"}
+            </h3>
             <p className="text-sm text-gray-600 dark:text-gray-300 text-center mb-6 leading-relaxed">
-              Pour commencer, vous pouvez gérer vos <strong className="text-orange-600 dark:text-orange-400">Réservations</strong> et mettre à jour votre <strong className="text-orange-600 dark:text-orange-400">Menu du jour</strong> directement depuis la fiche de votre établissement.
+              {currentUser?.category === 'salon_de_coiffure' || myEsts.some(e => e.category === 'salon_de_coiffure') ? (
+                <>Pour commencer, gérez vos <strong className="text-orange-600 dark:text-orange-400">Coiffeurs</strong>, suivez les <strong className="text-orange-600 dark:text-orange-400">Clients en attente</strong> et enrichissez votre catalogue.</>
+              ) : (
+                <>Pour commencer, vous pouvez gérer vos <strong className="text-orange-600 dark:text-orange-400">Réservations</strong> et mettre à jour votre <strong className="text-orange-600 dark:text-orange-400">Menu du jour</strong> directement depuis la fiche de votre établissement.</>
+              )}
             </p>
             <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-100 dark:border-orange-900/20">
-                <Calendar className="w-5 h-5 text-orange-500" />
-                <span className="text-xs font-bold text-gray-700 dark:text-gray-200">Gérer les réservations</span>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-100 dark:border-orange-900/20">
-                <ChefHat className="w-5 h-5 text-orange-500" />
-                <span className="text-xs font-bold text-gray-700 dark:text-gray-200">Mettre à jour le Menu</span>
-              </div>
+              {currentUser?.category === 'salon_de_coiffure' || myEsts.some(e => e.category === 'salon_de_coiffure') ? (
+                <>
+                  <div className="flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-100 dark:border-orange-900/20">
+                    <Users className="w-5 h-5 text-orange-500" />
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-200">Suivre les clients en attente</span>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-100 dark:border-orange-900/20">
+                    <Scissors className="w-5 h-5 text-orange-500" />
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-200">Gérer coiffeurs & coupes</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-100 dark:border-orange-900/20">
+                    <Calendar className="w-5 h-5 text-orange-500" />
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-200">Gérer les réservations</span>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-100 dark:border-orange-900/20">
+                    <ChefHat className="w-5 h-5 text-orange-500" />
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-200">Mettre à jour le Menu</span>
+                  </div>
+                </>
+              )}
             </div>
             <button 
               onClick={closeGuide}
@@ -852,26 +870,53 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
         </h3>
         
         <div className="flex flex-col gap-4">
-          <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
-            <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">Comment gérer mes réservations ?</h4>
-            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-              Cliquez sur le bouton "Gérer les réservations" sur la fiche de votre établissement. Vous pourrez y voir toutes les demandes en attente, les accepter ou les refuser, et suivre l'historique. N'oubliez pas de consulter régulièrement cette section.
-            </p>
-          </div>
+          {currentUser?.category === 'salon_de_coiffure' || myEsts.some(e => e.category === 'salon_de_coiffure') ? (
+            <>
+              <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">Comment suivre les clients en attente ?</h4>
+                <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                  Visualisez en temps réel le nombre de clients en attente pour chaque coiffeur. Incrémentez ou décrémentez les compteurs directement depuis votre tableau de bord selon l'affluence dans votre salon.
+                </p>
+              </div>
 
-          <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
-            <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">À quelle fréquence dois-je mettre à jour mon Menu du Jour ?</h4>
-            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-              Nous vous conseillons de mettre à jour votre menu chaque jour de la semaine avant 11h. Vous pouvez utiliser le bouton "Menu du jour" et dupliquer un menu précédent pour gagner du temps. Un menu à jour attire jusqu'à 3x plus de clients le midi.
-            </p>
-          </div>
+              <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">Comment ajouter mes coiffeurs et modèles de coupes ?</h4>
+                <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                  Dans la section "Gestion du Salon de Coiffure", vous pouvez ajouter vos coiffeurs et enregistrer vos coupes (hommes, femmes, enfants) avec photos et tarifs pour attirer plus de clients.
+                </p>
+              </div>
 
-          <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
-            <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">Comment répondre aux avis clients ?</h4>
-            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-              Dans la section "Avis des clients" de votre tableau de bord, vous trouverez un champ pour répondre à chaque avis. Une réponse courtoise, même à un avis négatif, montre votre professionnalisme.
-            </p>
-          </div>
+              <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">Comment répondre aux avis clients ?</h4>
+                <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                  Dans la section "Avis des clients" de votre tableau de bord, vous trouverez un champ pour répondre à chaque avis. Une réponse courtoise renforce la fidélité de votre clientèle.
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">Comment gérer mes réservations ?</h4>
+                <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                  Cliquez sur le bouton "Gérer les réservations" sur la fiche de votre établissement. Vous pourrez y voir toutes les demandes en attente, les accepter ou les refuser, et suivre l'historique. N'oubliez pas de consulter régulièrement cette section.
+                </p>
+              </div>
+
+              <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">À quelle fréquence dois-je mettre à jour mon Menu du Jour ?</h4>
+                <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                  Nous vous conseillons de mettre à jour votre menu chaque jour de la semaine avant 11h. Vous pouvez utiliser le bouton "Menu du jour" et dupliquer un menu précédent pour gagner du temps. Un menu à jour attire jusqu'à 3x plus de clients le midi.
+                </p>
+              </div>
+
+              <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">Comment répondre aux avis clients ?</h4>
+                <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                  Dans la section "Avis des clients" de votre tableau de bord, vous trouverez un champ pour répondre à chaque avis. Une réponse courtoise, même à un avis négatif, montre votre professionnalisme.
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

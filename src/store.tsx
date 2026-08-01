@@ -804,13 +804,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (registrationData) {
         console.log("[Phone Auth] Données d'inscription détectées. Création du profil utilisateur...");
-        const newUserData = {
+        const resolvedCategory = registrationData.estData?.category || 'maquis';
+        const newUserData: any = {
           name: registrationData.name.trim(),
           email: registrationData.email?.trim() || '',
           phone: firebaseUser.phoneNumber || registrationData.phone,
           role: registrationData.role,
           country: registrationData.country || 'Burkina Faso',
-          city: registrationData.city || 'Ouagadougou'
+          city: registrationData.city || 'Ouagadougou',
+          category: resolvedCategory
         };
 
         try {
@@ -820,13 +822,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           handleFirestoreError(error, OperationType.WRITE, `users/${firebaseUser.uid}`);
         }
 
-        if (registrationData.role === 'gerant' && registrationData.estData) {
+        if ((registrationData.role === 'gerant' || registrationData.role === 'salon_coiffure') && registrationData.estData) {
           console.log("[Phone Auth] Rôle gérant détecté. Création de l'établissement...");
           try {
-            await addDoc(collection(db, 'establishments'), {
+            const estPayload: any = {
               ownerId: firebaseUser.uid,
               name: registrationData.estData.name || '',
-              category: registrationData.estData.category || 'autre',
+              category: registrationData.role === 'salon_coiffure' || registrationData.estData.category === 'salon_de_coiffure' ? 'salon_de_coiffure' : (registrationData.estData.category || 'autre'),
               country: registrationData.country || 'Burkina Faso',
               city: registrationData.city || 'Ouagadougou',
               neighborhood: registrationData.estData.neighborhood || '',
@@ -838,7 +840,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
               geolocation: registrationData.estData.geolocation || '',
               status: 'valide',
               averageRating: 0
-            });
+            };
+            if (registrationData.role === 'salon_coiffure' || registrationData.estData.category === 'salon_de_coiffure') {
+              estPayload.hairSalonData = { hairdressers: [], hairstyles: [] };
+            }
+            await addDoc(collection(db, 'establishments'), estPayload);
             console.log("[Phone Auth] Établissement créé avec succès dans Firestore.");
           } catch (error) {
             handleFirestoreError(error, OperationType.CREATE, 'establishments');
@@ -921,13 +927,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const firebaseUser = credential.user;
       console.log("[Email Register] Compte d'authentification créé avec UID :", firebaseUser.uid);
 
-      const newUserData = {
+      const resolvedCategory = estData?.category || 'maquis';
+      const newUserData: any = {
         name: userData.name.trim() || 'Utilisateur',
         email: emailStr,
         phone: userData.phone || '',
         role: userData.role,
         country: userData.country || 'Burkina Faso',
-        city: userData.city || 'Ouagadougou'
+        city: userData.city || 'Ouagadougou',
+        category: resolvedCategory
       };
 
       try {
@@ -940,7 +948,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if ((userData.role === 'gerant' || userData.role === 'salon_coiffure') && estData) {
         console.log("[Email Register] Rôle gérant détecté. Création de l'établissement...");
         try {
-          await addDoc(collection(db, 'establishments'), {
+          const estPayload: any = {
             ownerId: firebaseUser.uid,
             name: estData.name || '',
             category: userData.role === 'salon_coiffure' ? 'salon_de_coiffure' : (estData.category || 'autre'),
@@ -954,9 +962,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             tags: estData.tags || [],
             geolocation: estData.geolocation || '',
             status: 'valide',
-            averageRating: 0,
-            hairSalonData: userData.role === 'salon_coiffure' ? { hairdressers: [], hairstyles: [] } : undefined
-          });
+            averageRating: 0
+          };
+          if (userData.role === 'salon_coiffure' || estData.category === 'salon_de_coiffure') {
+            estPayload.hairSalonData = { hairdressers: [], hairstyles: [] };
+          }
+          await addDoc(collection(db, 'establishments'), estPayload);
           console.log("[Email Register] Établissement créé avec succès dans Firestore.");
         } catch (error) {
           handleFirestoreError(error, OperationType.CREATE, 'establishments');

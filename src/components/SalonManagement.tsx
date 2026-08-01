@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Establishment, Hairdresser, Hairstyle } from '../types';
 import { useAppStore } from '../store';
-import { Users, Scissors, Plus, Trash2 } from 'lucide-react';
+import { Users, Scissors, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { compressImage } from '../utils/imageCompressor';
 import { db } from '../lib/firebase';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -132,7 +132,7 @@ export function SalonManagement({ establishment }: { establishment: Establishmen
         <form onSubmit={handleAddHairdresser} className="flex gap-2">
           <input 
             type="text"
-            placeholder="Nom du coiffeur/coiffeuse"
+            placeholder="Nom complet du coiffeur/coiffeuse"
             value={newHairdresserName}
             onChange={e => setNewHairdresserName(e.target.value)}
             className="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:bg-white focus:border-orange-500 outline-none"
@@ -141,6 +141,10 @@ export function SalonManagement({ establishment }: { establishment: Establishmen
             <Plus className="w-4 h-4" /> Ajouter
           </button>
         </form>
+        <p className="text-[11px] text-gray-500 flex items-start gap-1.5 bg-orange-50/50 p-2.5 rounded-xl border border-orange-100/50 leading-relaxed">
+          <AlertCircle className="w-3.5 h-3.5 text-orange-600 shrink-0 mt-0.5" />
+          <span>💡 <strong>Note :</strong> Saisissez simplement le nom complet. Les coiffeurs n'ont pas besoin de compte ou d'accès sur l'application, l'affichage sert uniquement à informer les clients du temps d'attente.</span>
+        </p>
 
         <div className="grid gap-3">
           {hairdressers.map(h => (
