@@ -1,4 +1,4 @@
-export type Role = 'client' | 'gerant' | 'admin' | 'entreprise';
+export type Role = 'client' | 'gerant' | 'admin' | 'entreprise' | 'salon_coiffure';
 
 export interface User {
   id: string;
@@ -13,6 +13,14 @@ export interface User {
   avatar?: string;
 }
 
+export interface Coiffeur {
+  id: string;
+  establishmentId: string;
+  name: string;
+  waitingClientsCount: number;
+  lastUpdated: string; // ISO String
+}
+
 export interface Entreprise {
   id: string; // matches User id (UID)
   name: string;
@@ -25,7 +33,27 @@ export interface Entreprise {
   followers?: string[]; // list of clientIds who follow
 }
 
-export type Category = 'maquis' | 'bar' | 'restaurant' | 'boite_de_nuit' | 'glacier_pizzeria' | 'hotel' | 'residence' | 'autre';
+export interface Hairstyle {
+  id: string;
+  name: string;
+  gender: 'homme' | 'femme' | 'enfant';
+  photoUrl: string;
+  price: number;
+}
+
+export interface Hairdresser {
+  id: string;
+  name: string;
+  waitingClientsCount: number;
+  lastUpdated: string; // ISO String
+}
+
+export interface HairSalonData {
+  hairdressers: Hairdresser[];
+  hairstyles: Hairstyle[];
+}
+
+export type Category = 'maquis' | 'bar' | 'restaurant' | 'boite_de_nuit' | 'glacier_pizzeria' | 'hotel' | 'residence' | 'salon_de_coiffure' | 'autre';
 
 export interface Establishment {
   id: string;
@@ -46,6 +74,7 @@ export interface Establishment {
   openingHours?: string;
   menuPdfUrl?: string;
   menuImages?: string[];
+  hairSalonData?: HairSalonData;
 }
 
 export type PubType = 'annonce' | 'promo' | 'bon_plan' | 'evenement' | 'recrutement';

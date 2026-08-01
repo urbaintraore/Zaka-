@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry } from './types';
+import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
 import { 
@@ -28,6 +28,7 @@ interface AppState {
   reservations: Reservation[];
   menusDuJour: MenuDuJour[];
   carnetEntrees: CarnetEntry[];
+  coiffeurs: Record<string, Coiffeur[]>;
   loading: boolean;
   globalError: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null;
   theme: 'light' | 'dark';
@@ -79,6 +80,7 @@ interface AppContextType extends AppState {
   addReservation: (res: Omit<Reservation, 'id' | 'status' | 'createdAt'>) => Promise<void>;
   updateReservationStatus: (id: string, status: 'en_attente' | 'confirmee' | 'refusee' | 'annulee', managerMessage?: string) => Promise<void>;
   addMenuDuJour: (menu: Omit<MenuDuJour, 'id' | 'publishedAt'>) => Promise<void>;
+  updateHairSalonData: (id: string, data: HairSalonData) => Promise<void>;
   trackEstablishmentView: (establishmentId: string) => Promise<void>;
   trackPublicationView: (publicationId: string) => Promise<void>;
   addCarnetEntry: (entry: Omit<CarnetEntry, 'id'>) => Promise<void>;
@@ -1432,6 +1434,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateHairSalonData = async (id: string, data: HairSalonData) => {
+    try {
+      await updateDoc(doc(db, 'establishments', id), {
+        hairSalonData: data
+      });
+    } catch (error) {
+      console.error("Erreur updateHairSalonData:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `establishments/${id}`);
+    }
+  };
+
   const trackEstablishmentView = async (establishmentId: string) => {
     try {
       const est = state.establishments.find(e => e.id === establishmentId);
@@ -1539,6 +1552,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addReservation,
       updateReservationStatus,
       addMenuDuJour,
+      updateHairSalonData,
       trackEstablishmentView,
       trackPublicationView,
       addCarnetEntry,

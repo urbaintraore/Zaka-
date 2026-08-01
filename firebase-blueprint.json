@@ -31,7 +31,14 @@
         "photos": { "type": "array", "items": { "type": "string" } },
         "status": { "type": "string", "enum": ["en_attente", "valide", "suspendu"] },
         "averageRating": { "type": "number" },
-        "geolocation": { "type": "string" }
+        "geolocation": { "type": "string" },
+        "hairSalonData": { 
+          "type": "object",
+          "properties": {
+            "hairdressers": { "type": "array", "items": { "type": "object" } },
+            "hairstyles": { "type": "array", "items": { "type": "object" } }
+          }
+        }
       },
       "required": ["ownerId", "name", "category", "city", "status"]
     },

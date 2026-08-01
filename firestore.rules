@@ -55,7 +55,8 @@ service cloud.firestore {
         && (data.get('averageRating', 0) is number)
         && (data.get('photos', []) is list && data.get('photos', []).size() <= 10)
         && (data.get('tags', []) is list && data.get('tags', []).size() <= 50)
-        && (data.get('openingHours', '') is string && data.get('openingHours', '').size() <= 500);
+        && (data.get('openingHours', '') is string && data.get('openingHours', '').size() <= 500)
+        && (data.get('hairSalonData', {}) is map);
     }
 
     function isValidReview(data) {
@@ -215,6 +216,11 @@ service cloud.firestore {
         || (get(/databases/$(database)/documents/users/$(existing().ownerId)).data.email == request.auth.token.email && incoming().ownerId == request.auth.uid)
       ) || isUserAdmin();
       allow delete: if isSignedIn() && existing().ownerId == request.auth.uid || isUserAdmin();
+
+      match /coiffeurs/{coiffeurId} {
+        allow read: if true;
+        allow create, update, delete: if isSignedIn() && get(/databases/$(database)/documents/establishments/$(estId)).data.ownerId == request.auth.uid;
+      }
     }
 
     match /publications/{pubId} {

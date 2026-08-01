@@ -9,6 +9,7 @@ import { compressImage } from '../utils/imageCompressor';
 import { useInstallApp } from '../hooks/useInstallApp';
 import { ReservationsDashboard } from '../components/ReservationsDashboard';
 import { MenuDuJourForm } from '../components/MenuDuJourForm';
+import { SalonManagement } from '../components/SalonManagement';
 
 export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: { onLogout: () => void; onNavigate?: (tab: any) => void; onStartChatWithConv?: (convId: string) => void }) {
   const { 
@@ -523,6 +524,10 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
                       </button>
                     </div>
                   </div>
+                )}
+                
+                {est.category === 'salon_de_coiffure' && (
+                  <SalonManagement establishment={est} />
                 )}
                 
                 <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Publications récentes</h5>
