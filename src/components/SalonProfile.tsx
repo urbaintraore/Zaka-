@@ -1,26 +1,40 @@
-import React from 'react';
-import { Establishment } from '../types';
+import React, { useEffect, useState } from 'react';
+import { Establishment, Coiffeur } from '../types';
 import { HairGallery } from './HairGallery';
 import { Users } from 'lucide-react';
+import { db } from '../lib/firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
 
 export function SalonProfile({ establishment }: { establishment: Establishment }) {
+  const [coiffeurs, setCoiffeurs] = useState<Coiffeur[]>([]);
   const salonData = establishment.hairSalonData;
 
-  if (!salonData) return null;
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'establishments', establishment.id, 'coiffeurs'), (snapshot) => {
+      const coiffeurList: Coiffeur[] = [];
+      snapshot.forEach(doc => {
+        coiffeurList.push({ id: doc.id, ...doc.data() } as Coiffeur);
+      });
+      setCoiffeurs(coiffeurList);
+    });
+    return unsub;
+  }, [establishment.id]);
 
   return (
     <div className="space-y-6">
-      <div className="bg-gray-50 p-4 rounded-xl flex items-center gap-4">
-        <Users className="w-8 h-8 text-orange-500" />
-        <div>
-          <p className="text-sm font-bold text-gray-500">Nombre de coiffeurs</p>
-          <p className="text-2xl font-black text-gray-900">
-            {salonData.hairdressers ? salonData.hairdressers.length : 0}
-          </p>
+      <div className="bg-gray-50 p-4 rounded-xl">
+        <h4 className="text-sm font-bold text-gray-500 mb-3">Clients en attente</h4>
+        <div className="space-y-2">
+          {coiffeurs.map(c => (
+            <div key={c.id} className="flex justify-between text-sm">
+              <span>{c.name}</span>
+              <span className="font-bold text-orange-600">{c.waitingClientsCount} clients</span>
+            </div>
+          ))}
         </div>
       </div>
 
-      <HairGallery hairstyles={salonData.hairstyles || []} />
+      {salonData && <HairGallery hairstyles={salonData.hairstyles || []} />}
     </div>
   );
 }

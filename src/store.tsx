@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData } from './types';
+import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
 import { 
@@ -937,13 +937,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         handleFirestoreError(error, OperationType.WRITE, `users/${firebaseUser.uid}`);
       }
 
-      if (userData.role === 'gerant' && estData) {
+      if ((userData.role === 'gerant' || userData.role === 'salon_coiffure') && estData) {
         console.log("[Email Register] Rôle gérant détecté. Création de l'établissement...");
         try {
           await addDoc(collection(db, 'establishments'), {
             ownerId: firebaseUser.uid,
             name: estData.name || '',
-            category: estData.category || 'autre',
+            category: userData.role === 'salon_coiffure' ? 'salon_de_coiffure' : (estData.category || 'autre'),
             country: userData.country || 'Burkina Faso',
             city: userData.city || 'Ouagadougou',
             neighborhood: estData.neighborhood || '',
@@ -954,7 +954,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             tags: estData.tags || [],
             geolocation: estData.geolocation || '',
             status: 'valide',
-            averageRating: 0
+            averageRating: 0,
+            hairSalonData: userData.role === 'salon_coiffure' ? { hairdressers: [], hairstyles: [] } : undefined
           });
           console.log("[Email Register] Établissement créé avec succès dans Firestore.");
         } catch (error) {

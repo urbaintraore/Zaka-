@@ -1292,17 +1292,18 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {mode === 'register' && !isOtpSent && (
             <>
-              <div className="flex gap-2 mb-2 p-1.5 bg-gray-100/80 rounded-xl">
-                <button type="button" onClick={() => setRole('client')} className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'client' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Client</button>
-                <button type="button" onClick={() => setRole('gerant')} className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'gerant' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Gérant</button>
-                <button type="button" onClick={() => setRole('entreprise')} className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'entreprise' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Entreprise</button>
+              <div className="grid grid-cols-2 gap-2 mb-2 p-1.5 bg-gray-100/80 rounded-xl">
+                <button type="button" onClick={() => setRole('client')} className={`py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'client' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Client</button>
+                <button type="button" onClick={() => setRole('gerant')} className={`py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'gerant' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Gérant</button>
+                <button type="button" onClick={() => setRole('entreprise')} className={`py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'entreprise' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Entreprise</button>
+                <button type="button" onClick={() => setRole('salon_coiffure')} className={`py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'salon_coiffure' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Salon Coiffure</button>
               </div>
               
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-gray-500 ml-1">
-                  {role === 'entreprise' ? "Nom de l'entreprise" : "Nom complet"}
+                  {role === 'entreprise' ? "Nom de l'entreprise" : role === 'salon_coiffure' ? "Nom du salon" : "Nom complet"}
                 </label>
-                <input type="text" placeholder={role === 'entreprise' ? "Ex: Brakina, Castel, Sobbra..." : "Votre nom"} required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
+                <input type="text" placeholder={role === 'entreprise' ? "Ex: Brakina, Castel, Sobbra..." : role === 'salon_coiffure' ? "Ex: Coiffure Moderne..." : "Votre nom"} required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
               </div>
               
               <div className="grid grid-cols-2 gap-3">
