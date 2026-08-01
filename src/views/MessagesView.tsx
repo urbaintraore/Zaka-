@@ -58,7 +58,7 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
 
   const myEsts = establishments.filter(e => e.ownerId === currentUser?.id);
   const myEstIds = myEsts.map(e => e.id);
-  const isGerant = currentUser?.role === 'gerant';
+  const isGerant = currentUser?.role === 'gerant' || currentUser?.role === 'salon_coiffure';
   const isDJChatActive = activeConv && (activeConv as any).recipientType === 'dj';
 
   // Automatically scroll to bottom of chat

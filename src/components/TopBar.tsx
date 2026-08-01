@@ -15,13 +15,13 @@ export function TopBar() {
   if (currentUser) {
     const relevantServiceRequests = serviceRequests.filter(req => {
       if (currentUser.role === 'client' && req.clientId === currentUser.id && req.status !== 'en_attente') return true;
-      if (currentUser.role === 'gerant' && myEstIds.includes(req.establishmentId) && req.status === 'en_attente') return true;
+      if ((currentUser.role === 'gerant' || currentUser.role === 'salon_coiffure') && myEstIds.includes(req.establishmentId) && req.status === 'en_attente') return true;
       return false;
     });
 
     const relevantRelRequests = relationshipRequests.filter(req => {
       if (req.targetId === currentUser.id && req.status === 'en_attente') return true;
-      if (currentUser.role === 'gerant' && myEstIds.includes(req.establishmentId) && req.status === 'en_attente' && req.type === 'client_join') return true;
+      if ((currentUser.role === 'gerant' || currentUser.role === 'salon_coiffure') && myEstIds.includes(req.establishmentId) && req.status === 'en_attente' && req.type === 'client_join') return true;
       return false;
     });
 

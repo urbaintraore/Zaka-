@@ -174,7 +174,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
         </div>
       );
     }
-    if (currentUser.role === 'admin' || currentUser.role === 'gerant') {
+    if (currentUser.role === 'admin' || currentUser.role === 'gerant' || currentUser.role === 'salon_coiffure') {
       return (
         <div className="pb-24">
           {/* Sub Navigation for Dashboard/Profile */}
@@ -187,7 +187,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 }}
                 className={`flex-1 py-4 text-center font-bold text-sm border-b-2 transition-all ${subView === 'dashboard' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
               >
-                {currentUser.role === 'gerant' ? 'Espace Gérant' : 'Administration'}
+                {currentUser.role === 'salon_coiffure' ? 'Espace Salon' : currentUser.role === 'gerant' ? 'Espace Gérant' : 'Administration'}
               </button>
               <button 
                 onClick={() => {
@@ -227,7 +227,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                       <p className="text-gray-500 font-medium">{currentUser.email || currentUser.phone}</p>
                       <p className="text-gray-400 text-sm mt-1">{currentUser.city}, {currentUser.country}</p>
                       <div className="mt-4 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold uppercase tracking-wider">
-                        Compte {currentUser.role === 'gerant' ? 'Gérant' : 'Administrateur'}
+                        Compte {currentUser.role === 'gerant' ? 'Gérant' : currentUser.role === 'salon_coiffure' ? 'Salon de Coiffure' : 'Administrateur'}
                       </div>
 
                       <div className="mt-8 w-full flex flex-col gap-3">
@@ -316,7 +316,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                         <input 
                           type="text" 
                           disabled 
-                          value={currentUser.role === 'gerant' ? 'Gérant' : 'Administrateur'} 
+                          value={currentUser.role === 'gerant' ? 'Gérant' : currentUser.role === 'salon_coiffure' ? 'Salon de Coiffure' : 'Administrateur'} 
                           className="w-full px-4 py-3 bg-gray-100 text-gray-400 rounded-xl border border-gray-200 outline-none font-medium cursor-not-allowed select-none" 
                         />
                       </div>

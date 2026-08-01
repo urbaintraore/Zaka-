@@ -32,7 +32,7 @@ service cloud.firestore {
     function isValidUser(data) {
       return data.keys().hasAll(['name', 'role'])
         && data.name is string && data.name.size() > 0 && data.name.size() <= 100
-        && data.role in ['client', 'gerant', 'admin', 'entreprise']
+        && data.role in ['client', 'gerant', 'admin', 'entreprise', 'salon_coiffure']
         && (data.get('email', '') is string && data.get('email', '').size() <= 100)
         && (data.get('phone', '') is string && data.get('phone', '').size() <= 30)
         && (data.get('country', '') is string && data.get('country', '').size() <= 100)

@@ -312,7 +312,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const isGerant = state.currentUser.role === 'gerant';
+    const isGerant = state.currentUser.role === 'gerant' || state.currentUser.role === 'salon_coiffure';
     const convQuery = query(
       collection(db, 'conversations'),
       where(isGerant ? 'ownerId' : 'clientId', '==', state.currentUser.id)
@@ -355,7 +355,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 role = role.toLowerCase().trim() as Role;
               }
               
-              if (!role || !['client', 'gerant', 'admin', 'entreprise'].includes(role)) {
+              if (!role || !['client', 'gerant', 'admin', 'entreprise', 'salon_coiffure'].includes(role)) {
                 console.error(`[onAuthStateChanged] ERREUR CRITIQUE: Le rôle est manquant ou invalide ("${role}") pour l'utilisateur ${firebaseUser.email}`);
                 
                 // Attempt to recover role by checking if user has any establishments
@@ -670,7 +670,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // 2. If gerant, also listen to applications submitted to their establishments
     const estIds = myEstablishmentIds.split(',').filter(Boolean);
-    if (state.currentUser.role === 'gerant' && estIds.length > 0) {
+    if ((state.currentUser.role === 'gerant' || state.currentUser.role === 'salon_coiffure') && estIds.length > 0) {
       const chunks = [];
       for (let i = 0; i < estIds.length; i += 10) {
         chunks.push(estIds.slice(i, i + 10));
