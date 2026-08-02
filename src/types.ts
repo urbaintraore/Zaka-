@@ -158,6 +158,18 @@ export interface StaffReview {
   date: string;
 }
 
+export interface StaffAttendance {
+  id: string;
+  establishmentId: string;
+  staffId: string;
+  date: string; // YYYY-MM-DD
+  period: 'matinée' | 'soirée';
+  lateMinutes: number; // retard d'arrivée en minutes
+  earlyDepartureMinutes: number; // temps de départ anticipé en minutes
+  justification?: string; // justificatif s'il y en a
+  createdAt: string;
+}
+
 export interface ServiceRequest {
   id: string;
   clientId: string;

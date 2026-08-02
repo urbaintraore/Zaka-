@@ -14,6 +14,9 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
     toggleDJStatus,
     staffReviews,
     updateStaffReviewStatus,
+    staffAttendances,
+    createStaffAttendance,
+    deleteStaffAttendance,
     users, 
     establishments 
   } = useAppStore();
@@ -22,6 +25,16 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
   const [managerMessage, setManagerMessage] = useState<Record<string, string>>({});
   const [reviewAmounts, setReviewAmounts] = useState<Record<string, string>>({});
   const [reviewBonusTypes, setReviewBonusTypes] = useState<Record<string, 'bonus' | 'sanction'>>({});
+  
+  // Staff attendance state
+  const [attStaffId, setAttStaffId] = useState('');
+  const [attDate, setAttDate] = useState(new Date().toISOString().split('T')[0]);
+  const [attPeriod, setAttPeriod] = useState<'matinée' | 'soirée'>('soirée');
+  const [attLateMinutes, setAttLateMinutes] = useState('0');
+  const [attEarlyMinutes, setAttEarlyMinutes] = useState('0');
+  const [attJustification, setAttJustification] = useState('');
+  const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
+
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSendingInvitation, setIsSendingInvitation] = useState(false);
@@ -40,6 +53,8 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
   const acceptedRequests = relationshipRequests.filter(
     r => r.establishmentId === establishmentId && r.status === 'acceptee'
   );
+
+  const staffMembers = acceptedRequests.filter(r => r.isDJ || (r.requestedRole && r.requestedRole !== 'client'));
 
   const members = acceptedRequests.map(r => {
     const memberId = r.type === 'client_join' ? r.initiatorId : r.targetId;
@@ -533,6 +548,237 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
             })}
           </div>
         )}
+      </div>
+
+      {/* Suivi des Présences, Retards & Départs (Maquis / Boîte de Nuit) */}
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm space-y-4">
+        <div>
+          <h4 className="font-bold text-gray-900 dark:text-white text-sm mb-1 flex items-center gap-2">
+            <span>⏱️</span> Suivi des Présences, Retards & Départs (Maquis / Boîte de Nuit)
+          </h4>
+          <p className="text-xs text-gray-400 font-medium">
+            Enregistrez quotidiennement la période (matinée ou soirée), les retards, les départs anticipés et les justificatifs. Générez le rapport mensuel récapitulatif.
+          </p>
+        </div>
+
+        {/* Formulaire d'enregistrement quotidien */}
+        <div className="p-4 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-100 dark:border-gray-800 space-y-3">
+          <span className="text-xs font-black text-gray-800 dark:text-gray-200 uppercase tracking-wide block">Enregistrer un pointage / incident journalier</span>
+          
+          {staffMembers.length === 0 ? (
+            <p className="text-xs text-gray-400 italic">Aucun employé dans cet établissement pour enregistrer un pointage. Recrutez d'abord du personnel.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 mb-1">Employé</label>
+                <select
+                  value={attStaffId}
+                  onChange={e => setAttStaffId(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white"
+                >
+                  <option value="">Sélectionner un employé</option>
+                  {staffMembers.map(m => {
+                    const u = users.find(user => user.id === (m.type === 'client_join' ? m.initiatorId : m.targetId));
+                    return (
+                      <option key={m.id} value={u?.id || m.targetId}>
+                        {u?.name || 'Employé'} ({m.isDJ ? 'DJ' : m.requestedRole})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={attDate}
+                  onChange={e => setAttDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 mb-1">Période de travail</label>
+                <select
+                  value={attPeriod}
+                  onChange={e => setAttPeriod(e.target.value as any)}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white"
+                >
+                  <option value="soirée">🌙 Soirée (Boîte / Maquis Nuit)</option>
+                  <option value="matinée">☀️ Matinée / Journée</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 mb-1">Retard d'arrivée (minutes)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={attLateMinutes}
+                  onChange={e => setAttLateMinutes(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 mb-1">Départ anticipé (minutes)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={attEarlyMinutes}
+                  onChange={e => setAttEarlyMinutes(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label className="block text-[10px] font-bold text-gray-500 mb-1">Justificatif (s'il y en a)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Transport en panne, autorisation spéciale..."
+                  value={attJustification}
+                  onChange={e => setAttJustification(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
+          )}
+
+          {staffMembers.length > 0 && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!attStaffId) {
+                  setErrorMsg("Veuillez sélectionner un employé.");
+                  return;
+                }
+                try {
+                  await createStaffAttendance({
+                    establishmentId,
+                    staffId: attStaffId,
+                    date: attDate,
+                    period: attPeriod,
+                    lateMinutes: Number(attLateMinutes) || 0,
+                    earlyDepartureMinutes: Number(attEarlyMinutes) || 0,
+                    justification: attJustification
+                  });
+                  setSuccessMsg("Pointage et rapport de présence enregistrés avec succès !");
+                  setAttLateMinutes('0');
+                  setAttEarlyMinutes('0');
+                  setAttJustification('');
+                  setTimeout(() => setSuccessMsg(null), 4000);
+                } catch (err) {
+                  console.error(err);
+                  setErrorMsg("Erreur lors de l'enregistrement du pointage.");
+                }
+              }}
+              className="mt-3 px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm"
+            >
+              Enregistrer le pointage
+            </button>
+          )}
+        </div>
+
+        {/* Section Rapport Mensuel */}
+        <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <span className="text-xs font-black text-gray-800 dark:text-gray-200 uppercase tracking-wide block">Rapport Mensuel Récapitulatif</span>
+              <p className="text-[10px] text-gray-400">Synthèse des retards et départs anticipés par employé pour le mois sélectionné.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="month"
+                value={reportMonth}
+                onChange={e => setReportMonth(e.target.value)}
+                className="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const filtered = staffAttendances.filter(a => a.establishmentId === establishmentId && a.date.startsWith(reportMonth));
+                  if (filtered.length === 0) {
+                    alert("Aucune donnée de présence pour ce mois.");
+                    return;
+                  }
+                  let csvContent = "data:text/csv;charset=utf-8,ID Employe;Nom Employe;Date;Periode;Retard (min);Depart Anticipe (min);Justificatif\n";
+                  filtered.forEach(att => {
+                    const memberUser = users.find(u => u.id === att.staffId);
+                    csvContent += `${att.staffId};"${memberUser?.name || 'Inconnu'}";${att.date};${att.period};${att.lateMinutes};${att.earlyDepartureMinutes};"${att.justification || ''}"\n`;
+                  });
+                  const encodedUri = encodeURI(csvContent);
+                  const link = document.createElement("a");
+                  link.setAttribute("href", encodedUri);
+                  link.setAttribute("download", `rapport_presence_${est?.name || 'etablissement'}_${reportMonth}.csv`);
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+              >
+                📥 Exporter le fichier CSV mensuel
+              </button>
+            </div>
+          </div>
+
+          {/* Tableau récapitulatif du mois */}
+          {staffAttendances.filter(a => a.establishmentId === establishmentId && a.date.startsWith(reportMonth)).length === 0 ? (
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/40 rounded-xl text-center text-xs font-medium text-gray-400">
+              Aucun pointage enregistré pour le mois de {reportMonth}.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50 dark:bg-gray-800/60 text-gray-500 font-bold uppercase text-[10px]">
+                  <tr>
+                    <th className="p-3">Employé</th>
+                    <th className="p-3">Date</th>
+                    <th className="p-3">Période</th>
+                    <th className="p-3">Retard</th>
+                    <th className="p-3">Départ Anticipé</th>
+                    <th className="p-3">Justificatif</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {staffAttendances
+                    .filter(a => a.establishmentId === establishmentId && a.date.startsWith(reportMonth))
+                    .map(att => {
+                      const memberUser = users.find(u => u.id === att.staffId);
+                      return (
+                        <tr key={att.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30">
+                          <td className="p-3 font-bold text-gray-900 dark:text-white">{memberUser?.name || 'Employé'}</td>
+                          <td className="p-3 text-gray-600 dark:text-gray-300">{att.date}</td>
+                          <td className="p-3">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${att.period === 'soirée' ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'}`}>
+                              {att.period}
+                            </span>
+                          </td>
+                          <td className="p-3 font-bold text-orange-600">{att.lateMinutes} min</td>
+                          <td className="p-3 font-bold text-red-600">{att.earlyDepartureMinutes} min</td>
+                          <td className="p-3 text-gray-500 italic">{att.justification || 'Aucun'}</td>
+                          <td className="p-3 text-right">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (confirm("Voulez-vous supprimer ce pointage ?")) {
+                                  await deleteStaffAttendance(att.id);
+                                }
+                              }}
+                              className="text-red-500 hover:text-red-700 font-bold text-[10px] cursor-pointer"
+                            >
+                              Supprimer
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

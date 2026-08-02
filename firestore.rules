@@ -362,5 +362,10 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
       allow update: if isSignedIn() && (request.auth.uid == resource.data.clientId || get(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)).data.ownerId == request.auth.uid);
     }
+
+    match /staffAttendances/{attId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isSignedIn();
+    }
   }
 }

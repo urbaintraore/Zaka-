@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview } from './types';
+import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
 import { 
@@ -30,6 +30,7 @@ interface AppState {
   carnetEntrees: CarnetEntry[];
   coiffeurs: Record<string, Coiffeur[]>;
   staffReviews: StaffReview[];
+  staffAttendances: StaffAttendance[];
   loading: boolean;
   globalError: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null;
   theme: 'light' | 'dark';
@@ -89,6 +90,8 @@ interface AppContextType extends AppState {
   deleteCarnetEntry: (id: string) => Promise<void>;
   createStaffReview: (review: Omit<StaffReview, 'id' | 'status' | 'date'>) => Promise<void>;
   updateStaffReviewStatus: (id: string, status: 'valide' | 'invalide', managerNote?: string, bonusOrSanction?: StaffReview['bonusOrSanction']) => Promise<void>;
+  createStaffAttendance: (attendance: Omit<StaffAttendance, 'id' | 'createdAt'>) => Promise<void>;
+  deleteStaffAttendance: (id: string) => Promise<void>;
   setGlobalError: (err: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null) => void;
   toggleTheme: () => void;
 }
@@ -163,6 +166,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     menusDuJour: [],
     carnetEntrees: [],
     staffReviews: [],
+    staffAttendances: [],
     loading: true,
     globalError: null,
     theme: (localStorage.getItem('app-theme') as 'light' | 'dark') || 
@@ -573,6 +577,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error("Erreur staffReviews:", error);
     });
 
+    // Listen to staff attendances
+    const attendanceQuery = query(collection(db, 'staffAttendances'));
+    const unsubscribeAttendance = onSnapshot(attendanceQuery, (snapshot) => {
+      const attList: StaffAttendance[] = [];
+      snapshot.forEach(doc => attList.push({ id: doc.id, ...doc.data() } as StaffAttendance));
+      setState(s => ({ ...s, staffAttendances: attList }));
+    }, (error) => {
+      console.error("Erreur staffAttendances:", error);
+    });
+
     // Listen to service requests
     const serQuery = query(collection(db, 'serviceRequests'));
     const unsubscribeSer = onSnapshot(serQuery, (snapshot) => {
@@ -641,6 +655,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unsubscribeUsers();
       unsubscribeRel();
       unsubscribeStaffReviews();
+      unsubscribeAttendance();
       unsubscribeSer();
       unsubscribeRes();
       unsubscribeFav();
@@ -1380,6 +1395,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const createStaffAttendance = async (attendance: Omit<StaffAttendance, 'id' | 'createdAt'>) => {
+    try {
+      await addDoc(collection(db, 'staffAttendances'), {
+        ...attendance,
+        createdAt: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error("Erreur createStaffAttendance:", error);
+      throw error;
+    }
+  };
+
+  const deleteStaffAttendance = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'staffAttendances', id));
+    } catch (error: any) {
+      console.error("Erreur deleteStaffAttendance:", error);
+      throw error;
+    }
+  };
+
+  const createStaffAttendance = async (attendance: Omit<StaffAttendance, 'id' | 'createdAt'>) => {
+    try {
+      await addDoc(collection(db, 'staffAttendances'), {
+        ...attendance,
+        createdAt: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error("Erreur createStaffAttendance:", error);
+      throw error;
+    }
+  };
+
+  const deleteStaffAttendance = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'staffAttendances', id));
+    } catch (error: any) {
+      console.error("Erreur deleteStaffAttendance:", error);
+      throw error;
+    }
+  };
+
   const createServiceRequest = async (req: Omit<ServiceRequest, 'id' | 'status' | 'date'>) => {
     try {
       await addDoc(collection(db, 'serviceRequests'), {
@@ -1630,6 +1687,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteCarnetEntry,
       createStaffReview,
       updateStaffReviewStatus,
+      createStaffAttendance,
+      deleteStaffAttendance,
       setGlobalError,
       toggleTheme
     }}>
