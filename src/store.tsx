@@ -1416,27 +1416,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const createStaffAttendance = async (attendance: Omit<StaffAttendance, 'id' | 'createdAt'>) => {
-    try {
-      await addDoc(collection(db, 'staffAttendances'), {
-        ...attendance,
-        createdAt: new Date().toISOString()
-      });
-    } catch (error: any) {
-      console.error("Erreur createStaffAttendance:", error);
-      throw error;
-    }
-  };
-
-  const deleteStaffAttendance = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, 'staffAttendances', id));
-    } catch (error: any) {
-      console.error("Erreur deleteStaffAttendance:", error);
-      throw error;
-    }
-  };
-
   const createServiceRequest = async (req: Omit<ServiceRequest, 'id' | 'status' | 'date'>) => {
     try {
       await addDoc(collection(db, 'serviceRequests'), {
