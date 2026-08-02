@@ -11,6 +11,8 @@ import { Establishment } from '../types';
 import { HeartButton } from '../components/HeartButton';
 import { OuagadougouHeatmap } from '../components/OuagadougouHeatmap';
 
+import { JoinRoleModal } from '../components/JoinRoleModal';
+
 function isEstablishmentOpen(openingHours?: string): boolean {
   if (!openingHours) return true;
   try {
@@ -84,6 +86,7 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
   const [priceFilter, setPriceFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all');
   const [openNowFilter, setOpenNowFilter] = useState(false);
   const [selectedEst, setSelectedEst] = useState<Establishment | null>(null);
+  const [joinModalEst, setJoinModalEst] = useState<Establishment | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'map' | 'heatmap'>('list');
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [filterByProximity, setFilterByProximity] = useState(false);
@@ -377,17 +380,22 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
                                   if (onNavigate) onNavigate('profile');
                                   return;
                                 }
-                                try {
-                                  await createRelationshipRequest({ 
-                                    initiatorId: currentUser.id, 
-                                    targetId: est.ownerId, 
-                                    establishmentId: est.id, 
-                                    type: 'client_join' 
-                                  });
-                                  alert("Demande d'adhésion envoyée avec succès !");
-                                } catch (err) {
-                                  console.error(err);
-                                  alert("Erreur lors de l'envoi de la demande.");
+                                if (est.category === 'maquis' || est.category === 'boite_de_nuit') {
+                                  setJoinModalEst(est);
+                                } else {
+                                  try {
+                                    await createRelationshipRequest({ 
+                                      initiatorId: currentUser.id, 
+                                      targetId: est.ownerId, 
+                                      establishmentId: est.id, 
+                                      type: 'client_join',
+                                      requestedRole: 'client'
+                                    });
+                                    alert("Demande d'adhésion envoyée avec succès !");
+                                  } catch (err: any) {
+                                    console.error(err);
+                                    alert(err.message || "Erreur lors de l'envoi de la demande.");
+                                  }
                                 }
                               }}
                               className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-600 font-bold text-xs px-3 py-2.5 rounded-xl transition-all cursor-pointer"
@@ -477,6 +485,31 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
         <EstablishmentDetailModal
           establishment={selectedEst}
           onClose={() => setSelectedEst(null)}
+        />
+      )}
+
+      {joinModalEst && (
+        <JoinRoleModal
+          establishment={joinModalEst}
+          onClose={() => setJoinModalEst(null)}
+          onSubmit={async (role, identityPhotoUrl) => {
+            if (!currentUser) return;
+            try {
+              await createRelationshipRequest({ 
+                initiatorId: currentUser.id, 
+                targetId: joinModalEst.ownerId, 
+                establishmentId: joinModalEst.id, 
+                type: 'client_join',
+                requestedRole: role,
+                identityPhotoUrl
+              });
+              alert("Demande d'adhésion envoyée avec succès !");
+              setJoinModalEst(null);
+            } catch (err: any) {
+              console.error(err);
+              alert(err.message || "Erreur lors de l'envoi de la demande.");
+            }
+          }}
         />
       )}
     </div>

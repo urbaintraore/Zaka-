@@ -356,5 +356,11 @@ service cloud.firestore {
       allow update: if isSignedIn() && existing().clientId == request.auth.uid && incoming().clientId == existing().clientId && incoming().establishmentId == existing().establishmentId && isValidCarnetEntry(incoming());
       allow delete: if isSignedIn() && existing().clientId == request.auth.uid;
     }
+
+    match /staffReviews/{reviewId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
+      allow update: if isSignedIn() && (request.auth.uid == resource.data.clientId || get(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)).data.ownerId == request.auth.uid);
+    }
   }
 }

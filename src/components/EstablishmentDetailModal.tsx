@@ -16,15 +16,32 @@ interface EstablishmentDetailModalProps {
 }
 
 export function EstablishmentDetailModal({ establishment, onClose }: EstablishmentDetailModalProps) {
-  const { createServiceRequest, addReservation, menusDuJour, currentUser, updateEstablishment, trackEstablishmentView, addCarnetEntry, carnetEntrees } = useAppStore();
+  const { 
+    createServiceRequest, 
+    addReservation, 
+    menusDuJour, 
+    currentUser, 
+    updateEstablishment, 
+    trackEstablishmentView, 
+    addCarnetEntry, 
+    carnetEntrees,
+    relationshipRequests,
+    users,
+    staffReviews,
+    createStaffReview
+  } = useAppStore();
   const [showReservation, setShowReservation] = useState(false);
   const [showReservationsDashboard, setShowReservationsDashboard] = useState(false);
   const [isEditingGeo, setIsEditingGeo] = useState(false);
   const [geoInput, setGeoInput] = useState(establishment.geolocation || '');
   const [isSavingGeo, setIsSavingGeo] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
-  const [activeSubTab, setActiveSubTab] = useState<'info' | 'live' | 'affluence' | 'dj'>('info');
+  const [activeSubTab, setActiveSubTab] = useState<'info' | 'live' | 'affluence' | 'dj' | 'equipe'>('info');
   const [justVisited, setJustVisited] = useState(false);
+  const [ratingStaffId, setRatingStaffId] = useState<string | null>(null);
+  const [staffRatingVal, setStaffRatingVal] = useState(5);
+  const [staffComment, setStaffComment] = useState('');
+  const [reviewSuccessMsg, setReviewSuccessMsg] = useState<string | null>(null);
 
   const visitCount = carnetEntrees 
     ? carnetEntrees.filter(e => e.establishmentId === establishment.id && e.type === 'visite').length
@@ -312,7 +329,8 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
               { id: 'info', label: 'ℹ️ Infos' },
               { id: 'live', label: '📺 Live d\'Ambiance' },
               { id: 'affluence', label: '⚡ Affluence' },
-              { id: 'dj', label: '🎵 Playlist DJ' }
+              { id: 'dj', label: '🎵 Playlist DJ' },
+              { id: 'equipe', label: '👥 Personnel' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -473,8 +491,145 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
             <LiveDAmbiance establishmentId={establishment.id} establishmentName={establishment.name} />
           ) : activeSubTab === 'affluence' ? (
             <AffluenceTracker establishmentId={establishment.id} />
-          ) : (
+          ) : activeSubTab === 'dj' ? (
             <PlaylistDJ establishmentId={establishment.id} />
+          ) : (
+            <div className="space-y-4">
+              <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide">Équipe & Personnel</h3>
+              <p className="text-xs text-gray-500 font-medium">Découvrez les employés de cet établissement et notez leurs prestations.</p>
+
+              {reviewSuccessMsg && (
+                <div className="p-3 bg-green-50 text-green-700 rounded-xl text-xs font-bold">
+                  {reviewSuccessMsg}
+                </div>
+              )}
+
+              {relationshipRequests.filter(r => r.establishmentId === establishment.id && r.status === 'acceptee' && (r.isDJ || (r.requestedRole && r.requestedRole !== 'client'))).length === 0 ? (
+                <div className="p-6 bg-gray-50 dark:bg-gray-800/40 rounded-2xl text-center text-xs font-bold text-gray-400">
+                  Aucun membre du personnel enregistré pour le moment.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {relationshipRequests
+                    .filter(r => r.establishmentId === establishment.id && r.status === 'acceptee' && (r.isDJ || (r.requestedRole && r.requestedRole !== 'client')))
+                    .map(r => {
+                      const memberId = r.type === 'client_join' ? r.initiatorId : r.targetId;
+                      const memberUser = users.find(u => u.id === memberId);
+                      const staffReviewsList = staffReviews.filter(sr => sr.establishmentId === establishment.id && sr.staffId === memberId && sr.status === 'valide');
+                      const avgRating = staffReviewsList.length > 0 
+                        ? (staffReviewsList.reduce((acc, curr) => acc + curr.rating, 0) / staffReviewsList.length).toFixed(1)
+                        : '0.0';
+
+                      return (
+                        <div key={r.id} className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 flex items-center justify-between shadow-sm">
+                          <div className="flex items-center gap-3">
+                            {r.identityPhotoUrl || memberUser?.avatar ? (
+                              <img src={r.identityPhotoUrl || memberUser?.avatar} alt="Personnel" className="w-12 h-12 rounded-xl object-cover border border-orange-200 shadow-sm" />
+                            ) : (
+                              <div className="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-900/50 flex items-center justify-center font-black text-orange-600 text-sm">
+                                {(memberUser?.name || 'P').substring(0, 2).toUpperCase()}
+                              </div>
+                            )}
+                            <div>
+                              <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
+                                {memberUser?.name || 'Employé'}
+                                <span className="text-[9px] bg-orange-100 text-orange-700 font-extrabold px-2 py-0.5 rounded uppercase">
+                                  {r.isDJ ? 'DJ' : r.requestedRole}
+                                </span>
+                              </h4>
+                              <div className="flex items-center gap-1.5 text-xs text-yellow-500 font-bold mt-0.5">
+                                <span>★</span>
+                                <span>{avgRating} ({staffReviewsList.length} avis)</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {currentUser && currentUser.role === 'client' && (
+                            <button
+                              type="button"
+                              onClick={() => setRatingStaffId(memberId)}
+                              className="px-3 py-2 bg-orange-50 hover:bg-orange-100 text-orange-600 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                            >
+                              ⭐ Noter
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+
+              {ratingStaffId && (
+                <div className="fixed inset-0 bg-black/60 z-[110] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+                  <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md shadow-2xl p-6 space-y-4">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Noter la prestation de l'employé</h3>
+                    
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Note (1 à 5 étoiles)</label>
+                      <div className="flex gap-2">
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => setStaffRatingVal(star)}
+                            className={`text-2xl ${staffRatingVal >= star ? 'text-yellow-500' : 'text-gray-300'}`}
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Votre avis / commentaire</label>
+                      <textarea
+                        value={staffComment}
+                        onChange={e => setStaffComment(e.target.value)}
+                        placeholder="Décrivez la qualité du service..."
+                        className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-900 dark:text-white"
+                        rows={3}
+                      />
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!currentUser) return;
+                          try {
+                            await createStaffReview({
+                              establishmentId: establishment.id,
+                              staffId: ratingStaffId,
+                              clientId: currentUser.id,
+                              clientName: currentUser.name,
+                              rating: staffRatingVal,
+                              comment: staffComment
+                            });
+                            setReviewSuccessMsg("Avis soumis avec succès ! En attente de validation par le gérant.");
+                            setRatingStaffId(null);
+                            setStaffComment('');
+                            setTimeout(() => setReviewSuccessMsg(null), 4000);
+                          } catch (err) {
+                            console.error(err);
+                            alert("Erreur lors de la soumission de l'avis.");
+                          }
+                        }}
+                        className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl text-xs transition-all cursor-pointer"
+                      >
+                        Soumettre l'avis
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRatingStaffId(null)}
+                        className="px-4 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold py-3 rounded-xl text-xs cursor-pointer"
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
           
           <div className="sticky bottom-0 pt-4 bg-white dark:bg-gray-950 flex gap-3 z-10">

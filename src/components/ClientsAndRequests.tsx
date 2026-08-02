@@ -12,12 +12,16 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
     createRelationshipRequest,
     createConversation, 
     toggleDJStatus,
+    staffReviews,
+    updateStaffReviewStatus,
     users, 
     establishments 
   } = useAppStore();
 
   const [selectedClientId, setSelectedClientId] = useState('');
   const [managerMessage, setManagerMessage] = useState<Record<string, string>>({});
+  const [reviewAmounts, setReviewAmounts] = useState<Record<string, string>>({});
+  const [reviewBonusTypes, setReviewBonusTypes] = useState<Record<string, 'bonus' | 'sanction'>>({});
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSendingInvitation, setIsSendingInvitation] = useState(false);
@@ -44,7 +48,8 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
       requestId: r.id,
       clientId: memberId,
       user: memberUser,
-      isDJ: r.isDJ || false
+      isDJ: r.isDJ || r.requestedRole === 'dj' || false,
+      requestedRole: r.requestedRole || 'client'
     };
   });
 
@@ -216,7 +221,14 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
                 </div>
                 <div>
                   <div className="text-xs font-black text-gray-900">{getClientName(req.initiatorId)}</div>
-                  <div className="text-[10px] text-gray-400 font-semibold">A demandé à vous rejoindre</div>
+                  <div className="text-[10px] text-gray-400 font-semibold">
+                    A demandé à vous rejoindre
+                    {req.requestedRole && (
+                      <span className="ml-1 inline-block px-1.5 py-0.5 rounded-sm bg-orange-100 text-orange-800 text-[9px] font-bold uppercase tracking-wider">
+                        {req.requestedRole}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex gap-1.5">
@@ -366,11 +378,16 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
                     {(member.user?.name || 'Client').substring(0, 2).toUpperCase()}
                   </div>
                   <div>
-                    <div className="text-xs font-black text-gray-900 flex items-center gap-1.5">
+                    <div className="text-xs font-black text-gray-900 flex items-center gap-1.5 flex-wrap">
                       {member.user?.name || `Client (${member.clientId.slice(0, 5)})`}
                       {member.isDJ && (
                         <span className="text-[9px] bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded">
                           DJ Actif
+                        </span>
+                      )}
+                      {!member.isDJ && member.requestedRole !== 'client' && (
+                        <span className="text-[9px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded uppercase">
+                          {member.requestedRole}
                         </span>
                       )}
                     </div>
@@ -423,6 +440,97 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Évaluations et Performances du Personnel (Bonus / Sanctions) */}
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-5 shadow-sm">
+        <h4 className="font-bold text-gray-900 dark:text-white text-sm mb-1 flex items-center gap-2">
+          <span>⭐</span> Évaluations clients & Bonus/Sanctions du personnel
+        </h4>
+        <p className="text-xs text-gray-400 mb-4 font-medium">Validez les avis clients et gérez les bonifications ou sanctions pécuniaires de fin de mois de vos employés.</p>
+
+        {staffReviews.filter(r => r.establishmentId === establishmentId).length === 0 ? (
+          <div className="p-4 bg-gray-50 dark:bg-gray-800/40 rounded-xl text-center text-xs font-bold text-gray-400">
+            Aucun avis client sur le personnel pour l'instant.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {staffReviews.filter(r => r.establishmentId === establishmentId).map(review => {
+              const staffUser = users.find(u => u.id === review.staffId);
+              return (
+                <div key={review.id} className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-gray-900 dark:text-white">Employé : {staffUser?.name || 'Employé'}</span>
+                      <p className="text-[10px] text-gray-500">Client : {review.clientName} • Note : {'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                      review.status === 'valide' ? 'bg-green-100 text-green-700' :
+                      review.status === 'invalide' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                    }`}>
+                      {review.status}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-gray-700 dark:text-gray-300 italic bg-white dark:bg-gray-900 p-3 rounded-lg border border-gray-100 dark:border-gray-800">
+                    "{review.comment}"
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                    <button
+                      type="button"
+                      onClick={() => updateStaffReviewStatus(review.id, 'valide', review.managerNote, review.bonusOrSanction)}
+                      className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Valider l'avis
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateStaffReviewStatus(review.id, 'invalide', review.managerNote, review.bonusOrSanction)}
+                      className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Invalider
+                    </button>
+                  </div>
+
+                  {/* Bonus / Sanction Form */}
+                  <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                    <span className="text-[10px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-wider block">Notation gérant & Bonus / Sanction pécuniaire</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <select
+                        value={reviewBonusTypes[review.id] || review.bonusOrSanction?.type || 'bonus'}
+                        onChange={e => setReviewBonusTypes(prev => ({ ...prev, [review.id]: e.target.value as any }))}
+                        className="px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-bold text-gray-900 dark:text-white"
+                      >
+                        <option value="bonus">🎁 Bonification (Bonus)</option>
+                        <option value="sanction">⚠️ Sanction pécuniaire</option>
+                      </select>
+                      <input
+                        type="number"
+                        placeholder="Montant (FCFA)"
+                        value={reviewAmounts[review.id] !== undefined ? reviewAmounts[review.id] : (review.bonusOrSanction?.amount || '')}
+                        onChange={e => setReviewAmounts(prev => ({ ...prev, [review.id]: e.target.value }))}
+                        className="px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-medium text-gray-900 dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const type = reviewBonusTypes[review.id] || review.bonusOrSanction?.type || 'bonus';
+                          const amount = Number(reviewAmounts[review.id] !== undefined ? reviewAmounts[review.id] : (review.bonusOrSanction?.amount || 0));
+                          updateStaffReviewStatus(review.id, review.status, review.managerNote, { type, amount, reason: review.comment });
+                          setSuccessMsg("Sanction / Bonification enregistrée avec succès !");
+                        }}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                      >
+                        Enregistrer sanction/bonus
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

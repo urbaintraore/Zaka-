@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur } from './types';
+import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
 import { 
@@ -29,6 +29,7 @@ interface AppState {
   menusDuJour: MenuDuJour[];
   carnetEntrees: CarnetEntry[];
   coiffeurs: Record<string, Coiffeur[]>;
+  staffReviews: StaffReview[];
   loading: boolean;
   globalError: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null;
   theme: 'light' | 'dark';
@@ -86,6 +87,8 @@ interface AppContextType extends AppState {
   addCarnetEntry: (entry: Omit<CarnetEntry, 'id'>) => Promise<void>;
   updateCarnetEntryNote: (id: string, note: string) => Promise<void>;
   deleteCarnetEntry: (id: string) => Promise<void>;
+  createStaffReview: (review: Omit<StaffReview, 'id' | 'status' | 'date'>) => Promise<void>;
+  updateStaffReviewStatus: (id: string, status: 'valide' | 'invalide', managerNote?: string, bonusOrSanction?: StaffReview['bonusOrSanction']) => Promise<void>;
   setGlobalError: (err: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null) => void;
   toggleTheme: () => void;
 }
@@ -159,6 +162,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     reservations: [],
     menusDuJour: [],
     carnetEntrees: [],
+    staffReviews: [],
     loading: true,
     globalError: null,
     theme: (localStorage.getItem('app-theme') as 'light' | 'dark') || 
@@ -559,6 +563,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error("Erreur relationshipRequests:", error);
     });
 
+    // Listen to staff reviews
+    const staffQuery = query(collection(db, 'staffReviews'));
+    const unsubscribeStaffReviews = onSnapshot(staffQuery, (snapshot) => {
+      const sReviews: StaffReview[] = [];
+      snapshot.forEach(doc => sReviews.push({ id: doc.id, ...doc.data() } as StaffReview));
+      setState(s => ({ ...s, staffReviews: sReviews }));
+    }, (error) => {
+      console.error("Erreur staffReviews:", error);
+    });
+
     // Listen to service requests
     const serQuery = query(collection(db, 'serviceRequests'));
     const unsubscribeSer = onSnapshot(serQuery, (snapshot) => {
@@ -626,6 +640,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       unsubscribeUsers();
       unsubscribeRel();
+      unsubscribeStaffReviews();
       unsubscribeSer();
       unsubscribeRes();
       unsubscribeFav();
@@ -1293,6 +1308,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const createRelationshipRequest = async (req: Omit<RelationshipRequest, 'id' | 'status' | 'date'>) => {
     try {
+      // Validate unique establishment for staff roles
+      const restrictedRoles = ['serveur', 'caissier', 'menage', 'vigile'];
+      if (req.requestedRole && restrictedRoles.includes(req.requestedRole)) {
+        const existingRestricted = state.relationshipRequests.find(r => 
+          r.initiatorId === req.initiatorId && 
+          r.status !== 'refusee' &&
+          r.requestedRole && restrictedRoles.includes(r.requestedRole)
+        );
+        if (existingRestricted) {
+          throw new Error("Vous ne pouvez être employé que dans un seul établissement à la fois (sauf Gérant et DJ).");
+        }
+      }
+
       await addDoc(collection(db, 'relationshipRequests'), {
         ...req,
         status: 'en_attente',
@@ -1318,6 +1346,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await updateDoc(doc(db, 'relationshipRequests', requestId), { isDJ });
     } catch (error: any) {
       console.error("Erreur toggleDJStatus:", error);
+      throw error;
+    }
+  };
+
+  const createStaffReview = async (review: Omit<StaffReview, 'id' | 'status' | 'date'>) => {
+    try {
+      await addDoc(collection(db, 'staffReviews'), {
+        ...review,
+        status: 'en_attente',
+        date: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error("Erreur createStaffReview:", error);
+      throw error;
+    }
+  };
+
+  const updateStaffReviewStatus = async (
+    id: string, 
+    status: 'valide' | 'invalide', 
+    managerNote?: string, 
+    bonusOrSanction?: StaffReview['bonusOrSanction']
+  ) => {
+    try {
+      const updateData: any = { status };
+      if (managerNote !== undefined) updateData.managerNote = managerNote;
+      if (bonusOrSanction !== undefined) updateData.bonusOrSanction = bonusOrSanction;
+      await updateDoc(doc(db, 'staffReviews', id), updateData);
+    } catch (error: any) {
+      console.error("Erreur updateStaffReviewStatus:", error);
       throw error;
     }
   };
@@ -1570,6 +1628,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addCarnetEntry,
       updateCarnetEntryNote,
       deleteCarnetEntry,
+      createStaffReview,
+      updateStaffReviewStatus,
       setGlobalError,
       toggleTheme
     }}>

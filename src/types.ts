@@ -135,7 +135,27 @@ export interface RelationshipRequest {
   type: 'client_join' | 'gerant_invite';
   status: 'en_attente' | 'acceptee' | 'refusee';
   date: string;
-  isDJ?: boolean;
+  isDJ?: boolean; // Keep for backward compatibility
+  requestedRole?: 'client' | 'dj' | 'serveur' | 'caissier' | 'menage' | 'vigile';
+  identityPhotoUrl?: string;
+}
+
+export interface StaffReview {
+  id: string;
+  establishmentId: string;
+  staffId: string;
+  clientId: string;
+  clientName: string;
+  rating: number;
+  comment: string;
+  status: 'en_attente' | 'valide' | 'invalide';
+  managerNote?: string;
+  bonusOrSanction?: {
+    type: 'bonus' | 'sanction';
+    amount?: number;
+    reason?: string;
+  };
+  date: string;
 }
 
 export interface ServiceRequest {
