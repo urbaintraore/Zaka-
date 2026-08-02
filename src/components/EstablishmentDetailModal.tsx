@@ -7,6 +7,7 @@ import { ReservationsDashboard } from './ReservationsDashboard';
 import { LiveDAmbiance } from './LiveDAmbiance';
 import { AffluenceTracker } from './AffluenceTracker';
 import { PlaylistDJ } from './PlaylistDJ';
+import { TableauDeBordRH } from './TableauDeBordRH';
 import { useAppStore } from '../store';
 import { shareContent } from '../utils/platform';
 
@@ -36,7 +37,7 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
   const [geoInput, setGeoInput] = useState(establishment.geolocation || '');
   const [isSavingGeo, setIsSavingGeo] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
-  const [activeSubTab, setActiveSubTab] = useState<'info' | 'live' | 'affluence' | 'dj' | 'equipe'>('info');
+  const [activeSubTab, setActiveSubTab] = useState<'info' | 'live' | 'affluence' | 'dj' | 'equipe' | 'rh'>('info');
   const [justVisited, setJustVisited] = useState(false);
   const [ratingStaffId, setRatingStaffId] = useState<string | null>(null);
   const [staffRatingVal, setStaffRatingVal] = useState(5);
@@ -330,7 +331,8 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
               { id: 'live', label: '📺 Live d\'Ambiance' },
               { id: 'affluence', label: '⚡ Affluence' },
               { id: 'dj', label: '🎵 Playlist DJ' },
-              { id: 'equipe', label: '👥 Personnel' }
+              { id: 'equipe', label: '👥 Personnel' },
+              { id: 'rh', label: '💼 Tableau RH' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -493,6 +495,8 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
             <AffluenceTracker establishmentId={establishment.id} />
           ) : activeSubTab === 'dj' ? (
             <PlaylistDJ establishmentId={establishment.id} />
+          ) : activeSubTab === 'rh' ? (
+            <TableauDeBordRH establishmentId={establishment.id} establishmentName={establishment.name} />
           ) : (
             <div className="space-y-4">
               <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide">Équipe & Personnel</h3>

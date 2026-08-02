@@ -167,6 +167,7 @@ export interface StaffAttendance {
   lateMinutes: number; // retard d'arrivée en minutes
   earlyDepartureMinutes: number; // temps de départ anticipé en minutes
   justification?: string; // justificatif s'il y en a
+  justificationPhotoUrl?: string; // photo justificative
   createdAt: string;
 }
 
