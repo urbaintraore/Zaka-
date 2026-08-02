@@ -3,18 +3,23 @@
  */
 
 export async function requestNotificationPermission(): Promise<boolean> {
-  if (!('Notification' in window)) {
-    console.warn("Ce navigateur ne supporte pas les notifications de bureau.");
+  try {
+    if (!('Notification' in window)) {
+      console.warn("Ce navigateur ne supporte pas les notifications de bureau.");
+      return false;
+    }
+
+    if (Notification.permission === 'granted') {
+      return true;
+    }
+
+    if (Notification.permission !== 'denied') {
+      const permission = await Notification.requestPermission();
+      return permission === 'granted';
+    }
+  } catch (error) {
+    // Ignore DOMException when requested inside cross-origin iframe
     return false;
-  }
-
-  if (Notification.permission === 'granted') {
-    return true;
-  }
-
-  if (Notification.permission !== 'denied') {
-    const permission = await Notification.requestPermission();
-    return permission === 'granted';
   }
 
   return false;

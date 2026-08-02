@@ -148,22 +148,44 @@ export function SalonManagement({ establishment }: { establishment: Establishmen
 
         <div className="grid gap-3">
           {hairdressers.map(h => (
-            <div key={h.id} className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100">
+            <div key={h.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-100 gap-3">
               <span className="font-bold text-sm text-gray-900">{h.name}</span>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  <input 
-                    type="number"
-                    min="0"
-                    value={h.waitingClientsCount}
-                    onChange={(e) => handleUpdateQueue(h.id, parseInt(e.target.value) || 0)}
-                    className="w-16 px-2 py-1.5 bg-white rounded-lg border border-gray-200 text-center text-sm font-bold text-orange-600 focus:border-orange-500 outline-none"
-                  />
-                  <span className="text-xs font-medium text-gray-500">clients en attente</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-gray-200">
+                  <span className={`w-6 h-6 rounded flex items-center justify-center font-black text-xs ${
+                    h.waitingClientsCount === 0 ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-600'
+                  }`}>
+                    {h.waitingClientsCount}
+                  </span>
+                  <span className="text-xs font-medium text-gray-500">en attente</span>
                 </div>
+
+                <button 
+                  type="button"
+                  onClick={() => handleUpdateQueue(h.id, h.waitingClientsCount - 1)}
+                  disabled={h.waitingClientsCount <= 0}
+                  className={`px-2.5 py-1.5 rounded-lg font-bold text-[10px] flex items-center gap-1 transition-colors ${
+                    h.waitingClientsCount <= 0 
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                      : 'bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer'
+                  }`}
+                  title="Fini avec un client"
+                >
+                  Fini avec un client
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => handleUpdateQueue(h.id, h.waitingClientsCount + 1)}
+                  className="px-2.5 py-1.5 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded-lg font-bold text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Ajouter un client"
+                >
+                  Nouveau (+1)
+                </button>
+
                 <button 
                   onClick={() => handleDeleteHairdresser(h.id)}
-                  className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer ml-auto"
                   title="Supprimer"
                 >
                   <Trash2 className="w-4 h-4" />

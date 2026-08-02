@@ -12,6 +12,7 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'autoUpdate',
         injectRegister: 'auto',
+        manifestFilename: 'manifest.webmanifest',
         includeAssets: ['logo.jpg', 'icon-192x192.png', 'icon-512x512.png', 'apple-touch-icon.png', 'maskable-icon-192.png', 'maskable-icon-512.png'],
         manifest: {
           name: "Zaka+",
@@ -143,11 +144,40 @@ export default defineConfig(() => {
                   maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
                 }
               }
+            },
+            {
+              urlPattern: /^https:\/\/.*\/.*\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'external-images-cache',
+                expiration: {
+                  maxEntries: 200,
+                  maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
+              urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*/i,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'firestore-api-cache',
+                networkTimeoutSeconds: 5,
+                expiration: {
+                  maxEntries: 100,
+                  maxAgeSeconds: 60 * 60 * 24 // 1 day
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
             }
           ]
         },
         devOptions: {
-          enabled: true
+          enabled: false
         }
       })
     ],
@@ -157,6 +187,10 @@ export default defineConfig(() => {
       },
     },
     server: {
+      cors: true,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

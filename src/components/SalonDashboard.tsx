@@ -205,35 +205,58 @@ export function SalonDashboard({ establishment }: { establishment: Establishment
                     </button>
                   </div>
 
-                  <div className="flex items-center justify-between bg-white p-3.5 rounded-xl border border-gray-100">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center font-black text-xs">
-                        {c.waitingClientsCount}
+                  <div className="flex flex-col gap-3 bg-white p-4 rounded-xl border border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${
+                          c.waitingClientsCount === 0 
+                            ? 'bg-green-100 text-green-700' 
+                            : 'bg-orange-100 text-orange-600'
+                        }`}>
+                          {c.waitingClientsCount}
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-gray-700 block">Clients en attente</span>
+                          <span className="text-[10px] text-gray-400">
+                            {c.waitingClientsCount === 0 ? 'Disponible maintenant' : `${c.waitingClientsCount} personne(s) attendent`}
+                          </span>
+                        </div>
                       </div>
-                      <span className="text-xs font-bold text-gray-700">Clients en attente</span>
+
+                      <div className="flex items-center gap-1">
+                        <input 
+                          type="number"
+                          min="0"
+                          value={c.waitingClientsCount}
+                          onChange={(e) => updateClientCount(c.id, parseInt(e.target.value) || 0)}
+                          className="w-12 text-center py-1 bg-gray-50 rounded-lg border border-gray-200 text-xs font-bold text-gray-800 outline-none"
+                        />
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
+                    {/* Quick Action Buttons for Manager */}
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
                       <button 
                         type="button"
                         onClick={() => updateClientCount(c.id, c.waitingClientsCount - 1)}
-                        className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-black text-sm flex items-center justify-center transition-colors cursor-pointer"
+                        disabled={c.waitingClientsCount <= 0}
+                        className={`py-2 px-2.5 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1.5 transition-colors ${
+                          c.waitingClientsCount <= 0 
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                            : 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 cursor-pointer'
+                        }`}
+                        title="Soustraire 1 client quand le coiffeur a terminé"
                       >
-                        -
+                        <CheckCircle className="w-3.5 h-3.5" /> Fini avec un client
                       </button>
-                      <input 
-                        type="number"
-                        min="0"
-                        value={c.waitingClientsCount}
-                        onChange={(e) => updateClientCount(c.id, parseInt(e.target.value) || 0)}
-                        className="w-14 text-center py-1.5 bg-gray-50 rounded-lg border border-gray-200 text-xs font-bold text-gray-800 outline-none"
-                      />
+
                       <button 
                         type="button"
                         onClick={() => updateClientCount(c.id, c.waitingClientsCount + 1)}
-                        className="w-8 h-8 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-black text-sm flex items-center justify-center transition-colors cursor-pointer shadow-sm"
+                        className="py-2 px-2.5 bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                        title="Ajouter un nouveau client à la file d'attente"
                       >
-                        +
+                        <Plus className="w-3.5 h-3.5" /> Nouveau client
                       </button>
                     </div>
                   </div>

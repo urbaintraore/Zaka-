@@ -12,6 +12,7 @@ import { ParticipationButtons } from '../components/ParticipationButtons';
 import { EventAIAnalytics } from '../components/EventAIAnalytics';
 import { ChallengePhoto } from '../components/ChallengePhoto';
 import { EventSocialMur } from '../components/EventSocialMur';
+import { MapView } from '../components/MapView';
 import { motion } from 'motion/react';
 
 interface HomeViewProps {
@@ -25,6 +26,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
   const [selectedPub, setSelectedPub] = useState<Publication | null>(null);
   const [filterMemberOnly, setFilterMemberOnly] = useState(false);
   const [activePubTab, setActivePubTab] = useState<'info' | 'photos' | 'wall'>('info');
+  const [mapCategory, setMapCategory] = useState<string>('Tous');
 
   useEffect(() => {
     setActivePubTab('info');
@@ -460,11 +462,42 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           </p>
           <button 
             onClick={() => onNavigate?.('explore')}
-            className="bg-white text-orange-600 px-6 py-3 rounded-full font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-sm flex items-center gap-2"
+            className="bg-white text-orange-600 px-6 py-3 rounded-full font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-sm flex items-center gap-2 mb-6"
           >
             <MapPin className="w-4 h-4" /> Explorer la carte
           </button>
         </div>
+
+        {/* Quick Filter Bar */}
+        <div className="relative z-10 -mx-6 px-6 overflow-x-auto hide-scrollbar">
+          <div className="flex items-center gap-2 pb-2">
+            {['Tous', 'Maquis', 'Restaurant', 'Bar', 'Discothèque'].map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setMapCategory(cat)}
+                className={`shrink-0 px-4 py-2 rounded-full text-sm font-bold transition-all ${
+                  mapCategory.toLowerCase() === cat.toLowerCase()
+                    ? 'bg-white text-orange-600 shadow-sm'
+                    : 'bg-white/20 text-white hover:bg-white/30'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Map Interactive */}
+      <div className="px-4">
+        <MapView 
+          establishments={establishments} 
+          onEstClick={(id) => {
+            const est = establishments.find(e => e.id === id);
+            if (est) setSelectedRankEst(est);
+          }}
+          selectedCategory={mapCategory}
+        />
       </div>
 
       {/* Ephemeral Stories (Style Instagram) */}

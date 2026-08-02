@@ -25,29 +25,9 @@ function AppContent() {
     // Request push notification permissions on mount
     requestNotificationPermission().then(granted => {
       console.log('Notification permission granted:', granted);
+    }).catch(() => {
+      // Ignore permission request error in iframe
     });
-
-    // Diagnostic script
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then(() => {
-        console.log('PWA: Service Worker is active and ready.');
-      }).catch(err => {
-        console.error('PWA: Service Worker registration failed:', err);
-      });
-    }
-    
-    // Check manifest
-    fetch('/manifest.webmanifest')
-      .then(response => {
-        if (!response.ok) {
-          console.error('PWA: Failed to load manifest:', response.statusText);
-        } else {
-          console.log('PWA: Manifest loaded successfully');
-        }
-      })
-      .catch(err => {
-        console.error('PWA: Error fetching manifest:', err);
-      });
   }, []);
 
   // Automated trigger: push reminder to client 2 hours before their reservation
