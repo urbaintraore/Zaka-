@@ -3,7 +3,7 @@ import { RichTextEditor } from '../components/RichTextEditor';
 import { ClientsAndRequests } from '../components/ClientsAndRequests';
 import { GerantAnalytics } from '../components/GerantAnalytics';
 import { useAppStore } from '../store';
-import { LogOut, Plus, Store, Eye, MousePointerClick, X, Megaphone, Calendar, Users, FileText, Image as ImageIcon, MessageSquare, Download, Settings, ChefHat, Scissors } from 'lucide-react';
+import { LogOut, Plus, Store, Eye, MousePointerClick, X, Megaphone, Calendar, Users, FileText, Image as ImageIcon, MessageSquare, Download, Settings, ChefHat, Scissors, Trash2 } from 'lucide-react';
 import { Category, PubType } from '../types';
 import { compressImage } from '../utils/imageCompressor';
 import { useInstallApp } from '../hooks/useInstallApp';
@@ -19,7 +19,9 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
     unreadCount, 
     addEstablishment, 
     updateEstablishment,
+    deleteEstablishment,
     addPublication,
+    deletePublication,
     applications,
     updateApplicationStatus,
     createConversation,
@@ -63,6 +65,26 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
   const [estMenuImages, setEstMenuImages] = useState<string[]>([]);
   const [isUploadingMenuImg, setIsUploadingMenuImg] = useState(false);
   const [editingEstId, setEditingEstId] = useState<string | null>(null);
+
+  const handleDeleteEst = async (id: string, name: string) => {
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer définitivement l'établissement "${name}" ?`)) {
+      try {
+        await deleteEstablishment(id);
+      } catch (err) {
+        console.error("Erreur suppression etablissement:", err);
+      }
+    }
+  };
+
+  const handleDeletePub = async (id: string, title: string) => {
+    if (window.confirm(`Êtes-vous sûr de vouloir supprimer définitivement la publication "${title}" ?`)) {
+      try {
+        await deletePublication(id);
+      } catch (err) {
+        console.error("Erreur suppression publication:", err);
+      }
+    }
+  };
 
   const handleMenuImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -448,27 +470,36 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
               <div className="border-t border-gray-100 pt-3 mt-3">
                 <div className="flex items-center justify-between mb-2">
                   <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Actions rapides</h5>
-                  <button 
-                    onClick={() => {
-                      setEditingEstId(est.id);
-                      setEstName(est.name);
-                      setEstCategory(est.category);
-                      setEstCountry(est.country || 'Burkina Faso');
-                      setEstCity(est.city);
-                      setEstNeighborhood(est.neighborhood);
-                      setEstGeolocation(est.geolocation || '');
-                      setEstDescription(est.description || '');
-                      setEstPhotoUrl(est.photos && est.photos[0] ? est.photos[0] : '');
-                      setEstOpeningHours(est.openingHours || '');
-                      setEstTags(est.tags ? est.tags.join(', ') : '');
-                      setEstMenuPdfUrl(est.menuPdfUrl || '');
-                      setEstMenuImages(est.menuImages || []);
-                      setIsAdding(true);
-                    }}
-                    className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                  >
-                    <Settings className="w-3 h-3" /> Modifier les infos
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button 
+                      onClick={() => {
+                        setEditingEstId(est.id);
+                        setEstName(est.name);
+                        setEstCategory(est.category);
+                        setEstCountry(est.country || 'Burkina Faso');
+                        setEstCity(est.city);
+                        setEstNeighborhood(est.neighborhood);
+                        setEstGeolocation(est.geolocation || '');
+                        setEstDescription(est.description || '');
+                        setEstPhotoUrl(est.photos && est.photos[0] ? est.photos[0] : '');
+                        setEstOpeningHours(est.openingHours || '');
+                        setEstTags(est.tags ? est.tags.join(', ') : '');
+                        setEstMenuPdfUrl(est.menuPdfUrl || '');
+                        setEstMenuImages(est.menuImages || []);
+                        setIsAdding(true);
+                      }}
+                      className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Settings className="w-3 h-3" /> Modifier les infos
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteEst(est.id, est.name)}
+                      className="text-xs font-bold text-red-600 hover:text-red-750 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                      title="Supprimer l'établissement"
+                    >
+                      <Trash2 className="w-3 h-3" /> Supprimer
+                    </button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mb-4">
                   <button onClick={() => { setPubModalEstId(est.id); setPubModalType('promo'); }} className="flex flex-col items-center justify-center p-3 bg-orange-50 text-orange-600 hover:bg-orange-100 font-bold text-xs rounded-xl transition-colors text-center tracking-wide gap-1">
@@ -535,9 +566,16 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
                         <div className="text-sm font-bold text-gray-900 line-clamp-1">{pub.title}</div>
                         <div className="text-[10px] font-bold tracking-wider text-orange-500 uppercase">{pub.type.replace('_', ' ')}</div>
                       </div>
-                      <div className="flex items-center gap-3 text-xs font-medium text-gray-400">
+                      <div className="flex items-center gap-2.5 text-xs font-medium text-gray-400">
                         <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5"/> {pub.views}</span>
                         <span className="flex items-center gap-1"><MousePointerClick className="w-3.5 h-3.5"/> {pub.clicks}</span>
+                        <button 
+                          onClick={() => handleDeletePub(pub.id, pub.title)}
+                          className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors cursor-pointer ml-1"
+                          title="Supprimer la publication"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   ))}

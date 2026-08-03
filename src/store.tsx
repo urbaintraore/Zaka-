@@ -59,7 +59,9 @@ interface AppContextType extends AppState {
   }) => Promise<void>;
   addEstablishment: (est: Omit<Establishment, 'id' | 'status' | 'averageRating'>) => Promise<void>;
   updateEstablishment: (id: string, data: Partial<Establishment>) => Promise<void>;
+  deleteEstablishment: (id: string) => Promise<void>;
   addPublication: (pub: Omit<Publication, 'id' | 'views' | 'clicks' | 'createdAt'>) => Promise<void>;
+  deletePublication: (id: string) => Promise<void>;
   toggleFavorite: (clientId: string, establishmentId: string) => Promise<void>;
   updateFavoriteTags: (clientId: string, establishmentId: string, tags: string[]) => Promise<void>;
   saveAllFavoriteTags: (clientId: string, tagsMap: Record<string, string[]>) => Promise<void>;
@@ -868,7 +870,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               photos: registrationData.estData.photos || [],
               tags: registrationData.estData.tags || [],
               geolocation: registrationData.estData.geolocation || '',
-              status: 'valide',
+              status: 'en_attente',
               averageRating: 0
             };
             if (registrationData.role === 'salon_coiffure' || registrationData.estData.category === 'salon_de_coiffure') {
@@ -991,7 +993,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             photos: estData.photos || [],
             tags: estData.tags || [],
             geolocation: estData.geolocation || '',
-            status: 'valide',
+            status: 'en_attente',
             averageRating: 0
           };
           if (userData.role === 'salon_coiffure' || estData.category === 'salon_de_coiffure') {
@@ -1056,7 +1058,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       await addDoc(collection(db, 'establishments'), {
         ...est,
-        status: 'valide',
+        status: 'en_attente',
         averageRating: 0
       });
     } catch (error) {
@@ -1079,6 +1081,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const deleteEstablishment = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'establishments', id));
+    } catch (error: any) {
+      console.error("Erreur suppression etablissement:", error);
+      handleFirestoreError(error, OperationType.DELETE, `establishments/${id}`);
+    }
+  };
+
   const addPublication = async (pub: Omit<Publication, 'id' | 'views' | 'clicks' | 'createdAt'>) => {
     try {
       const cleanPub = Object.entries(pub).reduce((acc, [key, val]) => {
@@ -1096,6 +1107,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
     } catch (error) {
       console.error("Erreur ajout publication:", error);
+      throw error;
+    }
+  };
+
+  const deletePublication = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'publications', id));
+    } catch (error) {
+      console.error("Erreur suppression publication:", error);
       throw error;
     }
   };
@@ -1635,7 +1655,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       confirmerCodeOtp,
       addEstablishment,
       updateEstablishment,
+      deleteEstablishment,
       addPublication,
+      deletePublication,
       toggleFavorite,
       updateFavoriteTags,
       saveAllFavoriteTags,

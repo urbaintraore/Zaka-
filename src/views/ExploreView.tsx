@@ -115,7 +115,7 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
   };
 
   const filtered = establishments.filter(est => {
-    if (est.status === 'suspendu') return false;
+    if (est.status !== 'valide') return false;
     if (category !== 'all' && est.category !== category) return false;
     if (search) {
       const searchLower = search.toLowerCase();

@@ -340,6 +340,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
 
   // Get recent 5-star reviews on popular establishments (averageRating top 6)
   const popularEstsList = [...establishments]
+    .filter(e => e.status === 'valide')
     .sort((a, b) => b.averageRating - a.averageRating);
   const popularEstIdsSet = new Set(popularEstsList.slice(0, 6).map(e => e.id));
 
@@ -368,10 +369,13 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
   const promos = filteredPublications.filter(p => p.type === 'promo' || p.type === 'bon_plan');
   const annonces = filteredPublications.filter(p => p.type === 'annonce');
   
-  const topEstablishments = [...establishments].sort((a,b) => b.averageRating - a.averageRating).slice(0, 5);
+  const topEstablishments = [...establishments]
+    .filter(e => e.status === 'valide')
+    .sort((a,b) => b.averageRating - a.averageRating)
+    .slice(0, 5);
 
   const filteredEstablishments = filterMemberOnly
-    ? establishments.filter(e => joinedEstIds.includes(e.id))
+    ? establishments.filter(e => e.status === 'valide' && joinedEstIds.includes(e.id))
     : topEstablishments;
 
   // Calendar helpers

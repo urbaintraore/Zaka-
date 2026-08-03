@@ -4,7 +4,7 @@ import { StaffAttendance, StaffReview } from '../types';
 import { 
   Calendar as CalendarIcon, Download, Clock, AlertTriangle, Award, 
   Users, CheckCircle, XCircle, Plus, Trash2, BellRing, FileText, 
-  Eye, Check, ShieldAlert, Star, DollarSign, Image as ImageIcon, Sparkles 
+  Eye, Check, ShieldAlert, Star, DollarSign, Image as ImageIcon, Sparkles, HelpCircle, Archive, Send 
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 
@@ -21,8 +21,11 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
   
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [selectedStaffId, setSelectedStaffId] = useState<string>('all');
-  const [activeViewMode, setActiveViewMode] = useState<'list' | 'calendar' | 'reviews' | 'payroll'>('list');
+  const [activeViewMode, setActiveViewMode] = useState<'list' | 'calendar' | 'reviews' | 'payroll' | 'archive'>('list');
   
+  // Onboarding modal for new staff
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+
   // Threshold settings for alerts
   const [lateThresholdMinutes, setLateThresholdMinutes] = useState<number>(60);
   const [incidentThresholdCount, setIncidentThresholdCount] = useState<number>(3);
@@ -43,8 +46,6 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
 
   // Review management modal state
   const [reviewNoteInput, setReviewNoteInput] = useState<Record<string, string>>({});
-  const [reviewAmountInput, setReviewAmountInput] = useState<Record<string, string>>({});
-  const [reviewBonusType, setReviewBonusType] = useState<Record<string, 'bonus' | 'sanction'>>({});
 
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -61,6 +62,15 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
     const matchesStaff = selectedStaffId === 'all' || a.staffId === selectedStaffId;
     return matchesEst && matchesMonth && matchesStaff;
   });
+
+  // Pending photo justifications for automated manager alerts
+  const pendingPhotoJustifications = staffAttendances.filter(a => 
+    a.establishmentId === establishmentId && a.justificationPhotoUrl && (a.lateMinutes > 0 || a.earlyDepartureMinutes > 0)
+  );
+
+  // Available unique months in archives for this establishment
+  const allEstAttendances = staffAttendances.filter(a => a.establishmentId === establishmentId);
+  const archiveMonthsSet: string[] = (Array.from(new Set(allEstAttendances.map(a => a.date.slice(0, 7)))) as string[]).sort().reverse();
 
   // Calculate stats per staff for alerts & payroll
   const staffStatsMap: Record<string, { 
@@ -166,7 +176,7 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
   };
 
   // Generate PDF Report using jsPDF
-  const handleGeneratePDF = () => {
+  const handleGeneratePDF = (targetMonth = selectedMonth) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -181,7 +191,7 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Etablissement : ${establishmentName} | Mois : ${selectedMonth}`, 15, 25);
+    doc.text(`Etablissement : ${establishmentName} | Mois : ${targetMonth}`, 15, 25);
 
     // Summary KPI section
     doc.setTextColor(15, 23, 42);
@@ -231,8 +241,8 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
     });
 
     // Save PDF
-    doc.save(`Rapport_RH_${establishmentName.replace(/\s+/g, '_')}_${selectedMonth}.pdf`);
-    setSuccessMsg("Rapport PDF généré et téléchargé avec succès !");
+    doc.save(`Rapport_RH_${establishmentName.replace(/\s+/g, '_')}_${targetMonth}.pdf`);
+    setSuccessMsg(`Rapport PDF (${targetMonth}) généré et téléchargé avec succès !`);
     setTimeout(() => setSuccessMsg(null), 4000);
   };
 
@@ -259,6 +269,15 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowOnboardingModal(true)}
+            className="px-3 py-2 bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+            title="Guide pour les nouveaux employés"
+          >
+            <HelpCircle className="w-4 h-4 text-amber-600" /> Guide Employé
+          </button>
+
           <input
             type="month"
             value={selectedMonth}
@@ -300,7 +319,7 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
 
           <button
             type="button"
-            onClick={handleGeneratePDF}
+            onClick={() => handleGeneratePDF()}
             className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
           >
             <FileText className="w-4 h-4" /> Rapport PDF
@@ -315,13 +334,40 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
         </div>
       )}
 
+      {/* Automated Push Notification Banner for Pending Justifications with Photo */}
+      {pendingPhotoJustifications.length > 0 && (
+        <div className="p-4 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-900/50 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center flex-shrink-0 animate-bounce">
+              <Send className="w-5 h-5" />
+            </div>
+            <div>
+              <h5 className="font-black text-xs text-purple-900 dark:text-purple-200">
+                🔔 Notification Push au Gérant : {pendingPhotoJustifications.length} justificatif(s) avec photo en attente
+              </h5>
+              <p className="text-[11px] text-purple-700 dark:text-purple-400">
+                Des employés ont téléchargé des photos de justificatif de retard. Vérifiez les pointages pour valider rapidement.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveViewMode('list')}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer self-start sm:self-auto"
+          >
+            Examiner les justificatifs
+          </button>
+        </div>
+      )}
+
       {/* Navigation Sub-Tabs for RH Modes */}
-      <div className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 pb-3">
+      <div className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 pb-3 overflow-x-auto">
         {[
           { id: 'list', label: '📋 Liste des Pointages', icon: Clock },
           { id: 'calendar', label: '🗓️ Calendrier Interactif', icon: CalendarIcon },
           { id: 'reviews', label: '⭐ Avis & Notes Employés', icon: Star },
           { id: 'payroll', label: '💰 Paie & Bonus / Sanctions', icon: DollarSign },
+          { id: 'archive', label: '🗄️ Archives & Rapports', icon: Archive },
         ].map(tab => {
           const IconComp = tab.icon;
           const isActive = activeViewMode === tab.id;
@@ -329,7 +375,7 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
             <button
               key={tab.id}
               onClick={() => setActiveViewMode(tab.id as any)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
                 isActive 
                   ? 'bg-orange-600 text-white shadow-sm' 
                   : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -651,7 +697,6 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
               {estReviews.map(rev => {
                 const clientObj = users.find(u => u.id === rev.clientId);
                 const staffObj = users.find(u => u.id === rev.staffId);
-                const isPending = rev.status === 'en_attente';
 
                 return (
                   <div key={rev.id} className="p-4 bg-gray-50 dark:bg-gray-800/40 rounded-2xl border border-gray-150 dark:border-gray-800 space-y-3">
@@ -791,6 +836,108 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
         </div>
       )}
 
+      {/* VIEW MODE 5: ARCHIVES & MONTHLY PDF REPORTS */}
+      {activeViewMode === 'archive' && (
+        <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-150 dark:border-gray-800 p-5 shadow-sm space-y-4">
+          <div>
+            <h4 className="font-black text-sm text-gray-900 dark:text-white uppercase tracking-wider">
+              🗄️ Archives & Historique des Rapports Mensuels
+            </h4>
+            <p className="text-xs text-gray-400">Accédez aux données de présence et téléchargez les rapports PDF des mois précédents.</p>
+          </div>
+
+          {archiveMonthsSet.length === 0 ? (
+            <div className="p-10 bg-gray-50 dark:bg-gray-800/40 rounded-2xl text-center space-y-2">
+              <Archive className="w-10 h-10 text-gray-300 mx-auto" />
+              <p className="text-xs font-bold text-gray-400">Aucune archive mensuelle disponible pour l'instant.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {archiveMonthsSet.map(mStr => {
+                const countAtts = allEstAttendances.filter(a => a.date.startsWith(mStr)).length;
+                return (
+                  <div key={mStr} className="p-4 bg-gray-50 dark:bg-gray-800/40 rounded-2xl border border-gray-150 dark:border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h5 className="font-black text-sm text-gray-900 dark:text-white">
+                        Mois : {mStr} (Année {mStr.split('-')[0]})
+                      </h5>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {countAtts} pointage(s) enregistrés dans les archives.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedMonth(mStr);
+                          setActiveViewMode('list');
+                        }}
+                        className="px-3.5 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                      >
+                        Voir les données
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleGeneratePDF(mStr)}
+                        className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                      >
+                        <FileText className="w-4 h-4" /> Télécharger PDF
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Onboarding Modal for New Staff */}
+      {showOnboardingModal && (
+        <div className="fixed inset-0 bg-black/70 z-[140] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in" onClick={() => setShowOnboardingModal(false)}>
+          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-lg w-full p-6 space-y-4 relative shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+                <span>👋</span> Guide d'Accueil pour les Nouveaux Employés
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowOnboardingModal(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-gray-700 dark:text-gray-300">
+              <div className="p-3 bg-orange-50 dark:bg-orange-950/40 rounded-2xl border border-orange-200 dark:border-orange-900 space-y-1">
+                <h5 className="font-black text-orange-800 dark:text-orange-200">1. Suivi de vos Shifts & Pointages</h5>
+                <p>Chaque jour de travail (matinée ou soirée en maquis/boîte), votre présence et vos éventuels retards sont enregistrés par le gérant ou l'application.</p>
+              </div>
+
+              <div className="p-3 bg-purple-50 dark:bg-purple-950/40 rounded-2xl border border-purple-200 dark:border-purple-900 space-y-1">
+                <h5 className="font-black text-purple-800 dark:text-purple-200">2. Soumission de Justificatifs avec Photo</h5>
+                <p>En cas de retard ou de départ anticipé, vous pouvez joindre une photo justificative (panne, transport, etc.) qui avertira instantanément le gérant via une notification push pour validation rapide.</p>
+              </div>
+
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-900 space-y-1">
+                <h5 className="font-black text-emerald-800 dark:text-emerald-200">3. Statistiques & Primes / Bonus</h5>
+                <p>Consultez vos notes clients et votre historique de ponctualité pour décrocher les primes d'excellence mensuelles !</p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowOnboardingModal(false)}
+              className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm"
+            >
+              J'ai compris ! Commencer
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Add Attendance Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/60 z-[120] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
@@ -914,7 +1061,7 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
                       justification: attJustification,
                       justificationPhotoUrl: attPhotoUrl
                     });
-                    setSuccessMsg("Pointage journalier et justificatif enregistrés avec succès !");
+                    setSuccessMsg("Pointage journalier et justificatif enregistrés avec succès (Notification envoyée au gérant) !");
                     setShowAddModal(false);
                     setAttLateMinutes('0');
                     setAttEarlyMinutes('0');
