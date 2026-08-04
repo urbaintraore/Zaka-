@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../store';
 import { Tab } from '../components/BottomNav';
-import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight, Eye, Trophy, TrendingUp, Award, Clock } from 'lucide-react';
 import { stripHtml } from '../utils/htmlHelpers';
 import { ReservationModal } from '../components/ReservationModal';
 import { Publication, Establishment } from '../types';
@@ -25,6 +25,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
   const [reservationEst, setReservationEst] = useState<{ id: string, name: string } | null>(null);
   const [selectedPub, setSelectedPub] = useState<Publication | null>(null);
   const [filterMemberOnly, setFilterMemberOnly] = useState(false);
+  const [showExpired, setShowExpired] = useState(false);
   const [activePubTab, setActivePubTab] = useState<'info' | 'photos' | 'wall'>('info');
   const [mapCategory, setMapCategory] = useState<string>('Tous');
 
@@ -51,6 +52,58 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
   const [selectedRankEst, setSelectedRankEst] = useState<Establishment | null>(null);
   const [recalcTrigger, setRecalcTrigger] = useState(0);
 
+  // Community Favorites State (Coups de cœur de la communauté)
+  const [popularEstsByFavorites, setPopularEstsByFavorites] = useState<{ id: string; favoritesCount: number }[]>([]);
+  const [isPopularLoading, setIsPopularLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const fetchFavoritesAndCalculatePopularity = async () => {
+      try {
+        setIsPopularLoading(true);
+        const { collection, getDocs } = await import('firebase/firestore');
+        const favSnap = await getDocs(collection(db, 'favorites'));
+        if (!active) return;
+
+        const counts: Record<string, number> = {};
+        favSnap.forEach(docSnap => {
+          const data = docSnap.data();
+          const estIds = data?.establishmentIds || [];
+          estIds.forEach((id: string) => {
+            counts[id] = (counts[id] || 0) + 1;
+          });
+        });
+
+        // Map and sort establishments by favorite count
+        const estsWithCounts = Object.entries(counts)
+          .map(([id, count]) => ({ id, favoritesCount: count }))
+          .sort((a, b) => b.favoritesCount - a.favoritesCount);
+
+        setPopularEstsByFavorites(estsWithCounts);
+      } catch (err) {
+        console.error("Erreur lors de la récupération des favoris pour les Coups de cœur:", err);
+        // Fallback: use establishments list sorted by averageRating (simulating counts using rating)
+        const fallback = establishments
+          .filter(e => e.status === 'valide')
+          .map(e => ({ id: e.id, favoritesCount: Math.round(e.averageRating * 3) }))
+          .sort((a, b) => b.favoritesCount - a.favoritesCount);
+        if (active) {
+          setPopularEstsByFavorites(fallback);
+        }
+      } finally {
+        if (active) {
+          setIsPopularLoading(false);
+        }
+      }
+    };
+
+    fetchFavoritesAndCalculatePopularity();
+
+    return () => {
+      active = false;
+    };
+  }, [establishments, reviews]);
+
   // Simulation Panel state
   const [showSimPanel, setShowSimPanel] = useState(false);
   const [simMessage, setSimMessage] = useState<string | null>(null);
@@ -65,40 +118,22 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
         const docRef = doc(db, 'rankings', 'cache');
         const docSnap = await getDoc(docRef);
         
-        let needsRecalculate = false;
         let cachedData = null;
-        
         if (docSnap.exists()) {
           cachedData = docSnap.data();
-          const updatedAtStr = cachedData.updatedAt;
-          if (updatedAtStr) {
-            const updatedAt = new Date(updatedAtStr);
-            const now = new Date();
-            const isSameDay = updatedAt.toDateString() === now.toDateString();
-            const diffHours = Math.abs(now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60);
-            if (!isSameDay && diffHours >= 24) {
-              needsRecalculate = true;
-            }
-          } else {
-            needsRecalculate = true;
-          }
-        } else {
-          needsRecalculate = true;
-        }
-
-        if (needsRecalculate) {
-          console.log("[Rankings] Stale or missing cache, recalculating...");
-          await runRecalculate();
-        } else if (cachedData) {
-          if (active) {
+          if (active && cachedData) {
             setRankings({
               mostViewed: cachedData.mostViewed || [],
               bestRated: cachedData.bestRated || [],
               popularEvents: cachedData.popularEvents || [],
               updatedAt: cachedData.updatedAt || null,
             });
+            setIsRankingsLoading(false);
           }
         }
+        
+        // Always run the fresh real-time recalculation in the background
+        await runRecalculate();
       } catch (err) {
         console.error("Erreur lors du chargement des classements:", err);
         await runRecalculate();
@@ -111,18 +146,17 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
       if (isRecalculating) return;
       setIsRecalculating(true);
       try {
-        const { getDocs, collection, setDoc, doc } = await import('firebase/firestore');
+        const { getDocs, collection, query, where, setDoc, doc } = await import('firebase/firestore');
         const nowStr = new Date().toISOString();
-        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const sevenDaysAgoDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const sevenDaysAgo = sevenDaysAgoDate.toISOString();
         
         let rawEstViews: any[] = [];
         try {
-          const estViewsSnap = await getDocs(collection(db, 'establishment_views'));
+          const qEstViews = query(collection(db, 'establishment_views'), where('timestamp', '>=', sevenDaysAgo));
+          const estViewsSnap = await getDocs(qEstViews);
           estViewsSnap.forEach(d => {
-            const data = d.data();
-            if (data.timestamp && data.timestamp >= sevenDaysAgo) {
-              rawEstViews.push(data);
-            }
+            rawEstViews.push(d.data());
           });
         } catch (e) {
           console.error("Erreur query establishment_views:", e);
@@ -130,25 +164,43 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
 
         let rawPubViews: any[] = [];
         try {
-          const pubViewsSnap = await getDocs(collection(db, 'publication_views'));
+          const qPubViews = query(collection(db, 'publication_views'), where('timestamp', '>=', sevenDaysAgo));
+          const pubViewsSnap = await getDocs(qPubViews);
           pubViewsSnap.forEach(d => {
-            const data = d.data();
-            if (data.timestamp && data.timestamp >= sevenDaysAgo) {
-              rawPubViews.push(data);
-            }
+            rawPubViews.push(d.data());
           });
         } catch (e) {
           console.error("Erreur query publication_views:", e);
         }
 
-        // --- CALCULATE ESTABLISHMENT VIEWS RANKING ---
+        let rawParticipations: any[] = [];
+        try {
+          const qParticipations = query(collection(db, 'event_participations'), where('timestamp', '>=', sevenDaysAgo));
+          const participationsSnap = await getDocs(qParticipations);
+          participationsSnap.forEach(d => {
+            rawParticipations.push(d.data());
+          });
+        } catch (e) {
+          console.error("Erreur query event_participations:", e);
+        }
+
+        // --- CALCULATE ESTABLISHMENT VIEWS RANKING (Top des plus vus) ---
         const viewCounts: Record<string, number> = {};
         rawEstViews.forEach(v => {
           const estId = v.establishmentId;
           const est = establishments.find(e => e.id === estId);
           if (!est) return;
+          
+          // Exclure les vues du propriétaire de l'établissement
           if (v.userId && v.userId === est.ownerId) {
-            return; // Skip views by owner
+            return;
+          }
+          // Exclure les vues des utilisateurs ayant le rôle de gérant ou d'administrateur
+          if (v.userId) {
+            const viewerUser = users?.find(u => u.id === v.userId);
+            if (viewerUser && (viewerUser.role === 'gerant' || viewerUser.role === 'admin')) {
+              return;
+            }
           }
           viewCounts[estId] = (viewCounts[estId] || 0) + 1;
         });
@@ -158,11 +210,19 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           .sort((a, b) => b.count - a.count)
           .slice(0, 10);
 
-        // --- CALCULATE BEST RATED RANKING ---
+        // --- CALCULATE BEST RATED RANKING (Les mieux notés - 7 jours glissants, min 3 avis) ---
         const bestRatedList = establishments
           .map(est => {
-            const estReviews = reviews.filter(r => r.establishmentId === est.id);
+            // Filtrer les avis de l'établissement laissés au cours des 7 derniers jours uniquement
+            const estReviews = reviews.filter(r => {
+              if (r.establishmentId !== est.id) return false;
+              const rDate = new Date(r.date || (r as any).createdAt || 0);
+              return rDate >= sevenDaysAgoDate;
+            });
+            
+            // Appliquer le seuil minimal de 3 avis récents requis
             if (estReviews.length < 3) return null;
+            
             const average = estReviews.reduce((sum, r) => sum + r.rating, 0) / estReviews.length;
             return {
               establishmentId: est.id,
@@ -173,11 +233,11 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           .filter((item): item is { establishmentId: string; rating: number; reviewsCount: number } => item !== null)
           .sort((a, b) => {
             if (b.rating !== a.rating) return b.rating - a.rating;
-            return b.reviewsCount - a.reviewsCount;
+            return b.reviewsCount - a.reviewsCount; // Tri secondaire par volume d'avis récents
           })
           .slice(0, 10);
 
-        // --- CALCULATE POPULAR EVENTS RANKING ---
+        // --- CALCULATE POPULAR EVENTS RANKING (Événements populaires - 7 jours glissants) ---
         const todayStr = new Date().toISOString().split('T')[0];
         const activeEvents = publications.filter(pub => {
           if (pub.type !== 'evenement') return false;
@@ -186,23 +246,35 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           return dateCheck.split('T')[0] >= todayStr;
         });
 
-        const eventViewCounts: Record<string, number> = {};
+        const eventPopularityCounts: Record<string, number> = {};
+        
+        // 1. Ajouter les vues de publication de l'événement des 7 derniers jours (en excluant gérants/propriétaires)
         rawPubViews.forEach(v => {
           const pubId = v.publicationId;
           const pub = activeEvents.find(p => p.id === pubId);
           if (!pub) return;
           
           const est = establishments.find(e => e.id === pub.establishmentId);
-          if (est && v.userId && v.userId === est.ownerId) {
-            return;
+          if (est && v.userId) {
+            if (v.userId === est.ownerId) return;
+            const viewerUser = users?.find(u => u.id === v.userId);
+            if (viewerUser && (viewerUser.role === 'gerant' || viewerUser.role === 'admin')) return;
           }
-          eventViewCounts[pubId] = (eventViewCounts[pubId] || 0) + 1;
+          eventPopularityCounts[pubId] = (eventPopularityCounts[pubId] || 0) + 1;
+        });
+
+        // 2. Ajouter les participations aux événements des 7 derniers jours (poids de 5 pour leur impact d'enjaillement)
+        rawParticipations.forEach(p => {
+          const pubId = p.eventId;
+          const pub = activeEvents.find(e => e.id === pubId);
+          if (!pub) return;
+          eventPopularityCounts[pubId] = (eventPopularityCounts[pubId] || 0) + 5;
         });
 
         const popularEvents = activeEvents
           .map(pub => ({
             publicationId: pub.id,
-            count: eventViewCounts[pub.id] || 0
+            count: eventPopularityCounts[pub.id] || 0
           }))
           .sort((a, b) => b.count - a.count)
           .slice(0, 10);
@@ -233,7 +305,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
     return () => {
       active = false;
     };
-  }, [establishments, publications, reviews, recalcTrigger]);
+  }, [establishments, publications, reviews, recalcTrigger, users]);
 
   const handleSimulateViews = async (recent: boolean) => {
     try {
@@ -280,6 +352,54 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
       setSimMessage(`Succès: Vue Gérant sur sa propre fiche ajoutée pour ${est.name} (exclue du classement).`);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleSimulateGerantRoleView = async () => {
+    try {
+      const { addDoc, collection } = await import('firebase/firestore');
+      if (establishments.length === 0) {
+        setSimMessage("Aucun établissement disponible.");
+        return;
+      }
+      const est = establishments[0];
+      const gerantUser = users?.find(u => u.role === 'gerant') || { id: 'simulated-gerant-id' };
+      
+      await addDoc(collection(db, 'establishment_views'), {
+        establishmentId: est.id,
+        userId: gerantUser.id,
+        timestamp: new Date().toISOString()
+      });
+      setSimMessage(`Succès: Vue par un compte de rôle Gérant simulée pour ${est.name} (exclue du classement).`);
+    } catch (err) {
+      console.error(err);
+      setSimMessage("Erreur lors de la simulation.");
+    }
+  };
+
+  const handleSimulateRecentReviews = async () => {
+    try {
+      const { addDoc, collection } = await import('firebase/firestore');
+      if (establishments.length === 0) {
+        setSimMessage("Aucun établissement disponible.");
+        return;
+      }
+      const est = establishments[0];
+      const recentDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      
+      for (let i = 0; i < 3; i++) {
+        await addDoc(collection(db, 'reviews'), {
+          clientId: 'test-client-' + Math.random().toString(36).substring(2, 6),
+          establishmentId: est.id,
+          rating: 5,
+          comment: `Super expérience récente ! (Simulé #${i + 1})`,
+          date: recentDate
+        });
+      }
+      setSimMessage(`Succès: 3 avis récents (5★) ajoutés pour ${est.name} pour valider le seuil de 3 avis sur 7 jours.`);
+    } catch (err) {
+      console.error(err);
+      setSimMessage("Erreur lors de la simulation des avis.");
     }
   };
 
@@ -338,20 +458,43 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
     };
   };
 
-  // Get recent 5-star reviews on popular establishments (averageRating top 6)
-  const popularEstsList = [...establishments]
-    .filter(e => e.status === 'valide')
-    .sort((a, b) => b.averageRating - a.averageRating);
-  const popularEstIdsSet = new Set(popularEstsList.slice(0, 6).map(e => e.id));
+  // Get recent 5-star reviews on popular establishments (based on favorites count calculated via Firestore query)
+  const topPopularEstIds = new Set(popularEstsByFavorites.slice(0, 10).map(e => e.id));
 
-  const popularFiveStarReviews = reviews
-    .filter(r => r.rating === 5 && popularEstIdsSet.has(r.establishmentId))
+  const communityFavoritesReviews = reviews
+    .filter(r => r.rating === 5 && (topPopularEstIds.size > 0 ? topPopularEstIds.has(r.establishmentId) : true))
     .sort((a, b) => {
       const dateA = new Date((a as any).createdAt || a.date || 0).getTime();
       const dateB = new Date((b as any).createdAt || b.date || 0).getTime();
       return dateB - dateA;
     })
     .slice(0, 6);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const now = new Date();
+
+  // Helper to check if a date is older than X days
+  const isOlderThanDays = (dateStr: string, days: number) => {
+    const date = new Date(dateStr);
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > days;
+  };
+
+  // Helper to check if a publication is considered "New" (< 48 hours)
+  const isNewPublication = (dateStr?: string) => {
+    if (!dateStr) return false;
+    const date = new Date(dateStr);
+    const diffHours = Math.abs(now.getTime() - date.getTime()) / (1000 * 60 * 60);
+    return diffHours <= 48;
+  };
+
+  // Helper to check if an event is happening today
+  const isEventSoonOrToday = (startDateStr?: string) => {
+    if (!startDateStr) return false;
+    const start = startDateStr.split('T')[0];
+    return start === todayStr;
+  };
 
   // Filter based on member status if active
   const joinedEstIds = currentUser
@@ -360,14 +503,60 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
         .map(r => r.establishmentId)
     : [];
 
-  const filteredPublications = filterMemberOnly
+  const basePublications = filterMemberOnly
     ? publications.filter(p => joinedEstIds.includes(p.establishmentId))
     : publications;
 
-  // Group by type
-  const events = filteredPublications.filter(p => p.type === 'evenement');
-  const promos = filteredPublications.filter(p => p.type === 'promo' || p.type === 'bon_plan');
-  const annonces = filteredPublications.filter(p => p.type === 'annonce');
+  // Process each publication to calculate status, freshness and soon indicators
+  const processedPublications = basePublications.map(pub => {
+    const isNew = isNewPublication(pub.createdAt);
+    let isExpired = pub.status === 'expiree';
+    
+    // Check specific expiration rules
+    if (pub.type === 'evenement') {
+      const dateCheck = pub.endDate || pub.startDate || '';
+      if (dateCheck && dateCheck.split('T')[0] < todayStr) {
+        isExpired = true;
+      }
+    } else {
+      // Promos and announcements
+      if (pub.endDate && pub.endDate.split('T')[0] < todayStr) {
+        isExpired = true;
+      } else if (!pub.endDate && pub.createdAt && isOlderThanDays(pub.createdAt, 15)) {
+        // Automatically expire after 15 days if no end date specified to keep the homepage fresh
+        isExpired = true;
+      }
+    }
+
+    return {
+      ...pub,
+      isNew,
+      isExpired,
+      isSoon: pub.type === 'evenement' ? isEventSoonOrToday(pub.startDate) : false
+    };
+  });
+
+  // Filter based on user preference (show/hide expired)
+  const activePublications = showExpired 
+    ? processedPublications 
+    : processedPublications.filter(p => !p.isExpired);
+
+  // Sort: Boosted first, then descending order of creation (freshness)
+  const sortedPublications = [...activePublications].sort((a, b) => {
+    if (a.status === 'boostee' && b.status !== 'boostee') return -1;
+    if (a.status !== 'boostee' && b.status === 'boostee') return 1;
+    
+    const dateA = new Date(a.createdAt || 0).getTime();
+    const dateB = new Date(b.createdAt || 0).getTime();
+    return dateB - dateA;
+  });
+
+  type ProcessedPub = Publication & { isNew: boolean; isExpired: boolean; isSoon: boolean };
+
+  // Group by type for rendering
+  const events = sortedPublications.filter(p => p.type === 'evenement') as ProcessedPub[];
+  const promos = sortedPublications.filter(p => p.type === 'promo' || p.type === 'bon_plan') as ProcessedPub[];
+  const annonces = sortedPublications.filter(p => p.type === 'annonce') as ProcessedPub[];
   
   const topEstablishments = [...establishments]
     .filter(e => e.status === 'valide')
@@ -507,20 +696,20 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
       {/* Ephemeral Stories (Style Instagram) */}
       <StoriesSection onStartChat={onStartChat} />
 
-      {/* Dynamic Widget: Recent 5-Star Reviews */}
-      {popularFiveStarReviews.length > 0 && (
-        <div className="px-4" id="popular-reviews-widget">
+      {/* Dynamic Widget: Coups de cœur de la communauté */}
+      {communityFavoritesReviews.length > 0 && (
+        <div className="px-4" id="community-favorites-widget">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-yellow-500 animate-pulse" />
               <div>
-                <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">La Crème de Zaka 🔥</h3>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Derniers avis 5★ sur les adresses phares</p>
+                <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Coups de cœur de la communauté 💖</h3>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Derniers avis 5★ sur les adresses les plus populaires</p>
               </div>
             </div>
           </div>
           <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-3.5 px-0.5">
-            {popularFiveStarReviews.map(review => {
+            {communityFavoritesReviews.map(review => {
               const est = getEst(review.establishmentId);
               if (!est) return null;
               
@@ -528,6 +717,10 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
               const reviewerUser = users?.find(u => u.id === review.clientId);
               const reviewerName = reviewerUser?.name || 'Initié Club';
               const reviewerAvatar = reviewerUser?.avatar || '';
+
+              // Find the favorites count for this establishment
+              const favData = popularEstsByFavorites.find(p => p.id === review.establishmentId);
+              const favCount = favData ? favData.favoritesCount : 0;
               
               return (
                 <motion.div
@@ -574,20 +767,22 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                     </p>
                   </div>
 
-                  {/* Footer: Establishment & Popular Badge */}
+                  {/* Footer: Establishment & Popularity Badge */}
                   <div className="mt-4 pt-3.5 border-t border-gray-100 dark:border-gray-900 flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <div className="text-xs font-black text-gray-900 dark:text-white truncate">
                         {est.name}
                       </div>
                       <div className="text-[9px] text-gray-400 font-bold uppercase tracking-wider truncate">
-                        📍 {est.neighborhood}
+                        📍 {est.neighborhood || 'Burkina'}
                       </div>
                     </div>
-                    <span className="shrink-0 text-[8px] font-black uppercase bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-400 px-2 py-0.5 rounded-full border border-orange-200 dark:border-orange-900/30 flex items-center gap-0.5">
-                      <span>Populaire</span>
-                      <Flame className="w-2.5 h-2.5 fill-current animate-pulse" />
-                    </span>
+                    {favCount > 0 && (
+                      <span className="shrink-0 text-[8px] font-black uppercase bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-400 px-2 py-0.5 rounded-full border border-orange-200 dark:border-orange-900/30 flex items-center gap-0.5">
+                        <Heart className="w-2 h-2 fill-current text-orange-600 dark:text-orange-400" />
+                        <span>{favCount} favori{favCount > 1 ? 's' : ''}</span>
+                      </span>
+                    )}
                   </div>
                 </motion.div>
               );
@@ -597,382 +792,286 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
       )}
 
       <div className="px-4 flex flex-col gap-8">
-        {/* WIDGET DES DERNIERS AVIS 5 ÉTOILES */}
-        {(() => {
-          const popularEsts = (establishments || [])
-            .filter(e => e.status === 'valide' && e.averageRating >= 4.0)
-            .map(e => e.id);
-
-          const latestFiveStarReviews = (reviews || [])
-            .filter(r => r.rating === 5 && popularEsts.includes(r.establishmentId))
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-            .slice(0, 5);
-
-          if (latestFiveStarReviews.length === 0) return null;
-
-          return (
-            <section className="bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent p-6 rounded-3xl border border-orange-100/60 dark:border-orange-900/30 shadow-xs">
-              <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-9 h-9 bg-yellow-400 text-white rounded-xl flex items-center justify-center shadow-md shadow-yellow-400/20">
-                  <Star className="w-5 h-5 fill-current text-white" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-gray-950 dark:text-white uppercase tracking-wider">Avis d'Exception 🌟</h3>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold">Les derniers 5★ sur vos adresses populaires</p>
-                </div>
-              </div>
-
-              <div className="flex gap-4 overflow-x-auto hide-scrollbar py-1">
-                {latestFiveStarReviews.map(review => {
-                  const est = establishments.find(e => e.id === review.establishmentId);
-                  if (!est) return null;
-                  const author = users.find(u => u.id === review.clientId);
-                  const authorName = author ? author.name : 'Membre Zaka+';
-
-                  return (
-                    <div 
-                      key={review.id}
-                      className="shrink-0 w-64 bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs flex flex-col justify-between space-y-3 cursor-pointer hover:border-orange-200 dark:hover:border-orange-950 transition-all active:scale-[0.98]"
-                      onClick={() => {
-                        setSelectedRankEst(est);
-                      }}
-                    >
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-extrabold text-orange-600 bg-orange-50 dark:bg-orange-950/40 px-2 py-0.5 rounded-full uppercase">
-                            {est.category.replace(/_/g, ' ')}
-                          </span>
-                          <div className="flex gap-0.5 text-yellow-400">
-                            {Array.from({ length: 5 }).map((_, i) => (
-                              <Star key={i} className="w-3 h-3 fill-current" />
-                            ))}
-                          </div>
-                        </div>
-
-                        <h4 className="font-extrabold text-xs text-gray-950 dark:text-white truncate">{est.name}</h4>
-                        <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-2 font-medium leading-relaxed italic">
-                          💬 "{review.comment}"
-                        </p>
-                      </div>
-
-                      <div className="pt-2 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between text-[9px] font-bold text-gray-400">
-                        <span className="text-gray-800 dark:text-gray-300 font-extrabold truncate max-w-[120px]">{authorName}</span>
-                        <span>
-                          {new Date(review.date).toLocaleDateString('fr-FR', {
-                            day: 'numeric',
-                            month: 'short'
-                          })}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })()}
-
-        {/* SECTION CLASSEMENTS HEBDOMADAIRES */}
-        <section className="bg-white dark:bg-gray-950 p-6 rounded-3xl border border-gray-100 dark:border-gray-900 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+        {/* SECTION PALMARÈS ET CLASSEMENTS DYNAMIQUES */}
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-yellow-500 animate-pulse" />
-                <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">Le Top de la Semaine</h2>
+                <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">Le Palmarès de la Semaine</h2>
               </div>
               <p className="text-xs text-gray-500 mt-1 font-medium">
-                Découvrez nos classements mis à jour quotidiennement
+                Calculs dynamiques en temps réel sur un intervalle glissant de 7 jours
               </p>
             </div>
             {rankings?.updatedAt && (
               <span className="text-[10px] self-start sm:self-center font-bold px-2.5 py-1 rounded-full bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-100 dark:border-green-900/40">
-                🔄 Mis à jour aujourd'hui
+                ⚡ Mis à jour en direct
               </span>
             )}
           </div>
 
-          {/* Tabs navigation */}
-          <div className="grid grid-cols-3 gap-1 bg-gray-100 dark:bg-gray-900 p-1 rounded-2xl mb-6">
-            <button
-              onClick={() => setActiveRankTab('views')}
-              className={`py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
-                activeRankTab === 'views'
-                  ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs'
-                  : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              <span className="text-base">👁️</span>
-              <span>Plus vus</span>
-            </button>
-            <button
-              onClick={() => setActiveRankTab('rating')}
-              className={`py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
-                activeRankTab === 'rating'
-                  ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs'
-                  : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              <span className="text-base">⭐</span>
-              <span>Mieux notés</span>
-            </button>
-            <button
-              onClick={() => setActiveRankTab('events')}
-              className={`py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
-                activeRankTab === 'events'
-                  ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs'
-                  : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              <span className="text-base">🔥</span>
-              <span>Ça bouge</span>
-            </button>
+          <div className="grid grid-cols-1 gap-6">
+            {/* Widget 1: Top des plus vus */}
+            <div className="bg-white dark:bg-gray-950 p-6 rounded-3xl border border-gray-100 dark:border-gray-900 shadow-xs flex flex-col gap-4">
+              <div className="flex items-center justify-between pb-2 border-b border-gray-50 dark:border-gray-900">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center text-orange-600">
+                    <Eye className="w-4.5 h-4.5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Top des plus vus</h3>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Exclut les vues des gérants/propriétaires</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400 border border-orange-100 dark:border-orange-900/20">
+                  7j glissants
+                </span>
+              </div>
+
+              {isRankingsLoading ? (
+                <div className="py-6 text-center text-xs text-gray-400 animate-pulse">Chargement des visites...</div>
+              ) : (!rankings?.mostViewed || rankings.mostViewed.length === 0) ? (
+                <div className="text-center py-6 text-xs text-gray-400">
+                  Aucune visite récente de gérants non-propriétaires enregistrée.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  {rankings.mostViewed.slice(0, 5).map((item, index) => {
+                    const est = getEst(item.establishmentId);
+                    if (!est) return null;
+                    const imageUrl = est.photos?.[0] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400';
+                    return (
+                      <div
+                        key={est.id}
+                        onClick={() => setSelectedRankEst(est)}
+                        className="flex items-center gap-3 p-2 rounded-2xl hover:bg-orange-50/10 transition-all cursor-pointer group"
+                      >
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs flex-shrink-0 ${
+                          index === 0 ? 'bg-yellow-100 text-yellow-700 ring-1 ring-yellow-400' :
+                          index === 1 ? 'bg-slate-100 text-slate-700' :
+                          index === 2 ? 'bg-orange-100 text-orange-700' :
+                          'bg-gray-50 text-gray-400 dark:bg-gray-900 dark:text-gray-500'
+                        }`}>
+                          {index === 0 ? '👑' : index + 1}
+                        </div>
+                        <img src={imageUrl} alt={est.name} className="w-9 h-9 rounded-xl object-cover flex-shrink-0 bg-gray-100" referrerPolicy="no-referrer" />
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-gray-900 dark:text-gray-100 text-xs sm:text-sm group-hover:text-orange-600 transition-colors truncate">{est.name}</h4>
+                          <p className="text-[10px] text-gray-500 capitalize truncate mt-0.5">
+                            {est.category.replace(/_/g, ' ')} • {est.neighborhood}
+                          </p>
+                        </div>
+                        <span className="text-[11px] font-extrabold text-orange-600 bg-orange-50 dark:bg-orange-950/40 px-2 py-0.5 rounded-lg flex-shrink-0">
+                          {item.count} vue{item.count > 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Widget 2: Les mieux notés */}
+            <div className="bg-white dark:bg-gray-950 p-6 rounded-3xl border border-gray-100 dark:border-gray-900 shadow-xs flex flex-col gap-4">
+              <div className="flex items-center justify-between pb-2 border-b border-gray-50 dark:border-gray-900">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-yellow-50 dark:bg-yellow-950/30 flex items-center justify-center text-yellow-600">
+                    <Trophy className="w-4.5 h-4.5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Les mieux notés</h3>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Minimum de 3 avis récents requis</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-400 border border-yellow-100 dark:border-yellow-900/20">
+                  7j glissants
+                </span>
+              </div>
+
+              {isRankingsLoading ? (
+                <div className="py-6 text-center text-xs text-gray-400 animate-pulse">Chargement des avis récents...</div>
+              ) : (!rankings?.bestRated || rankings.bestRated.length === 0) ? (
+                <div className="text-center py-6 text-xs text-gray-400 flex flex-col gap-1.5 items-center">
+                  <span>Aucun établissement n'a reçu 3 avis au cours des 7 derniers jours.</span>
+                  <span className="text-[10px] text-orange-500 font-bold">💡 Utilisez le simulateur en bas de page pour ajouter 3 avis récents en 1 clic !</span>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  {rankings.bestRated.slice(0, 5).map((item, index) => {
+                    const est = getEst(item.establishmentId);
+                    if (!est) return null;
+                    const imageUrl = est.photos?.[0] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400';
+                    return (
+                      <div
+                        key={est.id}
+                        onClick={() => setSelectedRankEst(est)}
+                        className="flex items-center gap-3 p-2 rounded-2xl hover:bg-orange-50/10 transition-all cursor-pointer group"
+                      >
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs flex-shrink-0 ${
+                          index === 0 ? 'bg-yellow-100 text-yellow-700 ring-1 ring-yellow-400' :
+                          index === 1 ? 'bg-slate-100 text-slate-700' :
+                          index === 2 ? 'bg-orange-100 text-orange-700' :
+                          'bg-gray-50 text-gray-400 dark:bg-gray-900 dark:text-gray-500'
+                        }`}>
+                          {index === 0 ? '👑' : index + 1}
+                        </div>
+                        <img src={imageUrl} alt={est.name} className="w-9 h-9 rounded-xl object-cover flex-shrink-0 bg-gray-100" referrerPolicy="no-referrer" />
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-gray-900 dark:text-gray-100 text-xs sm:text-sm group-hover:text-orange-600 transition-colors truncate">{est.name}</h4>
+                          <p className="text-[10px] text-gray-500 capitalize truncate mt-0.5">
+                            {est.category.replace(/_/g, ' ')} • {est.neighborhood}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end flex-shrink-0">
+                          <span className="text-[11px] font-extrabold text-yellow-600 bg-yellow-50 dark:bg-yellow-950/40 px-2.5 py-0.5 rounded-lg flex items-center gap-0.5">
+                            <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
+                            {item.rating.toFixed(1)}
+                          </span>
+                          <span className="text-[9px] text-gray-400 font-bold mt-0.5 uppercase tracking-tight">
+                            {item.reviewsCount} avis
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Widget 3: Événements populaires */}
+            <div className="bg-white dark:bg-gray-950 p-6 rounded-3xl border border-gray-100 dark:border-gray-900 shadow-xs flex flex-col gap-4">
+              <div className="flex items-center justify-between pb-2 border-b border-gray-50 dark:border-gray-900">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center text-blue-600">
+                    <Flame className="w-4.5 h-4.5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Événements populaires</h3>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Vues de l'événement + participations récentes</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-100 dark:border-blue-900/20">
+                  7j glissants
+                </span>
+              </div>
+
+              {isRankingsLoading ? (
+                <div className="py-6 text-center text-xs text-gray-400 animate-pulse">Chargement de l'enjaillement...</div>
+              ) : (!rankings?.popularEvents || rankings.popularEvents.length === 0) ? (
+                <div className="text-center py-6 text-xs text-gray-400">
+                  Aucun événement populaire enregistré cette semaine.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  {rankings.popularEvents.slice(0, 5).map((item, index) => {
+                    const pub = publications.find(p => p.id === item.publicationId);
+                    if (!pub) return null;
+                    const est = getEst(pub.establishmentId);
+                    const imageUrl = pub.imageUrl || (est?.photos?.[0]) || 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=400';
+                    return (
+                      <div
+                        key={pub.id}
+                        onClick={() => setSelectedPub(pub)}
+                        className="flex items-center gap-3 p-2 rounded-2xl hover:bg-orange-50/10 transition-all cursor-pointer group"
+                      >
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs flex-shrink-0 ${
+                          index === 0 ? 'bg-yellow-100 text-yellow-700 ring-1 ring-yellow-400' :
+                          index === 1 ? 'bg-slate-100 text-slate-700' :
+                          index === 2 ? 'bg-orange-100 text-orange-700' :
+                          'bg-gray-50 text-gray-400 dark:bg-gray-900 dark:text-gray-500'
+                        }`}>
+                          {index === 0 ? '👑' : index + 1}
+                        </div>
+                        <img src={imageUrl} alt={pub.title} className="w-9 h-9 rounded-xl object-cover flex-shrink-0 bg-gray-100" referrerPolicy="no-referrer" />
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-gray-900 dark:text-gray-100 text-xs sm:text-sm group-hover:text-orange-600 transition-colors truncate">{pub.title}</h4>
+                          <p className="text-[10px] text-gray-500 truncate mt-0.5">
+                            Chez {est?.name || 'Partenaire'} • {pub.startDate ? new Date(pub.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : 'Cette semaine'}
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-extrabold text-blue-600 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-lg flex-shrink-0">
+                          🔥 {item.count} pop
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Rankings List */}
-          {isRankingsLoading ? (
-            <div className="py-12 text-center text-sm text-gray-500 animate-pulse">
-              Chargement des classements en cours...
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {activeRankTab === 'views' && (
-                <>
-                  {(!rankings?.mostViewed || rankings.mostViewed.length === 0) ? (
-                    <div className="text-center py-8 text-xs text-gray-500">
-                      Aucune donnée de visite récente pour le moment.
-                    </div>
-                  ) : (
-                    rankings.mostViewed.map((item, index) => {
-                      const est = getEst(item.establishmentId);
-                      if (!est) return null;
-                      const imageUrl = est.photos?.[0] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400';
-                      return (
-                        <div
-                          key={est.id}
-                          onClick={() => setSelectedRankEst(est)}
-                          className="flex items-center gap-4 p-3 rounded-2xl border border-gray-50 dark:border-gray-900 hover:border-orange-100 hover:bg-orange-50/20 transition-all cursor-pointer group"
-                        >
-                          {/* Rank badge */}
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm flex-shrink-0 ${
-                            index === 0 ? 'bg-yellow-100 text-yellow-700 ring-2 ring-yellow-400' :
-                            index === 1 ? 'bg-slate-100 text-slate-700 ring-2 ring-slate-300' :
-                            index === 2 ? 'bg-orange-100 text-orange-700 ring-2 ring-orange-300' :
-                            'bg-gray-50 text-gray-400 dark:bg-gray-900 dark:text-gray-500'
-                          }`}>
-                            {index === 0 ? '👑' : index + 1}
-                          </div>
-
-                          {/* Photo */}
-                          <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
-                            <img src={imageUrl} alt={est.name} className="w-full h-full object-cover" />
-                          </div>
-
-                          {/* Text */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <h4 className="font-bold text-gray-900 dark:text-gray-100 group-hover:text-orange-600 transition-colors truncate text-sm sm:text-base">{est.name}</h4>
-                              {index === 0 && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-yellow-100 text-yellow-800 uppercase animate-bounce">
-                                  #1 cette semaine
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-gray-500 capitalize truncate mt-0.5">
-                              {est.category.replace(/_/g, ' ')} • {est.neighborhood}
-                            </p>
-                          </div>
-
-                          {/* Count Metric badge */}
-                          <div className="flex flex-col items-end flex-shrink-0">
-                            <span className="text-xs font-extrabold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-lg">
-                              {item.count} vue{item.count > 1 ? 's' : ''}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </>
-              )}
-
-              {activeRankTab === 'rating' && (
-                <>
-                  {(!rankings?.bestRated || rankings.bestRated.length === 0) ? (
-                    <div className="text-center py-8 text-xs text-gray-500">
-                      Pas assez d'avis pour établir le classement (seuil : 3 avis minimum).
-                    </div>
-                  ) : (
-                    rankings.bestRated.map((item, index) => {
-                      const est = getEst(item.establishmentId);
-                      if (!est) return null;
-                      const imageUrl = est.photos?.[0] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400';
-                      return (
-                        <div
-                          key={est.id}
-                          onClick={() => setSelectedRankEst(est)}
-                          className="flex items-center gap-4 p-3 rounded-2xl border border-gray-50 dark:border-gray-900 hover:border-orange-100 hover:bg-orange-50/20 transition-all cursor-pointer group"
-                        >
-                          {/* Rank badge */}
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm flex-shrink-0 ${
-                            index === 0 ? 'bg-yellow-100 text-yellow-700 ring-2 ring-yellow-400' :
-                            index === 1 ? 'bg-slate-100 text-slate-700 ring-2 ring-slate-300' :
-                            index === 2 ? 'bg-orange-100 text-orange-700 ring-2 ring-orange-300' :
-                            'bg-gray-50 text-gray-400 dark:bg-gray-900 dark:text-gray-500'
-                          }`}>
-                            {index === 0 ? '👑' : index + 1}
-                          </div>
-
-                          {/* Photo */}
-                          <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
-                            <img src={imageUrl} alt={est.name} className="w-full h-full object-cover" />
-                          </div>
-
-                          {/* Text */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <h4 className="font-bold text-gray-900 dark:text-gray-100 group-hover:text-orange-600 transition-colors truncate text-sm sm:text-base">{est.name}</h4>
-                              {index === 0 && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-yellow-100 text-yellow-800 uppercase">
-                                  mieux noté
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-gray-500 capitalize truncate mt-0.5">
-                              {est.category.replace(/_/g, ' ')} • {est.neighborhood}
-                            </p>
-                          </div>
-
-                          {/* Metric Rating badge */}
-                          <div className="flex flex-col items-end flex-shrink-0">
-                            <div className="flex items-center gap-1 text-xs font-extrabold text-yellow-600 bg-yellow-50 px-2.5 py-1 rounded-lg">
-                              <Star className="w-3.5 h-3.5 fill-yellow-500 text-yellow-500" />
-                              <span>{item.rating.toFixed(1)}</span>
-                            </div>
-                            <span className="text-[10px] text-gray-400 mt-1 font-bold">
-                              {item.reviewsCount} avis
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </>
-              )}
-
-              {activeRankTab === 'events' && (
-                <>
-                  {(!rankings?.popularEvents || rankings.popularEvents.length === 0) ? (
-                    <div className="text-center py-8 text-xs text-gray-500">
-                      Aucun événement en cours ou à venir à afficher cette semaine.
-                    </div>
-                  ) : (
-                    rankings.popularEvents.map((item, index) => {
-                      const pub = publications.find(p => p.id === item.publicationId);
-                      if (!pub) return null;
-                      const est = getEst(pub.establishmentId);
-                      const imageUrl = pub.imageUrl || (est?.photos?.[0]) || 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=400';
-                      return (
-                        <div
-                          key={pub.id}
-                          onClick={() => setSelectedPub(pub)}
-                          className="flex items-center gap-4 p-3 rounded-2xl border border-gray-50 dark:border-gray-900 hover:border-orange-100 hover:bg-orange-50/20 transition-all cursor-pointer group"
-                        >
-                          {/* Rank badge */}
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm flex-shrink-0 ${
-                            index === 0 ? 'bg-yellow-100 text-yellow-700 ring-2 ring-yellow-400' :
-                            index === 1 ? 'bg-slate-100 text-slate-700 ring-2 ring-slate-300' :
-                            index === 2 ? 'bg-orange-100 text-orange-700 ring-2 ring-orange-300' :
-                            'bg-gray-50 text-gray-400 dark:bg-gray-900 dark:text-gray-500'
-                          }`}>
-                            {index === 0 ? '👑' : index + 1}
-                          </div>
-
-                          {/* Photo */}
-                          <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
-                            <img src={imageUrl} alt={pub.title} className="w-full h-full object-cover" />
-                          </div>
-
-                          {/* Text */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <h4 className="font-bold text-gray-900 dark:text-gray-100 group-hover:text-orange-600 transition-colors truncate text-sm sm:text-base">{pub.title}</h4>
-                            </div>
-                            <p className="text-xs text-gray-500 truncate mt-0.5 font-bold">
-                              Chez {est?.name || 'Partenaire'} • {pub.startDate ? new Date(pub.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : 'Cette semaine'}
-                            </p>
-                          </div>
-
-                          {/* Metric Pop badge */}
-                          <div className="flex flex-col items-end flex-shrink-0">
-                            <span className="text-xs font-extrabold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
-                              {item.count} clic{item.count > 1 ? 's' : ''}/vue{item.count > 1 ? 's' : ''}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
           {/* Simulation/Test panel helper */}
-          <div className="mt-6 border-t border-gray-100 dark:border-gray-900 pt-4">
+          <div className="bg-white dark:bg-gray-950 p-6 rounded-3xl border border-gray-100 dark:border-gray-900 shadow-xs">
             <button
               onClick={() => {
                 setShowSimPanel(!showSimPanel);
                 setSimMessage(null);
               }}
-              className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-bold flex items-center gap-1.5"
+              className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-bold flex items-center gap-1.5 cursor-pointer"
             >
               <span>🛠️</span>
-              <span>{showSimPanel ? "Masquer le simulateur de test" : "Afficher le simulateur de test (vues / exclusions Gérant)"}</span>
+              <span>{showSimPanel ? "Masquer le simulateur de test" : "Afficher le simulateur de test (vues / exclusions Gérant / seuil 3 avis)"}</span>
             </button>
 
             {showSimPanel && (
-              <div className="mt-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800">
+              <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800">
                 <h4 className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2">Simulateur de Données de Classement</h4>
-                <p className="text-[11px] text-gray-500 leading-relaxed mb-3">
-                  Utilisez ces boutons pour simuler des vues ou avis conformément aux tests requis, puis cliquez sur "Forcer la mise à jour".
+                <p className="text-[11px] text-gray-500 leading-relaxed mb-4">
+                  Testez la conformité de l'exclusion des gérants et du seuil d'avis de 7j glissants. Ajoutez des actions fictives, puis cliquez sur "Forcer la mise à jour".
                 </p>
                 
-                <div className="flex flex-wrap gap-2 mb-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
                   <button
                     onClick={() => handleSimulateViews(true)}
-                    className="px-2.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                    className="px-3 py-2 bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 rounded-xl text-xs font-bold cursor-pointer text-left"
                   >
-                    +6 Vues Récentes (&lt;7j)
+                    ➕ +6 Vues Récentes (&lt;7j)
                   </button>
                   <button
                     onClick={() => handleSimulateViews(false)}
-                    className="px-2.5 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                    className="px-3 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-900 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold cursor-pointer text-left"
                   >
-                    +6 Vues Anciennes (&gt;7j)
+                    ➕ +6 Vues Anciennes (&gt;7j)
                   </button>
                   <button
                     onClick={handleSimulateOwnerView}
-                    className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                    className="px-3 py-2 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 rounded-xl text-xs font-bold cursor-pointer text-left"
                   >
-                    Vue Gérant (Exclue)
+                    🚫 Vue Propriétaire (Exclue d'office)
                   </button>
                   <button
-                    onClick={handleForceRecalculate}
-                    className="px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                    onClick={handleSimulateGerantRoleView}
+                    className="px-3 py-2 bg-pink-50 hover:bg-pink-100 dark:bg-pink-950/30 text-pink-700 dark:text-pink-400 rounded-xl text-xs font-bold cursor-pointer text-left"
                   >
-                    🔄 Forcer la mise à jour
+                    🚫 Vue Compte Gérant (Exclue d'office)
+                  </button>
+                  <button
+                    onClick={handleSimulateRecentReviews}
+                    className="px-3 py-2 bg-yellow-50 hover:bg-yellow-100 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 rounded-xl text-xs font-bold cursor-pointer text-left col-span-1 sm:col-span-2"
+                  >
+                    ⭐ Simuler 3 avis récents (Seuil pour "Les mieux notés")
+                  </button>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleForceRecalculate}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    🔄 Recalculer les widgets en direct
                   </button>
                 </div>
 
                 {simMessage && (
-                  <div className="p-2 bg-white dark:bg-gray-950 rounded-lg text-[11px] font-semibold text-orange-600 border border-orange-100 dark:border-orange-950/40">
+                  <div className="mt-3 p-3 bg-white dark:bg-gray-950 rounded-xl text-xs font-semibold text-orange-600 border border-orange-100 dark:border-orange-950/40">
                     {simMessage}
                   </div>
                 )}
               </div>
             )}
           </div>
-        </section>
+        </div>
 
         {/* Filtres de flux */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-2">
@@ -998,14 +1097,29 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
             </button>
           </div>
           
-          {filterMemberOnly && (
-            <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 font-bold px-2.5 py-1 rounded-full animate-pulse">
-              Filtre membre actif
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowExpired(!showExpired)}
+              className={`px-3 py-1.5 rounded-full text-[11px] font-black border transition-all flex items-center gap-1 cursor-pointer ${
+                showExpired 
+                  ? 'bg-purple-100 border-purple-200 text-purple-700 hover:bg-purple-200' 
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+              }`}
+              title={showExpired ? "Masquer le contenu obsolète/expiré" : "Afficher toutes les publications, y compris obsolètes"}
+            >
+              <Clock className="w-3 h-3 animate-spin" style={{ animationDuration: '6s' }} />
+              <span>{showExpired ? "Flux Complet" : "Fraîcheur Activée"}</span>
+            </button>
+
+            {filterMemberOnly && (
+              <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 font-bold px-2.5 py-1 rounded-full animate-pulse">
+                Filtre membre actif
+              </span>
+            )}
+          </div>
         </div>
 
-        {filterMemberOnly && filteredPublications.length === 0 && (
+        {filterMemberOnly && sortedPublications.length === 0 && (
           <div className="bg-white border border-gray-100 rounded-3xl p-8 text-center shadow-sm max-w-sm mx-auto my-4">
             <div className="w-12 h-12 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-3 border border-orange-100">
               <Users className="w-6 h-6 text-orange-500" />
@@ -1137,10 +1251,25 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                       <div className="h-48 bg-gray-200 relative overflow-hidden">
                         <img src={imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-                        <div className="absolute top-3 left-3 flex gap-1.5 items-center">
+                        <div className="absolute top-3 left-3 flex gap-1.5 items-center flex-wrap max-w-[90%]">
                           <span className="bg-red-500 text-white text-[10px] uppercase tracking-wider font-black px-3 py-1.5 rounded-lg shadow-xs">
                             Événement
                           </span>
+                          {event.isNew && (
+                            <span className="bg-emerald-500 text-white text-[10px] uppercase tracking-wider font-black px-2 py-1.5 rounded-lg shadow-xs animate-pulse">
+                              ✨ Nouveau
+                            </span>
+                          )}
+                          {event.isSoon && (
+                            <span className="bg-orange-500 text-white text-[10px] uppercase tracking-wider font-black px-2 py-1.5 rounded-lg shadow-xs">
+                              ⚡ Ce soir
+                            </span>
+                          )}
+                          {event.isExpired && (
+                            <span className="bg-gray-500 text-white text-[10px] uppercase tracking-wider font-black px-2 py-1.5 rounded-lg shadow-xs">
+                              🔒 Archivé
+                            </span>
+                          )}
                           {publisher.isEntreprise && (
                             <span className="bg-amber-500 text-white text-[10px] uppercase tracking-wider font-black px-2.5 py-1.5 rounded-lg shadow-xs flex items-center gap-1">
                               🤝 Partenaire
@@ -1177,10 +1306,25 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                         <div className="h-36 bg-gray-200 relative overflow-hidden flex-shrink-0">
                           <img src={imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-                          <div className="absolute top-2.5 left-2.5 flex gap-1 items-center">
+                          <div className="absolute top-2.5 left-2.5 flex gap-1 items-center flex-wrap max-w-[90%]">
                             <span className="bg-red-500 text-white text-[9px] uppercase tracking-wider font-black px-2 py-1 rounded-md shadow-xs">
                               Événement
                             </span>
+                            {event.isNew && (
+                              <span className="bg-emerald-500 text-white text-[9px] uppercase tracking-wider font-black px-2 py-1 rounded-md shadow-xs animate-pulse">
+                                Nouveau
+                              </span>
+                            )}
+                            {event.isSoon && (
+                              <span className="bg-orange-500 text-white text-[9px] uppercase tracking-wider font-black px-2 py-1 rounded-md shadow-xs">
+                                Ce soir
+                              </span>
+                            )}
+                            {event.isExpired && (
+                              <span className="bg-gray-500 text-white text-[9px] uppercase tracking-wider font-black px-2 py-1 rounded-md shadow-xs">
+                                Archivé
+                              </span>
+                            )}
                             {publisher.isEntreprise && (
                               <span className="bg-amber-500 text-white text-[9px] uppercase tracking-wider font-black px-2 py-1 rounded-md shadow-xs">
                                 🤝 Partenaire
@@ -1222,8 +1366,23 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                       <Megaphone className="w-6 h-6 text-blue-500" />
                     </div>
                     <div className="flex flex-col justify-center flex-1">
-                      <div className="flex items-center gap-2 mb-0.5">
+                      <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                         <div className="text-[11px] font-black text-blue-600 uppercase tracking-wide">{publisher.name}</div>
+                        {annonce.isNew && (
+                          <span className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-0.5 animate-pulse">
+                            ✨ Nouveau
+                          </span>
+                        )}
+                        {annonce.isExpired && (
+                          <span className="bg-gray-100 text-gray-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-gray-200 flex items-center gap-0.5">
+                            🔒 Archivé
+                          </span>
+                        )}
+                        {annonce.status === 'boostee' && (
+                          <span className="bg-purple-100 text-purple-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-purple-200 flex items-center gap-0.5">
+                            🔥 En vedette
+                          </span>
+                        )}
                         {publisher.isEntreprise && (
                           <span className="bg-amber-100 text-amber-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-amber-200">
                             🤝 Partenaire
@@ -1255,8 +1414,23 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                       <Tag className="w-6 h-6 text-orange-500" />
                     </div>
                     <div className="flex flex-col justify-center flex-1">
-                      <div className="flex items-center gap-2 mb-0.5">
+                      <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                         <div className="text-[11px] font-black text-orange-600 uppercase tracking-wide">{publisher.name}</div>
+                        {promo.isNew && (
+                          <span className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-0.5 animate-pulse">
+                            ✨ Nouveau
+                          </span>
+                        )}
+                        {promo.isExpired && (
+                          <span className="bg-gray-100 text-gray-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-gray-200 flex items-center gap-0.5">
+                            🔒 Archivé
+                          </span>
+                        )}
+                        {promo.status === 'boostee' && (
+                          <span className="bg-purple-100 text-purple-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-purple-200 flex items-center gap-0.5">
+                            🔥 En vedette
+                          </span>
+                        )}
                         {publisher.isEntreprise && (
                           <span className="bg-amber-100 text-amber-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-amber-200">
                             🤝 Partenaire

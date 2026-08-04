@@ -213,33 +213,38 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidEstablishment(incoming()) && incoming().ownerId == request.auth.uid;
       allow update: if isSignedIn() && isValidEstablishment(incoming()) && (
         (existing().ownerId == request.auth.uid && incoming().ownerId == existing().ownerId)
-        || (get(/databases/$(database)/documents/users/$(existing().ownerId)).data.email == request.auth.token.email && incoming().ownerId == request.auth.uid)
+        || (exists(/databases/$(database)/documents/users/$(existing().ownerId)) && get(/databases/$(database)/documents/users/$(existing().ownerId)).data.email == request.auth.token.email && incoming().ownerId == request.auth.uid)
       ) || isUserAdmin();
       allow delete: if isSignedIn() && existing().ownerId == request.auth.uid || isUserAdmin();
 
       match /coiffeurs/{coiffeurId} {
         allow read: if true;
-        allow create, update, delete: if isSignedIn() && get(/databases/$(database)/documents/establishments/$(estId)).data.ownerId == request.auth.uid;
+        allow create, update, delete: if isSignedIn() && exists(/databases/$(database)/documents/establishments/$(estId)) && get(/databases/$(database)/documents/establishments/$(estId)).data.ownerId == request.auth.uid;
       }
     }
 
     match /publications/{pubId} {
       allow get: if true;
       allow list: if true;
-      allow create: if isSignedIn() && isValidPublication(incoming()) && get(/databases/$(database)/documents/establishments/$(incoming().establishmentId)).data.ownerId == request.auth.uid;
-      allow update: if isSignedIn() && isValidPublication(incoming()) && get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid && incoming().establishmentId == existing().establishmentId
+      allow create: if isSignedIn() && isValidPublication(incoming()) && exists(/databases/$(database)/documents/establishments/$(incoming().establishmentId)) && get(/databases/$(database)/documents/establishments/$(incoming().establishmentId)).data.ownerId == request.auth.uid;
+      allow update: if isSignedIn() && isValidPublication(incoming()) && exists(/databases/$(database)/documents/establishments/$(existing().establishmentId)) && get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid && incoming().establishmentId == existing().establishmentId
         || isUserAdmin();
-      allow delete: if isSignedIn() && get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid || isUserAdmin();
+      allow delete: if isSignedIn() && (
+        isUserAdmin()
+        || !exists(/databases/$(database)/documents/establishments/$(existing().establishmentId))
+        || get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid
+      );
     }
 
     match /applications/{appId} {
       allow read: if isSignedIn() && (
         resource.data.clientId == request.auth.uid 
-        || get(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)).data.ownerId == request.auth.uid
+        || (exists(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)) && get(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)).data.ownerId == request.auth.uid)
         || isUserAdmin()
       );
       allow create: if isSignedIn() && isValidApplication(incoming()) && incoming().clientId == request.auth.uid;
       allow update: if isSignedIn() && isValidApplication(incoming()) 
+        && exists(/databases/$(database)/documents/establishments/$(existing().establishmentId))
         && get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid 
         && incoming().clientId == existing().clientId 
         && incoming().publicationId == existing().publicationId
@@ -258,14 +263,14 @@ service cloud.firestore {
         allow get, list: if isSignedIn() && (
           isUserAdmin()
           || !exists(/databases/$(database)/documents/conversations/$(convId))
-          || get(/databases/$(database)/documents/conversations/$(convId)).data.clientId == request.auth.uid 
-          || get(/databases/$(database)/documents/conversations/$(convId)).data.ownerId == request.auth.uid
+          || (exists(/databases/$(database)/documents/conversations/$(convId)) && get(/databases/$(database)/documents/conversations/$(convId)).data.clientId == request.auth.uid)
+          || (exists(/databases/$(database)/documents/conversations/$(convId)) && get(/databases/$(database)/documents/conversations/$(convId)).data.ownerId == request.auth.uid)
         );
         allow create: if isSignedIn() && isValidMessage(incoming()) && incoming().senderId == request.auth.uid && (
           isUserAdmin()
           || !exists(/databases/$(database)/documents/conversations/$(convId))
-          || get(/databases/$(database)/documents/conversations/$(convId)).data.clientId == request.auth.uid 
-          || get(/databases/$(database)/documents/conversations/$(convId)).data.ownerId == request.auth.uid
+          || (exists(/databases/$(database)/documents/conversations/$(convId)) && get(/databases/$(database)/documents/conversations/$(convId)).data.clientId == request.auth.uid)
+          || (exists(/databases/$(database)/documents/conversations/$(convId)) && get(/databases/$(database)/documents/conversations/$(convId)).data.ownerId == request.auth.uid)
         );
       }
     }
@@ -279,11 +284,12 @@ service cloud.firestore {
     match /serviceRequests/{reqId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
-      allow update: if isSignedIn() && (resource.data.clientId == request.auth.uid || get(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)).data.ownerId == request.auth.uid);
+      allow update: if isSignedIn() && (resource.data.clientId == request.auth.uid || (exists(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)) && get(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)).data.ownerId == request.auth.uid));
     }
 
     match /favorites/{userId} {
       allow get, delete: if isSignedIn() && request.auth.uid == userId;
+      allow list: if isSignedIn();
       allow create, update: if isSignedIn() && request.auth.uid == userId && isValidFavorites(incoming());
     }
 
@@ -299,14 +305,14 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidReservation(incoming()) && incoming().clientId == request.auth.uid;
       allow update: if isSignedIn() && (
         (existing().clientId == request.auth.uid && incoming().clientId == request.auth.uid && incoming().status == 'annulee')
-        || (get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid)
+        || (exists(/databases/$(database)/documents/establishments/$(existing().establishmentId)) && get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid)
       );
     }
 
     match /menus_du_jour/{menuId} {
       allow read: if true;
-      allow create, update: if isSignedIn() && isValidMenuDuJour(incoming()) && get(/databases/$(database)/documents/establishments/$(incoming().establishmentId)).data.ownerId == request.auth.uid;
-      allow delete: if isSignedIn() && get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid;
+      allow create, update: if isSignedIn() && isValidMenuDuJour(incoming()) && exists(/databases/$(database)/documents/establishments/$(incoming().establishmentId)) && get(/databases/$(database)/documents/establishments/$(incoming().establishmentId)).data.ownerId == request.auth.uid;
+      allow delete: if isSignedIn() && exists(/databases/$(database)/documents/establishments/$(existing().establishmentId)) && get(/databases/$(database)/documents/establishments/$(existing().establishmentId)).data.ownerId == request.auth.uid;
     }
 
     match /entreprises/{entId} {
@@ -360,7 +366,7 @@ service cloud.firestore {
     match /staffReviews/{reviewId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
-      allow update: if isSignedIn() && (request.auth.uid == resource.data.clientId || get(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)).data.ownerId == request.auth.uid);
+      allow update: if isSignedIn() && (request.auth.uid == resource.data.clientId || (exists(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)) && get(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)).data.ownerId == request.auth.uid));
     }
 
     match /staffAttendances/{attId} {
