@@ -10,6 +10,7 @@ export interface User {
   city?: string;
   points?: number;
   referralCode?: string;
+  code_parrainage?: string;
   avatar?: string;
 }
 
@@ -94,6 +95,8 @@ export interface Publication {
   createdAt: string;
   whatsapp?: string;
   applyEmail?: string;
+  isEmergency?: boolean;
+  expiresAt?: string;
 }
 
 export interface Review {
@@ -242,5 +245,15 @@ export interface EventParticipation {
   status: 'interested' | 'going' | 'present';
   timestamp: string; // ISO String
   isVisible: boolean;
+}
+
+export interface Parrainage {
+  id: string;
+  parrainId: string;
+  parrainEmail: string;
+  parraineId: string;
+  parraineEmail: string;
+  date: string;
+  status: 'en_attente' | 'debloque';
 }
 

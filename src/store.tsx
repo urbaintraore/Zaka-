@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance } from './types';
+import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
 import { 
@@ -11,7 +11,7 @@ import {
   RecaptchaVerifier,
   ConfirmationResult
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, collection, onSnapshot, query, addDoc, updateDoc, where, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, onSnapshot, query, addDoc, updateDoc, where, deleteDoc, getDocs } from 'firebase/firestore';
 
 interface AppState {
   currentUser: User | null;
@@ -31,6 +31,7 @@ interface AppState {
   coiffeurs: Record<string, Coiffeur[]>;
   staffReviews: StaffReview[];
   staffAttendances: StaffAttendance[];
+  parrainages: Parrainage[];
   loading: boolean;
   globalError: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null;
   theme: 'light' | 'dark';
@@ -169,6 +170,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     carnetEntrees: [],
     staffReviews: [],
     staffAttendances: [],
+    parrainages: [],
     loading: true,
     globalError: null,
     theme: (localStorage.getItem('app-theme') as 'light' | 'dark') || 
@@ -543,7 +545,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.currentUser) {
       // Clear authenticated state data when user logs out
-      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {}, carnetEntrees: [] }));
+      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {}, carnetEntrees: [], parrainages: [] }));
       return;
     }
 
@@ -557,6 +559,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setState(s => ({ ...s, users: uList }));
     }, (error) => {
       console.error("Erreur listening to users:", error);
+    });
+
+    // Listen to parrainages
+    const parrainageQuery = query(collection(db, 'parrainages'));
+    const unsubscribeParrainages = onSnapshot(parrainageQuery, (snapshot) => {
+      const pList: Parrainage[] = [];
+      snapshot.forEach(docSnap => pList.push({ id: docSnap.id, ...docSnap.data() } as Parrainage));
+      setState(s => ({ ...s, parrainages: pList }));
+    }, (error) => {
+      console.error("Erreur listening to parrainages:", error);
     });
 
     // Listen to relationship requests
@@ -662,6 +674,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unsubscribeRes();
       unsubscribeFav();
       unsubscribeCarnet();
+      unsubscribeParrainages();
     };
   }, [state.currentUser?.id]);
 
@@ -821,6 +834,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     email?: string;
     estData?: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] };
     entrepriseData?: { sector: string; logo: string; philosophy: string; description: string };
+    referralCodeUsed?: string;
   }) => {
     if (!confirmationResult) {
       const msg = "Aucun code de vérification n'a été envoyé. Veuillez d'abord demander un code OTP.";
@@ -837,6 +851,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (registrationData) {
         console.log("[Phone Auth] Données d'inscription détectées. Création du profil utilisateur...");
         const resolvedCategory = registrationData.estData?.category || 'maquis';
+        
+        let code_parrainage = '';
+        if (registrationData.role === 'client') {
+          const baseName = (registrationData.name || 'ZAKA').trim().split(' ')[0].replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toUpperCase();
+          const rand = Math.floor(1000 + Math.random() * 9000);
+          code_parrainage = `${baseName}${rand}`;
+        }
+
         const newUserData: any = {
           name: registrationData.name.trim(),
           email: registrationData.email?.trim() || '',
@@ -844,7 +866,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           role: registrationData.role,
           country: registrationData.country || 'Burkina Faso',
           city: registrationData.city || 'Ouagadougou',
-          category: resolvedCategory
+          category: resolvedCategory,
+          points: 0,
+          ...(code_parrainage ? { code_parrainage, referralCode: code_parrainage } : {})
         };
 
         try {
@@ -852,6 +876,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
           console.log("[Phone Auth] Profil Firestore créé avec succès.");
         } catch (error) {
           handleFirestoreError(error, OperationType.WRITE, `users/${firebaseUser.uid}`);
+        }
+
+        if (registrationData.referralCodeUsed && registrationData.role === 'client') {
+          try {
+            const trimmedCode = registrationData.referralCodeUsed.trim().toUpperCase();
+            const parrainQuery = query(collection(db, 'users'), where('code_parrainage', '==', trimmedCode));
+            const parrainSnap = await getDocs(parrainQuery);
+            let parrainDoc = parrainSnap.docs[0];
+            
+            if (!parrainDoc) {
+              const parrainQueryLegacy = query(collection(db, 'users'), where('referralCode', '==', trimmedCode));
+              const parrainSnapLegacy = await getDocs(parrainQueryLegacy);
+              parrainDoc = parrainSnapLegacy.docs[0];
+            }
+
+            if (parrainDoc && parrainDoc.id !== firebaseUser.uid) {
+              const parrainData = parrainDoc.data();
+              await addDoc(collection(db, 'parrainages'), {
+                parrainId: parrainDoc.id,
+                parrainEmail: parrainData.email || '',
+                parraineId: firebaseUser.uid,
+                parraineEmail: registrationData.email?.trim() || '',
+                date: new Date().toISOString(),
+                status: 'en_attente'
+              });
+              console.log(`[Referral] Referral recorded (OTP). Parrain: ${parrainDoc.id}, Parraine: ${firebaseUser.uid}`);
+            }
+          } catch (err) {
+            console.error("Error registering referral connection in OTP:", err);
+          }
         }
 
         if ((registrationData.role === 'gerant' || registrationData.role === 'salon_coiffure') && registrationData.estData) {
@@ -943,7 +997,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     userData: Omit<User, 'id'>, 
     pass: string, 
     estData?: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] },
-    entrepriseData?: { sector: string; logo: string; philosophy: string; description: string }
+    entrepriseData?: { sector: string; logo: string; philosophy: string; description: string },
+    referralCodeUsed?: string
   ) => {
     const emailStr = (userData.email || '').trim();
     if (!emailStr) {
@@ -960,6 +1015,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.log("[Email Register] Compte d'authentification créé avec UID :", firebaseUser.uid);
 
       const resolvedCategory = estData?.category || 'maquis';
+      
+      let code_parrainage = '';
+      if (userData.role === 'client') {
+        const baseName = (userData.name || 'ZAKA').trim().split(' ')[0].replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toUpperCase();
+        const rand = Math.floor(1000 + Math.random() * 9000);
+        code_parrainage = `${baseName}${rand}`;
+      }
+
       const newUserData: any = {
         name: userData.name.trim() || 'Utilisateur',
         email: emailStr,
@@ -967,7 +1030,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         role: userData.role,
         country: userData.country || 'Burkina Faso',
         city: userData.city || 'Ouagadougou',
-        category: resolvedCategory
+        category: resolvedCategory,
+        points: 0,
+        ...(code_parrainage ? { code_parrainage, referralCode: code_parrainage } : {})
       };
 
       try {
@@ -975,6 +1040,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.log("[Email Register] Profil Firestore créé avec succès.");
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, `users/${firebaseUser.uid}`);
+      }
+
+      if (referralCodeUsed && userData.role === 'client') {
+        try {
+          const trimmedCode = referralCodeUsed.trim().toUpperCase();
+          const parrainQuery = query(collection(db, 'users'), where('code_parrainage', '==', trimmedCode));
+          const parrainSnap = await getDocs(parrainQuery);
+          let parrainDoc = parrainSnap.docs[0];
+          
+          if (!parrainDoc) {
+            const parrainQueryLegacy = query(collection(db, 'users'), where('referralCode', '==', trimmedCode));
+            const parrainSnapLegacy = await getDocs(parrainQueryLegacy);
+            parrainDoc = parrainSnapLegacy.docs[0];
+          }
+
+          if (parrainDoc && parrainDoc.id !== firebaseUser.uid) {
+            const parrainData = parrainDoc.data();
+            await addDoc(collection(db, 'parrainages'), {
+              parrainId: parrainDoc.id,
+              parrainEmail: parrainData.email || '',
+              parraineId: firebaseUser.uid,
+              parraineEmail: emailStr,
+              date: new Date().toISOString(),
+              status: 'en_attente'
+            });
+            console.log(`[Referral] Referral recorded. Parrain: ${parrainDoc.id}, Parraine: ${firebaseUser.uid}`);
+          }
+        } catch (err) {
+          console.error("Error registering referral connection:", err);
+        }
       }
 
       if ((userData.role === 'gerant' || userData.role === 'salon_coiffure') && estData) {
@@ -1489,6 +1584,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...review,
         date: new Date().toISOString()
       });
+
+      // Handle referral unlock if this is the client's first review
+      try {
+        const clientReviews = state.reviews.filter(r => r.clientId === review.clientId);
+        if (clientReviews.length === 0) {
+          const referralQuery = query(
+            collection(db, 'parrainages'),
+            where('parraineId', '==', review.clientId),
+            where('status', '==', 'en_attente')
+          );
+          const referralSnap = await getDocs(referralQuery);
+          if (!referralSnap.empty) {
+            const referralDoc = referralSnap.docs[0];
+            const referralData = referralDoc.data();
+            
+            // Unlock referral
+            await updateDoc(doc(db, 'parrainages', referralDoc.id), {
+              status: 'debloque',
+              unlockedAt: new Date().toISOString()
+            });
+            
+            // Reward parrain: add 10 points
+            const parrainDocRef = doc(db, 'users', referralData.parrainId);
+            const parrainSnap = await getDoc(parrainDocRef);
+            if (parrainSnap.exists()) {
+              const currentParrainPoints = parrainSnap.data().points || 0;
+              await updateDoc(parrainDocRef, { points: currentParrainPoints + 10 });
+            }
+            
+            // Reward parraine: add 10 points
+            const parraineDocRef = doc(db, 'users', review.clientId);
+            const parraineSnap = await getDoc(parraineDocRef);
+            if (parraineSnap.exists()) {
+              const currentParrainePoints = parraineSnap.data().points || 0;
+              await updateDoc(parraineDocRef, { points: currentParrainePoints + 10 });
+            }
+            
+            console.log(`[Referral] Referral unlocked successfully in addReview!`);
+          }
+        }
+      } catch (refErr) {
+        console.error("Error unlocking referral in addReview:", refErr);
+      }
     } catch (error) {
       console.error("Erreur ajout avis:", error);
       throw error;

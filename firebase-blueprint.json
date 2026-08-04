@@ -188,6 +188,21 @@
         "privateNote": { "type": "string" }
       },
       "required": ["clientId", "establishmentId", "type", "date"]
+    },
+    "Parrainage": {
+      "title": "Parrainage",
+      "description": "Referral details between a parrain and parraine",
+      "type": "object",
+      "properties": {
+        "parrainId": { "type": "string" },
+        "parrainEmail": { "type": "string" },
+        "parraineId": { "type": "string" },
+        "parraineEmail": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string", "enum": ["en_attente", "debloque"] },
+        "unlockedAt": { "type": "string" }
+      },
+      "required": ["parrainId", "parraineId", "status", "date"]
     }
   },
   "firestore": {
@@ -234,6 +249,10 @@
     "carnet_entrees": {
       "schema": { "$ref": "#/entities/CarnetEntry" },
       "description": "User personal outing journal entries"
+    },
+    "parrainages": {
+      "schema": { "$ref": "#/entities/Parrainage" },
+      "description": "Referrals collection"
     }
   }
 }

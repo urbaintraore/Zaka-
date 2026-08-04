@@ -114,6 +114,8 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
   const [pubEndDate, setPubEndDate] = useState('');
   const [pubWhatsApp, setPubWhatsApp] = useState('');
   const [pubApplyEmail, setPubApplyEmail] = useState('');
+  const [pubIsEmergency, setPubIsEmergency] = useState(false);
+  const [pubEmergencyHours, setPubEmergencyHours] = useState('3');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isSubmittingPub, setIsSubmittingPub] = useState(false);
   const [pubError, setPubError] = useState<string | null>(null);
@@ -190,6 +192,17 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
     try {
       setIsSubmittingPub(true);
       setPubError(null);
+      
+      let expiresAt: string | undefined = undefined;
+      let finalEndDate = pubEndDate || undefined;
+
+      if (pubIsEmergency && pubModalType === 'promo') {
+        const hours = parseInt(pubEmergencyHours) || 3;
+        const expiryDate = new Date(Date.now() + hours * 60 * 60 * 1000);
+        expiresAt = expiryDate.toISOString();
+        finalEndDate = expiresAt; // Compatible date string
+      }
+
       await addPublication({
         establishmentId: pubModalEstId,
         type: pubModalType,
@@ -197,10 +210,12 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
         description: pubDesc,
         imageUrl: pubImage || undefined,
         startDate: pubStartDate || undefined,
-        endDate: pubEndDate || undefined,
+        endDate: finalEndDate,
         status: 'active',
         whatsapp: pubModalType === 'recrutement' ? (pubWhatsApp || undefined) : undefined,
-        applyEmail: pubModalType === 'recrutement' ? (pubApplyEmail || undefined) : undefined
+        applyEmail: pubModalType === 'recrutement' ? (pubApplyEmail || undefined) : undefined,
+        isEmergency: pubIsEmergency && pubModalType === 'promo' ? true : undefined,
+        expiresAt
       });
       closePubModal();
     } catch(err: any) {
@@ -221,6 +236,8 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
     setPubEndDate('');
     setPubWhatsApp('');
     setPubApplyEmail('');
+    setPubIsEmergency(false);
+    setPubEmergencyHours('3');
     setPubError(null);
   };
 
@@ -814,7 +831,42 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
                 </div>
               )}
 
-              {(pubModalType === 'promo' || pubModalType === 'evenement') && (
+              {pubModalType === 'promo' && (
+                <div className="p-4 bg-red-50/50 border border-red-100 rounded-2xl flex flex-col gap-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <input 
+                      type="checkbox" 
+                      checked={pubIsEmergency} 
+                      onChange={e => setPubIsEmergency(e.target.checked)} 
+                      className="w-4.5 h-4.5 accent-red-600 rounded" 
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black text-red-700 uppercase tracking-wider flex items-center gap-1">
+                        🚨 Activer la Promo Urgence
+                      </span>
+                      <span className="text-[10px] text-gray-500 font-bold mt-0.5">Offre éclair de très courte durée</span>
+                    </div>
+                  </label>
+
+                  {pubIsEmergency && (
+                    <div className="flex flex-col gap-1 animate-fadeIn mt-1 pl-7">
+                      <label className="text-[10px] font-bold text-red-700 uppercase tracking-wider">Durée de l'offre éclair</label>
+                      <select 
+                        value={pubEmergencyHours} 
+                        onChange={e => setPubEmergencyHours(e.target.value)} 
+                        className="w-full px-3 py-2.5 bg-white border border-red-200 rounded-xl text-xs font-bold outline-none text-red-700"
+                      >
+                        <option value="3">3 Heures (Très urgent)</option>
+                        <option value="6">6 Heures (Moyennement urgent)</option>
+                        <option value="12">12 Heures (Dernier carat)</option>
+                        <option value="24">24 Heures (Une journée complète)</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(pubModalType === 'promo' || pubModalType === 'evenement') && (!pubIsEmergency || pubModalType !== 'promo') && (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-bold text-gray-500 ml-1">Date de début</label>

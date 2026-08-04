@@ -201,6 +201,17 @@ service cloud.firestore {
         && (data.get('privateNote', '') is string && data.get('privateNote', '').size() <= 2000);
     }
 
+    function isValidParrainage(data) {
+      return data.keys().hasAll(['parrainId', 'parraineId', 'status', 'date'])
+        && data.parrainId is string && data.parrainId.size() > 0 && data.parrainId.size() <= 128
+        && data.parraineId is string && data.parraineId.size() > 0 && data.parraineId.size() <= 128
+        && data.status in ['en_attente', 'debloque']
+        && data.date is string && data.date.size() > 0 && data.date.size() <= 50
+        && (data.get('parrainEmail', '') is string && data.get('parrainEmail', '').size() <= 100)
+        && (data.get('parraineEmail', '') is string && data.get('parraineEmail', '').size() <= 100)
+        && (data.get('unlockedAt', '') is string && data.get('unlockedAt', '').size() <= 50);
+    }
+
     match /users/{userId} {
       allow get, list: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming()) && incoming().role != 'admin';
@@ -372,6 +383,16 @@ service cloud.firestore {
     match /staffAttendances/{attId} {
       allow read: if isSignedIn();
       allow create, delete: if isSignedIn();
+    }
+
+    match /parrainages/{parrId} {
+      allow read, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidParrainage(incoming()) && (incoming().parraineId == request.auth.uid || isUserAdmin());
+      allow update: if isSignedIn() && isValidParrainage(incoming()) && (
+        (existing().parraineId == request.auth.uid && incoming().parraineId == existing().parraineId && incoming().parrainId == existing().parrainId)
+        || isUserAdmin()
+      );
+      allow delete: if isUserAdmin();
     }
   }
 }

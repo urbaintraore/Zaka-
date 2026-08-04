@@ -16,6 +16,53 @@ export function GerantAnalytics({ establishmentId }: { establishmentId: string }
   const acceptanceRate = totalRequests > 0 ? Math.round((validatedRequests / totalRequests) * 100) : 0;
   const pendingConnections = estRelRequests.filter(r => r.status === 'en_attente').length;
 
+  // Temporal comparisons
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+
+  // Reservations: This week vs Last week
+  const resThisWeek = estReservations.filter(res => {
+    if (!res.date) return false;
+    const resDate = new Date(res.date);
+    return resDate >= sevenDaysAgo && resDate <= now;
+  }).length;
+
+  const resLastWeek = estReservations.filter(res => {
+    if (!res.date) return false;
+    const resDate = new Date(res.date);
+    return resDate >= fourteenDaysAgo && resDate < sevenDaysAgo;
+  }).length;
+
+  let resChangePercent = 0;
+  if (resLastWeek > 0) {
+    resChangePercent = Math.round(((resThisWeek - resLastWeek) / resLastWeek) * 100);
+  } else if (resThisWeek > 0) {
+    resChangePercent = 100;
+  }
+
+  // Reviews: This month vs Last month
+  const reviewsThisMonth = estReviews.filter(rev => {
+    if (!rev.date) return false;
+    const revDate = new Date(rev.date);
+    return revDate >= thirtyDaysAgo && revDate <= now;
+  }).length;
+
+  const reviewsLastMonth = estReviews.filter(rev => {
+    if (!rev.date) return false;
+    const revDate = new Date(rev.date);
+    return revDate >= sixtyDaysAgo && revDate < thirtyDaysAgo;
+  }).length;
+
+  let revChangePercent = 0;
+  if (reviewsLastMonth > 0) {
+    revChangePercent = Math.round(((reviewsThisMonth - reviewsLastMonth) / reviewsLastMonth) * 100);
+  } else if (reviewsThisMonth > 0) {
+    revChangePercent = 100;
+  }
+
   // Rating calculations
   const totalRating = estReviews.reduce((sum, r) => sum + r.rating, 0);
   const averageRating = estReviews.length > 0 ? (totalRating / estReviews.length).toFixed(1) : null;
@@ -123,52 +170,73 @@ export function GerantAnalytics({ establishmentId }: { establishmentId: string }
           <div>
             <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 mb-1">
               <Star className="w-4 h-4 text-amber-500" />
-              <h5 className="text-xs font-bold uppercase tracking-wider">Note moyenne</h5>
+              <h5 className="text-xs font-bold uppercase tracking-wider">Avis Client</h5>
             </div>
-            <div className="flex items-baseline gap-2 mt-2">
+            <div className="flex items-baseline gap-2 mt-1.5">
               <p className="text-3xl font-black text-gray-900 dark:text-white">
                 {averageRating ? `${averageRating}/5` : 'N/A'}
               </p>
               {averageRating && renderStars(parseFloat(averageRating))}
             </div>
           </div>
-          <p className="text-[10px] text-gray-400 font-semibold mt-3">
-            Basé sur {estReviews.length} avis client{estReviews.length > 1 ? 's' : ''}
-          </p>
+          <div className="flex items-center gap-1 mt-3">
+            <span className={`text-[11px] font-black px-1.5 py-0.5 rounded flex items-center ${
+              revChangePercent >= 0 
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400' 
+                : 'bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400'
+            }`}>
+              {revChangePercent >= 0 ? '↑' : '↓'} {revChangePercent >= 0 ? '+' : ''}{revChangePercent}%
+            </span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold">ce mois ({reviewsThisMonth} vs {reviewsLastMonth})</span>
+          </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-950 p-4 rounded-2xl border border-gray-150 dark:border-gray-900 shadow-sm">
-          <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 mb-1">
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
-            <h5 className="text-xs font-bold uppercase tracking-wider">Acceptation</h5>
+        <div className="bg-white dark:bg-gray-950 p-4 rounded-2xl border border-gray-150 dark:border-gray-900 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 mb-1">
+              <ShieldCheck className="w-4 h-4 text-emerald-500" />
+              <h5 className="text-xs font-bold uppercase tracking-wider">Acceptation</h5>
+            </div>
+            <p className="text-3xl font-black text-gray-900 dark:text-white mt-2">{acceptanceRate}%</p>
           </div>
-          <p className="text-3xl font-black text-gray-900 dark:text-white mt-2">{acceptanceRate}%</p>
           <p className="text-[10px] text-gray-400 font-semibold mt-3">Taux d'acceptation des services</p>
         </div>
 
-        <div className="bg-white dark:bg-gray-950 p-4 rounded-2xl border border-gray-150 dark:border-gray-900 shadow-sm">
-          <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 mb-1">
-            <TrendingUp className="w-4 h-4 text-orange-500" />
-            <h5 className="text-xs font-bold uppercase tracking-wider">Connexions</h5>
+        <div className="bg-white dark:bg-gray-950 p-4 rounded-2xl border border-gray-150 dark:border-gray-900 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 mb-1">
+              <TrendingUp className="w-4 h-4 text-orange-500" />
+              <h5 className="text-xs font-bold uppercase tracking-wider">Connexions</h5>
+            </div>
+            <p className="text-3xl font-black text-gray-900 dark:text-white mt-2">{pendingConnections}</p>
           </div>
-          <p className="text-3xl font-black text-gray-900 dark:text-white mt-2">{pendingConnections}</p>
           <p className="text-[10px] text-gray-400 font-semibold mt-3">Demandes d'adhésion en attente</p>
         </div>
 
-        <div className="bg-white dark:bg-gray-950 p-4 rounded-2xl border border-gray-150 dark:border-gray-900 shadow-sm">
-          <div className="flex items-center justify-between mb-1 text-gray-500 dark:text-gray-400">
-            <h5 className="text-xs font-bold uppercase tracking-wider">Statut Services</h5>
-            <span className="text-[10px] bg-emerald-50 text-emerald-600 font-bold px-1.5 py-0.5 rounded">Total: {totalRequests}</span>
+        {/* Réservations (Temporal Comparison Card) */}
+        <div className="bg-white dark:bg-gray-950 p-4 rounded-2xl border border-gray-150 dark:border-gray-900 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 mb-1">
+              <Calendar className="w-4 h-4 text-blue-500" />
+              <h5 className="text-xs font-bold uppercase tracking-wider">Réservations</h5>
+            </div>
+            <div className="flex items-baseline gap-2 mt-2">
+              <p className="text-3xl font-black text-gray-900 dark:text-white">
+                {resThisWeek}
+              </p>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold">cette semaine</span>
+            </div>
           </div>
-          <div className="h-[75px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={data} cx="50%" cy="50%" innerRadius={15} outerRadius={30} paddingAngle={3} dataKey="value">
-                  {data.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+          
+          <div className="flex items-center gap-1 mt-3">
+            <span className={`text-[11px] font-black px-1.5 py-0.5 rounded flex items-center ${
+              resChangePercent >= 0 
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400' 
+                : 'bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400'
+            }`}>
+              {resChangePercent >= 0 ? '↑' : '↓'} {resChangePercent >= 0 ? '+' : ''}{resChangePercent}%
+            </span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 font-bold">vs semaine dern. ({resLastWeek})</span>
           </div>
         </div>
       </div>

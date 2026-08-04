@@ -110,6 +110,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   const [name, setName] = useState('');
   const [country, setCountry] = useState('Burkina Faso');
   const [city, setCity] = useState('');
+  const [referralCodeUsed, setReferralCodeUsed] = useState('');
 
   // Gerant Establishment fields
   const [estName, setEstName] = useState('');
@@ -717,15 +718,15 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3">
               <p className="text-xs text-gray-600 dark:text-gray-300 font-medium">Votre code de parrainage :</p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl font-mono text-sm font-bold text-center text-gray-800 dark:text-gray-200">
-                  {currentUser.referralCode || `ZAKA-${currentUser.name.substring(0,3).toUpperCase()}-${currentUser.id.substring(0,4).toUpperCase()}`}
+                  {currentUser.code_parrainage || currentUser.referralCode || `ZAKA-${currentUser.name.substring(0,3).toUpperCase()}-${currentUser.id.substring(0,4).toUpperCase()}`}
                 </code>
                 <button 
                   onClick={() => {
-                    const code = currentUser.referralCode || `ZAKA-${currentUser.name.substring(0,3).toUpperCase()}-${currentUser.id.substring(0,4).toUpperCase()}`;
+                    const code = currentUser.code_parrainage || currentUser.referralCode || `ZAKA-${currentUser.name.substring(0,3).toUpperCase()}-${currentUser.id.substring(0,4).toUpperCase()}`;
                     navigator.clipboard.writeText(`Rejoins-moi sur Zaka+ ! Utilise mon code de parrainage: ${code} et gagne tes premiers points.`);
                     alert("Code de parrainage copié !");
                   }}
@@ -734,7 +735,21 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                   Copier
                 </button>
               </div>
-              <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-1">Partagez ce code avec vos amis pour gagner +50 points par inscription.</p>
+
+              <button
+                onClick={() => {
+                  const code = currentUser.code_parrainage || currentUser.referralCode || `ZAKA-${currentUser.name.substring(0,3).toUpperCase()}-${currentUser.id.substring(0,4).toUpperCase()}`;
+                  const shareText = `Salut ! Rejoins-moi sur Zaka+, l'application de la vie nocturne au Burkina Faso. Utilise mon code de parrainage "${code}" lors de ton inscription pour débloquer tes premiers avantages !`;
+                  const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
+                  window.open(whatsappUrl, '_blank');
+                }}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition-colors active:scale-95 cursor-pointer flex items-center justify-center gap-2 shadow-sm shadow-emerald-600/20"
+              >
+                <span>💬</span>
+                Inviter un ami via WhatsApp
+              </button>
+
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-1">Partagez ce code avec vos amis pour gagner +10 points d'activité dès leur premier avis laissé !</p>
             </div>
           </div>
         </div>
@@ -1150,7 +1165,8 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               logo: entLogo,
               philosophy: entPhilosophy,
               description: entDescription
-            } : undefined
+            } : undefined,
+            referralCodeUsed
           );
         }
       } catch (err: any) {
@@ -1201,7 +1217,8 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 logo: entLogo,
                 philosophy: entPhilosophy,
                 description: entDescription
-              } : undefined
+              } : undefined,
+              referralCodeUsed
             });
           } else {
             await confirmerCodeOtp(otpCode);
@@ -1327,6 +1344,19 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                   <input type="text" placeholder="Ville" required value={city} onChange={e => setCity(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
                 </div>
               </div>
+
+              {role === 'client' && (
+                <div className="flex flex-col gap-1 animate-fadeIn">
+                  <label className="text-xs font-bold text-gray-500 ml-1">Code de parrainage (Optionnel)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: AMINE1234" 
+                    value={referralCodeUsed} 
+                    onChange={e => setReferralCodeUsed(e.target.value)} 
+                    className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium uppercase placeholder:normal-case" 
+                  />
+                </div>
+              )}
 
               {role === 'gerant' && (
                 <div className="mt-2 p-4 bg-orange-50/50 rounded-2xl border border-orange-100 flex flex-col gap-4">

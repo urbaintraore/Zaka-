@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../store';
 import { Tab } from '../components/BottomNav';
-import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight, Eye, Trophy, TrendingUp, Award, Clock } from 'lucide-react';
+import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight, Eye, Trophy, TrendingUp, Award, Clock, Share2, AlertCircle, BookOpen } from 'lucide-react';
 import { stripHtml } from '../utils/htmlHelpers';
 import { ReservationModal } from '../components/ReservationModal';
 import { Publication, Establishment } from '../types';
@@ -13,7 +13,52 @@ import { EventAIAnalytics } from '../components/EventAIAnalytics';
 import { ChallengePhoto } from '../components/ChallengePhoto';
 import { EventSocialMur } from '../components/EventSocialMur';
 import { MapView } from '../components/MapView';
+import { ShareableVisual } from '../components/ShareableVisual';
+import { UserGuideModal } from '../components/UserGuideModal';
 import { motion } from 'motion/react';
+
+export function EmergencyCountdown({ expiresAt }: { expiresAt: string }) {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const difference = +new Date(expiresAt) - +new Date();
+      if (difference <= 0) {
+        setTimeLeft('Expiré');
+        return;
+      }
+
+      const hours = Math.floor(difference / (1000 * 60 * 60));
+      const minutes = Math.floor((difference / 1000 / 60) % 60);
+      const seconds = Math.floor((difference / 1000) % 60);
+
+      const parts = [];
+      if (hours > 0) parts.push(`${hours}h`);
+      parts.push(`${minutes}m`);
+      parts.push(`${seconds}s`);
+
+      setTimeLeft(parts.join(' '));
+    };
+
+    calculateTimeLeft();
+    const interval = setInterval(calculateTimeLeft, 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt]);
+
+  if (timeLeft === 'Expiré') {
+    return (
+      <span className="bg-gray-100 text-gray-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-gray-200">
+        ⌛ Expiré
+      </span>
+    );
+  }
+
+  return (
+    <span className="bg-red-100 text-red-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-red-200 flex items-center gap-1 animate-pulse">
+      🚨 URGENT ({timeLeft})
+    </span>
+  );
+}
 
 interface HomeViewProps {
   onStartChat?: (estId: string) => void;
@@ -24,6 +69,8 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
   const { publications, establishments, entreprises, currentUser, createServiceRequest, relationshipRequests, setGlobalError, favorites, toggleFavorite, reviews, trackPublicationView, users } = useAppStore();
   const [reservationEst, setReservationEst] = useState<{ id: string, name: string } | null>(null);
   const [selectedPub, setSelectedPub] = useState<Publication | null>(null);
+  const [sharingPub, setSharingPub] = useState<Publication | null>(null);
+  const [showGuideModal, setShowGuideModal] = useState(false);
   const [filterMemberOnly, setFilterMemberOnly] = useState(false);
   const [showExpired, setShowExpired] = useState(false);
   const [activePubTab, setActivePubTab] = useState<'info' | 'photos' | 'wall'>('info');
@@ -512,19 +559,28 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
     const isNew = isNewPublication(pub.createdAt);
     let isExpired = pub.status === 'expiree';
     
-    // Check specific expiration rules
-    if (pub.type === 'evenement') {
-      const dateCheck = pub.endDate || pub.startDate || '';
-      if (dateCheck && dateCheck.split('T')[0] < todayStr) {
+    // Check emergency promo real-time expiration
+    if (pub.isEmergency && pub.expiresAt) {
+      if (new Date() > new Date(pub.expiresAt)) {
         isExpired = true;
       }
-    } else {
-      // Promos and announcements
-      if (pub.endDate && pub.endDate.split('T')[0] < todayStr) {
-        isExpired = true;
-      } else if (!pub.endDate && pub.createdAt && isOlderThanDays(pub.createdAt, 15)) {
-        // Automatically expire after 15 days if no end date specified to keep the homepage fresh
-        isExpired = true;
+    }
+    
+    // Check specific expiration rules
+    if (!isExpired) {
+      if (pub.type === 'evenement') {
+        const dateCheck = pub.endDate || pub.startDate || '';
+        if (dateCheck && dateCheck.split('T')[0] < todayStr) {
+          isExpired = true;
+        }
+      } else {
+        // Promos and announcements
+        if (pub.endDate && pub.endDate.split('T')[0] < todayStr) {
+          isExpired = true;
+        } else if (!pub.endDate && pub.createdAt && isOlderThanDays(pub.createdAt, 15)) {
+          // Automatically expire after 15 days if no end date specified to keep the homepage fresh
+          isExpired = true;
+        }
       }
     }
 
@@ -653,12 +709,20 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           <p className="text-orange-100 mb-6 font-medium text-sm pr-8">
             Découvrez les meilleurs maquis, bars et restaurants près de chez vous.
           </p>
-          <button 
-            onClick={() => onNavigate?.('explore')}
-            className="bg-white text-orange-600 px-6 py-3 rounded-full font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-sm flex items-center gap-2 mb-6"
-          >
-            <MapPin className="w-4 h-4" /> Explorer la carte
-          </button>
+          <div className="flex flex-wrap items-center gap-2 mb-6">
+            <button 
+              onClick={() => onNavigate?.('explore')}
+              className="bg-white text-orange-600 px-6 py-3 rounded-full font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-sm flex items-center gap-2"
+            >
+              <MapPin className="w-4 h-4" /> Explorer la carte
+            </button>
+            <button 
+              onClick={() => setShowGuideModal(true)}
+              className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-5 py-3 rounded-full font-bold active:scale-95 transition-all text-sm flex items-center gap-1.5"
+            >
+              <BookOpen className="w-4 h-4 text-orange-200" /> Guide Zaka+
+            </button>
+          </div>
         </div>
 
         {/* Quick Filter Bar */}
@@ -1409,14 +1473,35 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
               {promos.map(promo => {
                 const publisher = getPublisher(promo.establishmentId);
                 return (
-                  <div key={promo.id} onClick={() => setSelectedPub(promo)} className="bg-white rounded-2xl shadow-sm border border-orange-100 hover:border-orange-300 transition-colors p-4 flex gap-4 cursor-pointer relative overflow-hidden">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-50 to-orange-100 flex-shrink-0 flex items-center justify-center border border-orange-200/50">
-                      <Tag className="w-6 h-6 text-orange-500" />
+                  <div 
+                    key={promo.id} 
+                    onClick={() => setSelectedPub(promo)} 
+                    className={`bg-white rounded-2xl shadow-sm transition-all p-4 flex gap-4 cursor-pointer relative overflow-hidden ${
+                      promo.isEmergency && !promo.isExpired
+                        ? 'border-2 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.12)] ring-1 ring-red-100'
+                        : 'border border-orange-100 hover:border-orange-300'
+                    }`}
+                  >
+                    <div className={`w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center border ${
+                      promo.isEmergency && !promo.isExpired
+                        ? 'bg-gradient-to-br from-red-50 to-red-100 border-red-200/50'
+                        : 'bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200/50'
+                    }`}>
+                      {promo.isEmergency && !promo.isExpired ? (
+                        <AlertCircle className="w-6 h-6 text-red-600 animate-pulse" />
+                      ) : (
+                        <Tag className="w-6 h-6 text-orange-500" />
+                      )}
                     </div>
                     <div className="flex flex-col justify-center flex-1">
                       <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                        <div className="text-[11px] font-black text-orange-600 uppercase tracking-wide">{publisher.name}</div>
-                        {promo.isNew && (
+                        <div className={`text-[11px] font-black uppercase tracking-wide ${
+                          promo.isEmergency && !promo.isExpired ? 'text-red-600' : 'text-orange-600'
+                        }`}>{publisher.name}</div>
+                        {promo.isEmergency && !promo.isExpired && promo.expiresAt && (
+                          <EmergencyCountdown expiresAt={promo.expiresAt} />
+                        )}
+                        {promo.isNew && !promo.isEmergency && (
                           <span className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-0.5 animate-pulse">
                             ✨ Nouveau
                           </span>
@@ -1616,13 +1701,23 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
               )}
             </div>
 
-            <div className="p-6 border-t border-gray-100 bg-gray-50/30 flex-shrink-0 flex gap-3">
+            <div className="p-6 border-t border-gray-100 bg-gray-50/30 flex-shrink-0 flex gap-2">
               <button
                 onClick={() => setSelectedPub(null)}
-                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl active:scale-[0.98] transition-all cursor-pointer text-xs text-center"
+                className="py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl active:scale-[0.98] transition-all cursor-pointer text-xs text-center"
               >
                 Fermer
               </button>
+
+              <button
+                onClick={() => setSharingPub(selectedPub)}
+                className="py-3 px-3 bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200/60 font-bold rounded-xl active:scale-[0.98] transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                title="Générer un visuel Story 9:16"
+              >
+                <Share2 className="w-3.5 h-3.5 text-orange-600" />
+                Story 9:16
+              </button>
+
               {onStartChat && (
                 <button
                   onClick={() => {
@@ -1630,10 +1725,10 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                     setSelectedPub(null);
                     onStartChat(estId);
                   }}
-                  className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl active:scale-[0.98] transition-all cursor-pointer text-xs flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl active:scale-[0.98] transition-all cursor-pointer text-xs flex items-center justify-center gap-2 truncate"
                 >
                   <MessageSquare className="w-4 h-4" />
-                  {getPublisher(selectedPub.establishmentId).isEntreprise ? "Contacter le partenaire" : "Contacter l'établissement"}
+                  <span className="truncate">{getPublisher(selectedPub.establishmentId).isEntreprise ? "Contacter" : "Contacter"}</span>
                 </button>
               )}
             </div>
@@ -1641,11 +1736,23 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
         </div>
       )}
 
+      {sharingPub && (
+        <ShareableVisual
+          publication={sharingPub}
+          establishmentName={getPublisher(sharingPub.establishmentId).name}
+          onClose={() => setSharingPub(null)}
+        />
+      )}
+
       {selectedRankEst && (
         <EstablishmentDetailModal
           establishment={selectedRankEst}
           onClose={() => setSelectedRankEst(null)}
         />
+      )}
+
+      {showGuideModal && (
+        <UserGuideModal onClose={() => setShowGuideModal(false)} />
       )}
     </div>
   );
