@@ -1323,7 +1323,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 <span>• Si vous possédez déjà un compte, vérifiez l'orthographe de votre e-mail et de votre mot de passe, ou assurez-vous que vous utilisez la bonne méthode de connexion (E-mail ou Téléphone).</span>
               </div>
             )}
-            {(error.includes('email') && error.includes('déjà')) || error.includes('auth/email-already-in-use') && (
+            {((error.toLowerCase().includes('email') && (error.toLowerCase().includes('déjà') || error.toLowerCase().includes('deja'))) || error.includes('auth/email-already-in-use')) && (
               <div className="mt-2 pt-2 border-t border-red-100/60 text-xs text-red-600/90 flex flex-col gap-1.5 leading-relaxed">
                 <span className="font-bold text-red-800">💡 Compte existant :</span>
                 <span>Cette adresse e-mail est déjà associée à un compte existant.</span>
