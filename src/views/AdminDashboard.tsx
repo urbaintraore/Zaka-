@@ -22,7 +22,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useInstallApp } from '../hooks/useInstallApp';
-import { Establishment, Category } from '../types';
+import { Establishment, Category, CATEGORIES_LIST } from '../types';
 
 export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const { 
@@ -150,17 +150,7 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     setFormPhotos(formPhotos.filter((_, i) => i !== index));
   };
 
-  const categoriesList = [
-    { id: 'maquis', label: 'Maquis' },
-    { id: 'bar', label: 'Bar' },
-    { id: 'restaurant', label: 'Restaurant' },
-    { id: 'boite_de_nuit', label: 'Boîte de nuit' },
-    { id: 'glacier_pizzeria', label: 'Glacier / Pizzeria' },
-    { id: 'hotel', label: 'Hôtel' },
-    { id: 'residence', label: 'Résidence' },
-    { id: 'salon_de_coiffure', label: 'Salon de Coiffure' },
-    { id: 'autre', label: 'Autre' }
-  ];
+  const categoriesList = CATEGORIES_LIST;
 
   return (
     <div className="p-4 max-w-4xl mx-auto pb-24 flex flex-col gap-6">

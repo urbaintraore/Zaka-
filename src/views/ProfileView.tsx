@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
-import { Role, Category } from '../types';
+import { Role, Category, CATEGORIES_LIST, getCategoryLabel } from '../types';
 import { LogOut, User, Check, X, MessageSquare, Store, Sparkles, Calendar, Download, Star, Megaphone } from 'lucide-react';
 import { GerantDashboard } from './GerantDashboard';
 import { AdminDashboard } from './AdminDashboard';
@@ -391,14 +391,9 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-gray-500 ml-1">Type d'établissement</label>
                 <select required value={estCategory} onChange={e => setEstCategory(e.target.value as Category)} className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium text-gray-700">
-                  <option value="maquis">Maquis</option>
-                  <option value="bar">Bar</option>
-                  <option value="restaurant">Restaurant</option>
-                  <option value="boite_de_nuit">Boîte de nuit</option>
-                  <option value="glacier_pizzeria">Glacier - Pizzeria</option>
-                  <option value="hotel">Hôtel</option>
-                  <option value="residence">Résidence</option>
-                  <option value="autre">Autre</option>
+                  {CATEGORIES_LIST.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.label}</option>
+                  ))}
                 </select>
               </div>
               <div className="flex flex-col gap-1">
@@ -1348,13 +1343,15 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
           {mode === 'register' && !isOtpSent && (
             <>
               <div className="grid grid-cols-2 gap-2 mb-2 p-1.5 bg-gray-100/80 rounded-xl">
-                <button type="button" onClick={() => setRole('client')} className={`py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'client' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Client</button>
-                <button type="button" onClick={() => setRole('gerant')} className={`py-2.5 text-xs font-bold rounded-lg transition-all ${role === 'gerant' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>Gérant</button>
+                <button type="button" onClick={() => setRole('client')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'client' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>👤 Client</button>
+                <button type="button" onClick={() => setRole('gerant')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'gerant' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>🏪 Gérant</button>
+                <button type="button" onClick={() => setRole('annonceur')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'annonceur' ? 'bg-white shadow-sm text-orange-600 font-extrabold' : 'text-gray-500 hover:text-gray-700'}`}>📢 Annonceur</button>
+                <button type="button" onClick={() => setRole('entreprise')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'entreprise' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>🏢 Entreprise</button>
               </div>
               
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-gray-500 ml-1">
-                  Nom complet
+                  Nom complet / Responsable
                 </label>
                 <input type="text" placeholder="Votre nom" required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
               </div>
@@ -1395,16 +1392,55 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-bold text-gray-500 ml-1">Type d'établissement</label>
                     <select required value={estCategory} onChange={e => setEstCategory(e.target.value as Category)} className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium text-gray-700">
-                      <option value="maquis">Maquis</option>
-                      <option value="bar">Bar</option>
-                      <option value="restaurant">Restaurant</option>
-                      <option value="boite_de_nuit">Boîte de nuit</option>
-                      <option value="glacier_pizzeria">Glacier - Pizzeria</option>
-                      <option value="hotel">Hôtel</option>
-                      <option value="residence">Résidence</option>
-                      <option value="salon_de_coiffure">Salon de Coiffure</option>
-                      <option value="autre">Autre</option>
+                      {CATEGORIES_LIST.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.label}</option>
+                      ))}
                     </select>
+                  </div>
+                </div>
+              )}
+
+              {role === 'annonceur' && (
+                <div className="mt-2 p-4 bg-amber-50/50 rounded-2xl border border-amber-200/60 flex flex-col gap-4 animate-fadeIn">
+                  <div className="flex items-center justify-between border-b border-amber-200/50 pb-2">
+                    <h3 className="font-bold text-amber-900 text-sm">Détails de l'Annonceur (ZAKA Ads)</h3>
+                    <span className="text-[10px] bg-amber-100 text-amber-800 font-extrabold px-2 py-0.5 rounded-full uppercase">Régie Pub</span>
+                  </div>
+                  
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Secteur d'activité publicitaire</label>
+                    <select required value={entSector} onChange={e => setEntSector(e.target.value)} className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium text-gray-700">
+                      <option value="Boisson & Brasserie">Boisson & Brasserie (Brakina, Beaufort, etc.)</option>
+                      <option value="Télécommunication">Télécommunication (Orange, Moov, etc.)</option>
+                      <option value="Restauration & FMCG">Restauration & Agroalimentaire (Coca-Cola, etc.)</option>
+                      <option value="Événementiel & Spectacle">Événementiel & Spectacle</option>
+                      <option value="Marque Locale & Lifestyle">Marque Locale & Lifestyle</option>
+                      <option value="Banque & Assurance">Banque & Assurance</option>
+                      <option value="Média & Communication">Média & Communication</option>
+                      <option value="Autre">Autre</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Logo / Image de marque (URL)</label>
+                    <input 
+                      type="url" 
+                      placeholder="https://images.unsplash.com/... (optionnel)" 
+                      value={entLogo} 
+                      onChange={e => setEntLogo(e.target.value)} 
+                      className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" 
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Description / Objectifs de diffusion</label>
+                    <textarea 
+                      placeholder="Présentez votre marque et vos besoins en affichage publicitaire..." 
+                      required 
+                      value={entDescription} 
+                      onChange={e => setEntDescription(e.target.value)} 
+                      className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium min-h-[90px]"
+                    />
                   </div>
                 </div>
               )}

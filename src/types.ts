@@ -157,7 +157,49 @@ export interface HairSalonData {
   hairstyles: Hairstyle[];
 }
 
-export type Category = 'maquis' | 'bar' | 'restaurant' | 'boite_de_nuit' | 'glacier_pizzeria' | 'hotel' | 'residence' | 'salon_de_coiffure' | 'autre';
+export type Category = 
+  | 'maquis' 
+  | 'bar' 
+  | 'restaurant' 
+  | 'restaurants'
+  | 'boite_de_nuit' 
+  | 'glacier_pizzeria' 
+  | 'hotel' 
+  | 'residence' 
+  | 'salon_de_coiffure' 
+  | 'brakina' 
+  | 'coca_cola' 
+  | 'orange_burkina' 
+  | 'moov_africa' 
+  | 'evenements' 
+  | 'marques_locales' 
+  | 'autre';
+
+export const CATEGORIES_LIST: { id: Category; label: string; icon?: string }[] = [
+  { id: 'maquis', label: 'Maquis', icon: '🍺' },
+  { id: 'bar', label: 'Bar', icon: '🍸' },
+  { id: 'restaurant', label: 'Restaurant', icon: '🍽️' },
+  { id: 'restaurants', label: 'Restaurants', icon: '🍽️' },
+  { id: 'boite_de_nuit', label: 'Boîte de nuit', icon: '🪩' },
+  { id: 'glacier_pizzeria', label: 'Glacier - Pizzeria', icon: '🍦' },
+  { id: 'hotel', label: 'Hôtel', icon: '🏨' },
+  { id: 'residence', label: 'Résidence', icon: '🏡' },
+  { id: 'salon_de_coiffure', label: 'Salon de Coiffure', icon: '✂️' },
+  { id: 'brakina', label: 'Brakina', icon: '🍺' },
+  { id: 'coca_cola', label: 'Coca-Cola', icon: '🥤' },
+  { id: 'orange_burkina', label: 'Orange Burkina', icon: '📱' },
+  { id: 'moov_africa', label: 'Moov Africa', icon: '📶' },
+  { id: 'evenements', label: 'Événements', icon: '🎉' },
+  { id: 'marques_locales', label: 'Marques locales', icon: '🏷️' },
+  { id: 'autre', label: 'Autre', icon: '📍' },
+];
+
+export function getCategoryLabel(cat?: string): string {
+  if (!cat) return 'Établissement';
+  const found = CATEGORIES_LIST.find(c => c.id === cat.toLowerCase());
+  if (found) return found.label;
+  return cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
 
 export interface Establishment {
   id: string;

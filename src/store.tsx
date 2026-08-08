@@ -955,6 +955,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
           handleFirestoreError(error, OperationType.WRITE, `users/${firebaseUser.uid}`);
         }
 
+        if (registrationData.role === 'annonceur') {
+          try {
+            await setDoc(doc(db, 'advertisers', firebaseUser.uid), {
+              id: firebaseUser.uid,
+              name: registrationData.name.trim(),
+              sector: registrationData.entrepriseData?.sector || 'Autre',
+              logo: registrationData.entrepriseData?.logo || '',
+              description: registrationData.entrepriseData?.description || '',
+              phone: firebaseUser.phoneNumber || registrationData.phone,
+              email: registrationData.email?.trim() || '',
+              status: 'valide',
+              balance: 0,
+              createdAt: new Date().toISOString()
+            });
+            console.log("[Phone Auth] Profil Annonceur Firestore créé avec succès.");
+          } catch (error) {
+            handleFirestoreError(error, OperationType.WRITE, `advertisers/${firebaseUser.uid}`);
+          }
+        }
+
         if (registrationData.referralCodeUsed && registrationData.role === 'client') {
           try {
             const trimmedCode = registrationData.referralCodeUsed.trim().toUpperCase();
@@ -1117,6 +1137,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.log("[Email Register] Profil Firestore créé avec succès.");
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, `users/${firebaseUser.uid}`);
+      }
+
+      if (userData.role === 'annonceur') {
+        try {
+          await setDoc(doc(db, 'advertisers', firebaseUser.uid), {
+            id: firebaseUser.uid,
+            name: userData.name.trim(),
+            sector: entrepriseData?.sector || 'Autre',
+            logo: entrepriseData?.logo || '',
+            description: entrepriseData?.description || '',
+            phone: userData.phone || '',
+            email: emailStr,
+            status: 'valide',
+            balance: 0,
+            createdAt: new Date().toISOString()
+          });
+          console.log("[Email Register] Profil Annonceur Firestore créé avec succès.");
+        } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, `advertisers/${firebaseUser.uid}`);
+        }
       }
 
       if (referralCodeUsed && userData.role === 'client') {

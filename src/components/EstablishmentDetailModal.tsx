@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Calendar, Clock, Share2, Compass, FileText, MapPin, Save, Disc, Video, Users } from 'lucide-react';
-import { Establishment } from '../types';
+import { Establishment, getCategoryLabel } from '../types';
 import { ReservationModal } from './ReservationModal';
 import { AvisUtilisateurs } from './AvisUtilisateurs';
 import { ReservationsDashboard } from './ReservationsDashboard';
@@ -202,7 +202,7 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
           <div>
             <div className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1">
-              {establishment.category.replace(/_/g, ' ')}
+              {getCategoryLabel(establishment.category)}
             </div>
             <h2 className="text-2xl font-black text-gray-900 leading-tight mb-2">{establishment.name}</h2>
             <div className="flex items-center gap-2 text-sm text-gray-500 font-bold">

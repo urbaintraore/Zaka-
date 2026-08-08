@@ -7,7 +7,7 @@ import { getDistance } from '../utils/distance';
 import { getCurrentUserLocation } from '../utils/geolocation';
 import { shareContent } from '../utils/platform';
 import { MapView } from '../components/MapView';
-import { Establishment } from '../types';
+import { Establishment, CATEGORIES_LIST, getCategoryLabel } from '../types';
 import { HeartButton } from '../components/HeartButton';
 import { OuagadougouHeatmap } from '../components/OuagadougouHeatmap';
 import { AdPlacementBanner } from '../components/AdPlacementBanner';
@@ -172,13 +172,13 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
           />
         </div>
         <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-2">
-          {['all', 'maquis', 'bar', 'restaurant', 'boite_de_nuit', 'glacier_pizzeria', 'hotel', 'residence', 'autre'].map(cat => (
+          {[{ id: 'all', label: 'Tout', icon: '✨' }, ...CATEGORIES_LIST].map((cat: { id: string; label: string; icon?: string }) => (
             <button 
-              key={cat}
-              onClick={() => setCategory(cat)}
-              className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold capitalize transition-colors ${category === cat ? 'bg-orange-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-orange-200'}`}
+              key={cat.id}
+              onClick={() => setCategory(cat.id)}
+              className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-colors ${category === cat.id ? 'bg-orange-600 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:border-orange-200 dark:bg-gray-900 dark:border-gray-800 dark:text-gray-300'}`}
             >
-              {cat === 'all' ? 'Tout' : cat.replace(/_/g, ' ')}
+              {cat.id === 'all' ? 'Tout' : (cat.icon ? `${cat.icon} ${cat.label}` : cat.label)}
             </button>
           ))}
         </div>

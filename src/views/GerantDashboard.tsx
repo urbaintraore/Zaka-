@@ -4,7 +4,7 @@ import { ClientsAndRequests } from '../components/ClientsAndRequests';
 import { GerantAnalytics } from '../components/GerantAnalytics';
 import { useAppStore } from '../store';
 import { LogOut, Plus, Store, Eye, MousePointerClick, X, Megaphone, Calendar, Users, FileText, Image as ImageIcon, MessageSquare, Download, Settings, ChefHat, Scissors, Trash2 } from 'lucide-react';
-import { Category, PubType } from '../types';
+import { Category, PubType, getCategoryLabel } from '../types';
 import { compressImage } from '../utils/imageCompressor';
 import { useInstallApp } from '../hooks/useInstallApp';
 import { ReservationsDashboard } from '../components/ReservationsDashboard';
@@ -291,7 +291,7 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
             <input 
               type="text" 
               disabled 
-              value={estCategory === 'salon_de_coiffure' ? 'Salon de Coiffure' : (estCategory === 'restaurant' ? 'Restaurant' : (estCategory === 'maquis' ? 'Maquis' : estCategory))} 
+              value={getCategoryLabel(estCategory)} 
               className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-xl border border-gray-200 font-bold cursor-not-allowed capitalize" 
             />
             <span className="text-[11px] text-gray-400 ml-1">Type défini lors de la création de votre compte.</span>
