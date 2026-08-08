@@ -165,7 +165,123 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 const DEFAULT_ESTABLISHMENTS: Establishment[] = [];
 
-const DEFAULT_PUBLICATIONS: Publication[] = [];
+const DEFAULT_PUBLICATIONS: Publication[] = [
+  {
+    id: 'pub_ann_brakina_01',
+    establishmentId: 'est_brakina_official',
+    title: '📢 Communiqué Officiel BRAKINA : Partenariat ZAKA+ & Offres Grandes Vacances',
+    description: 'BRAKINA informe l\'ensemble de ses fidèles consommateurs et des gérants de maquis, bars et lounges de son partenariat stratégique avec la plateforme ZAKA+. Profitez de promotions exclusives sur toutes vos commandes de boissons fraîches !',
+    type: 'annonce',
+    createdAt: new Date().toISOString(),
+    status: 'boostee',
+    isEmergency: false,
+    views: 125,
+    clicks: 34
+  },
+  {
+    id: 'pub_ann_recrutement_01',
+    establishmentId: 'est_jardin_gourmet',
+    title: '💼 Offre d\'Emploi : Le Jardin Gourmet Recrute 5 Serveuses & Barmaids',
+    description: 'Dans le cadre de l\'extension de notre terrasse VIP à Ouaga 2000, nous recrutons d\'urgence un personnel accueillant et dynamique. Salaire attractif + primes de ponctualité ZAKA+.',
+    type: 'annonce',
+    createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
+    status: 'active',
+    isEmergency: false,
+    views: 89,
+    clicks: 12
+  },
+  {
+    id: 'pub_ann_renovation_01',
+    establishmentId: 'est_lounge_ouaga',
+    title: '🎉 Communiqué : Réouverture de la Terrasse Climatisée & Soirées DJ Live',
+    description: 'Votre espace préféré fait peau neuve ! Venez découvrir notre nouveau cadre lounge avec climatisation renforcée, nouveau menu de cocktails et prestations DJ en direct tous les soirs.',
+    type: 'annonce',
+    createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
+    status: 'active',
+    isEmergency: false,
+    views: 210,
+    clicks: 45
+  }
+];
+
+const DEFAULT_CAMPAIGNS: Campaign[] = [
+  {
+    id: 'camp_demo_resto',
+    advertiserId: 'advertiser_01',
+    advertiserName: 'Le Jardin Gourmet',
+    title: 'Campagne Resto Gourmet & Grillades',
+    objective: 'notoriete',
+    budgetTotal: 150000,
+    budgetSpent: 45000,
+    status: 'active',
+    startDate: new Date(Date.now() - 86400000 * 3).toISOString().split('T')[0],
+    endDate: new Date(Date.now() + 86400000 * 20).toISOString().split('T')[0],
+    targeting: {
+      cities: ['Ouagadougou', 'Bobo-Dioulasso'],
+      neighborhoods: ['Ouaga 2000', 'Zone du Bois'],
+      ageRanges: ['18-25', '26-35', '36-50']
+    },
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'camp_demo_brakina',
+    advertiserId: 'advertiser_02',
+    advertiserName: 'BRAKINA Partenaire Officiel',
+    title: 'Campagne Nationale Brakina Soirées Fraîcheur',
+    objective: 'promo_evenement',
+    budgetTotal: 500000,
+    budgetSpent: 120000,
+    status: 'active',
+    startDate: new Date(Date.now() - 86400000 * 5).toISOString().split('T')[0],
+    endDate: new Date(Date.now() + 86400000 * 30).toISOString().split('T')[0],
+    targeting: {
+      cities: ['Ouagadougou', 'Bobo-Dioulasso', 'Koudougou'],
+      ageRanges: ['18-25', '26-35', '36-50']
+    },
+    createdAt: new Date().toISOString()
+  }
+];
+
+const DEFAULT_ADS: Ad[] = [
+  {
+    id: 'ad_demo_resto',
+    campaignId: 'camp_demo_resto',
+    advertiserId: 'advertiser_01',
+    title: '🍽️ Le Jardin Gourmet - Menu Spécial & Grillades',
+    description: 'Découvrez notre Menu du Jour & nos soirées grillades au feu de bois à Ouaga 2000. Réservez votre table en 1 clic !',
+    format: 'banniere',
+    mediaUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=1000',
+    ctaText: 'WhatsApp',
+    ctaLink: '+22670000000',
+    advertiserName: 'Le Jardin Gourmet • Ouaga 2000',
+    placements: ['home_banner', 'home_sponsored', 'establishment_recommended'],
+    impressions: 1250,
+    views: 890,
+    clicks: 142,
+    conversions: 18,
+    status: 'active',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'ad_demo_brakina',
+    campaignId: 'camp_demo_brakina',
+    advertiserId: 'advertiser_02',
+    title: '🍺 Soirée Fraîcheur Brakina & Live DJ Sets',
+    description: 'Grandes promos sur les boissons fraîches et animations DJ en direct ce week-end dans tous les maquis partenaires !',
+    format: 'banniere',
+    mediaUrl: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&q=80&w=1000',
+    ctaText: 'Découvrir',
+    ctaLink: 'https://zaka.bf',
+    advertiserName: 'BRAKINA Partenaire Officiel',
+    placements: ['home_banner', 'home_sponsored', 'event_sponsored'],
+    impressions: 3400,
+    views: 2100,
+    clicks: 310,
+    conversions: 45,
+    status: 'active',
+    createdAt: new Date().toISOString()
+  }
+];
 
 const AppContext = createContext<AppContextType | null>(null);
 
@@ -389,7 +505,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 role = role.toLowerCase().trim() as Role;
               }
               
-              if (!role || !['client', 'gerant', 'admin', 'entreprise', 'salon_coiffure'].includes(role)) {
+              if (!role || !['client', 'gerant', 'admin', 'entreprise', 'salon_coiffure', 'annonceur'].includes(role)) {
                 console.error(`[onAuthStateChanged] ERREUR CRITIQUE: Le rôle est manquant ou invalide ("${role}") pour l'utilisateur ${firebaseUser.email}`);
                 
                 // Attempt to recover role by checking if user has any establishments
@@ -559,9 +675,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const unsubscribeCamp = onSnapshot(campQuery, (snapshot) => {
       const camps: Campaign[] = [];
       snapshot.forEach(docSnap => camps.push({ id: docSnap.id, ...docSnap.data() } as Campaign));
-      setState(s => ({ ...s, campaigns: camps }));
+      
+      const mergedCamps = [...camps];
+      DEFAULT_CAMPAIGNS.forEach(defC => {
+        if (!mergedCamps.some(c => c.id === defC.id)) {
+          mergedCamps.push(defC);
+        }
+      });
+      setState(s => ({ ...s, campaigns: mergedCamps }));
     }, (error) => {
       console.error("Erreur listening to campaigns:", error);
+      setState(s => ({ ...s, campaigns: DEFAULT_CAMPAIGNS }));
     });
 
     // Listen to ZAKA Ads (public)
@@ -569,9 +693,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const unsubscribeAds = onSnapshot(adsQuery, (snapshot) => {
       const adList: Ad[] = [];
       snapshot.forEach(docSnap => adList.push({ id: docSnap.id, ...docSnap.data() } as Ad));
-      setState(s => ({ ...s, ads: adList }));
+      
+      const mergedAds = [...adList];
+      DEFAULT_ADS.forEach(defAd => {
+        if (!mergedAds.some(a => a.id === defAd.id)) {
+          mergedAds.push(defAd);
+        }
+      });
+      setState(s => ({ ...s, ads: mergedAds }));
     }, (error) => {
       console.error("Erreur listening to ads:", error);
+      setState(s => ({ ...s, ads: DEFAULT_ADS }));
     });
 
     return () => {

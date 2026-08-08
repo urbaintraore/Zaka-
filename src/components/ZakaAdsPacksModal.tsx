@@ -9,29 +9,62 @@ interface ZakaAdsPacksModalProps {
   onSelectPack?: (pack: AdPackage) => void;
 }
 
-export const ZAKA_ADS_PACKAGES: AdPackage[] = [
+export const ZAKA_ADS_PACKAGES: (AdPackage & { categoryTarget?: string })[] = [
   {
-    id: 'starter',
-    name: 'Pack Starter',
-    price: 50000,
+    id: 'pack_restaurant',
+    name: 'Pack Resto & Gourmet',
+    price: 35000,
     durationDays: 30,
-    estimatedImpressions: 10000,
+    estimatedImpressions: 15000,
+    categoryTarget: 'restaurants',
+    isPopular: true,
     features: [
-      'Bannières sur la page d\'Accueil ZAKA+',
-      'Présence sur les fiches d\'Établissements',
-      'Ciblage par ville (Ouagadougou / Bobo)',
-      'Statistiques de clics et vues de base'
+      'Mise en avant du "Menu du Jour" en tête de feed',
+      'Diffusion ciblée heures de repas (11h-13h & 18h-20h)',
+      'Bouton d\'action direct "Réserver une Table" & WhatsApp',
+      'Geofencing par quartier (Ouaga 2000, Zone du Bois, etc.)',
+      'Statistiques de réservations & clics gourmands'
+    ]
+  },
+  {
+    id: 'pack_salon_beaute',
+    name: 'Pack Salon Beauté & Coiffure',
+    price: 30000,
+    durationDays: 30,
+    estimatedImpressions: 12500,
+    categoryTarget: 'salons_beaute',
+    features: [
+      'Sponsoring de votre Galerie Coiffures & Tresses',
+      'Bouton "Prendre RDV" & Appel direct au salon',
+      'Ciblage spécifique audience "Coiffure & Esthétique"',
+      'Boost spécial créneaux semaine & promos week-end',
+      'Génération de rendez-vous en ligne certifiée'
+    ]
+  },
+  {
+    id: 'pack_grands_annonceurs',
+    name: 'Pack Grands Annonceurs & Marques',
+    price: 500000,
+    durationDays: 30,
+    estimatedImpressions: 200000,
+    categoryTarget: 'annonceurs',
+    features: [
+      'Domination Bannières d\'Accueil & Feed principal',
+      'Sponsoring & Co-Branding fiches maquis & lounges',
+      'Campagnes Notifications Push geofencées illimitées',
+      'Formats Vidéos HD & Pop-ups interactifs',
+      'Accompagnement Manager AdTech ZAKA dédié'
     ]
   },
   {
     id: 'business',
-    name: 'Pack Business',
+    name: 'Pack Business Multi-Secteurs',
     price: 150000,
     durationDays: 30,
-    estimatedImpressions: 35000,
-    isPopular: true,
+    estimatedImpressions: 40000,
+    categoryTarget: 'tous',
     features: [
-      'Tous les emplacements Starter',
+      'Tous les emplacements Starter & Feed',
       'Publications sponsorisées dans le fil principal',
       '1 Notification Push sponsorisée / mois',
       'Ciblage par quartier et tranches d\'âge',
@@ -39,27 +72,14 @@ export const ZAKA_ADS_PACKAGES: AdPackage[] = [
     ]
   },
   {
-    id: 'premium',
-    name: 'Pack Premium',
-    price: 500000,
-    durationDays: 30,
-    estimatedImpressions: 150000,
-    features: [
-      'Visibilité maximale sur 100% de la plateforme',
-      'Format Vidéo & Bannières interactives',
-      'Notifications Push sponsorisées illimitées',
-      'Support IA ZAKA Ads Assistant prioritaire',
-      'Manager de compte dédié à Ouagadougou'
-    ]
-  },
-  {
     id: 'boost_express',
-    name: 'Boost Événementiel (Express)',
+    name: 'Boost Événementiel Express',
     price: 5000,
     durationDays: 1,
-    estimatedImpressions: 2500,
+    estimatedImpressions: 3000,
+    categoryTarget: 'tous',
     features: [
-      'Boost immédiat de 24h pour une soirée ou DJ',
+      'Boost immédiat 24h pour soirée, concert ou DJ',
       'Mise en tête de liste Événements & Soirées',
       'Diffusion prioritaire le vendredi ou samedi soir'
     ]
@@ -79,7 +99,17 @@ export const ZakaAdsPacksModal: React.FC<ZakaAdsPacksModalProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [step, setStep] = useState<'packages' | 'payment' | 'success'>('packages');
 
+  const [packCategoryFilter, setPackCategoryFilter] = useState<string>('all');
+
   if (!isOpen) return null;
+
+  const filteredPackages = ZAKA_ADS_PACKAGES.filter(p => {
+    if (packCategoryFilter === 'all') return true;
+    if (packCategoryFilter === 'restaurants') return p.categoryTarget === 'restaurants' || p.categoryTarget === 'tous';
+    if (packCategoryFilter === 'salons_beaute') return p.categoryTarget === 'salons_beaute' || p.categoryTarget === 'tous';
+    if (packCategoryFilter === 'annonceurs') return p.categoryTarget === 'annonceurs' || p.categoryTarget === 'tous';
+    return true;
+  });
 
   const handleProceedToPayment = () => {
     if (!selectedPack) return;
@@ -150,8 +180,31 @@ export const ZakaAdsPacksModal: React.FC<ZakaAdsPacksModalProps> = ({
         <div className="p-6">
           {step === 'packages' && (
             <div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                {ZAKA_ADS_PACKAGES.map((pkg) => {
+              {/* Sector Filter Tabs */}
+              <div className="flex bg-gray-100 dark:bg-gray-800 p-1.5 rounded-2xl gap-1.5 mb-6 overflow-x-auto hide-scrollbar">
+                {[
+                  { id: 'all', label: 'Tous les Packs' },
+                  { id: 'restaurants', label: '🍽️ Restaurants & Gastronomie' },
+                  { id: 'salons_beaute', label: '✂️ Salons & Beauté' },
+                  { id: 'annonceurs', label: '🏢 Annonceurs & Marques' }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setPackCategoryFilter(tab.id)}
+                    className={`py-2 px-3.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all cursor-pointer ${
+                      packCategoryFilter === tab.id
+                        ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-sm'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                {filteredPackages.map((pkg) => {
                   const isSelected = selectedPack?.id === pkg.id;
                   return (
                     <div

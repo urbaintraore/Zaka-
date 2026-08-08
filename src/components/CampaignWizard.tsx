@@ -16,8 +16,8 @@ interface CampaignWizardProps {
 const CITIES = ['Ouagadougou', 'Bobo-Dioulasso', 'Koudougou', 'Banfora', 'Ouahigouya'];
 const NEIGHBORHOODS = ['Ouaga 2000', 'Zone du Bois', 'Gounghin', 'Tampouy', 'Pissy', 'Koulouba', 'Wemtenga', 'Dassasgho', 'Patte d\'Oie', 'Secteur 15'];
 const AGE_RANGES = ['18-24 ans', '25-34 ans', '35-49 ans', '50+ ans'];
-const INTERESTS = ['Restauration & Maquis', 'Soirées & Nightlife', 'Salons de Coiffure & Beauté', 'Concerts & Festivals', 'Sport & Fitness', 'Shopping & Mode'];
-const KEY_MOMENTS = ['Vendredi soir (Sorties)', 'Samedi soir (Nightlife)', 'Dimanche détente', 'Événements fériés'];
+const INTERESTS = ['Restaurants & Gastronomie', 'Salons de Coiffure & Beauté', 'Soirées & Nightlife', 'Boissons & Rafraîchissements', 'Relooking & Esthétique', 'Shopping & Mode', 'Concerts & Festivals'];
+const KEY_MOMENTS = ['Pause Déjeuner (11h-14h)', 'Après-midi Coiffure (14h-18h)', 'Happy Hour & Dîner (18h-22h)', 'Vendredi soir (Sorties)', 'Samedi soir (Nightlife)', 'Week-ends & Fêtes'];
 
 const PLACEMENTS: { id: AdPlacementType; label: string; description: string; icon: string }[] = [
   { id: 'home_banner', label: 'Bannière Entête Accueil', description: 'Emplacement premium visible immédiatement à l\'ouverture de l\'application.', icon: '🏆' },
@@ -219,25 +219,59 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onSuccess, onCan
 
       {/* AI Assistant Quick Generator Banner */}
       {step === 1 && (
-        <div className="p-4 bg-orange-50/70 dark:bg-orange-950/20 border-b border-orange-100 dark:border-orange-900/30 flex flex-col sm:flex-row items-center gap-3">
-          <Bot className="w-6 h-6 text-orange-500 shrink-0" />
-          <div className="flex-1 w-full">
-            <input
-              type="text"
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder="Ex: Soirée concert Afro-beat au Maquis Le Jardin ce vendredi, entrée 2000 FCFA..."
-              className="w-full text-xs px-3.5 py-2 rounded-xl bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-900/50 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-            />
+        <div className="p-4 bg-orange-50/70 dark:bg-orange-950/20 border-b border-orange-100 dark:border-orange-900/30 space-y-2">
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <Bot className="w-6 h-6 text-orange-500 shrink-0" />
+            <div className="flex-1 w-full">
+              <input
+                type="text"
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="Ex: Soirée concert, menu spécial restaurant, relooking salon de coiffure..."
+                className="w-full text-xs px-3.5 py-2 rounded-xl bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-900/50 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
+            </div>
+            <button
+              onClick={handleAiGenerate}
+              disabled={aiLoading}
+              className="w-full sm:w-auto px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shrink-0 transition-all cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{aiLoading ? 'Génération IA...' : 'Générer avec ZAKA IA'}</span>
+            </button>
           </div>
-          <button
-            onClick={handleAiGenerate}
-            disabled={aiLoading}
-            className="w-full sm:w-auto px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shrink-0 transition-all cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{aiLoading ? 'Génération IA...' : 'Générer avec ZAKA IA'}</span>
-          </button>
+
+          {/* Quick Sector Prompt Presets */}
+          <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pt-1 text-[11px]">
+            <span className="text-gray-500 font-bold shrink-0">Modèles Rapides :</span>
+            <button
+              type="button"
+              onClick={() => {
+                setAiPrompt("Restaurant : Promotion Menu du Jour gourmet et réservation de table pour midi et soir");
+              }}
+              className="px-2.5 py-1 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-700 dark:text-orange-300 font-bold shrink-0 transition-colors cursor-pointer"
+            >
+              🍽️ Restaurant (Menu & Tables)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAiPrompt("Salon de Coiffure & Beauté : Tresses tendance, coupe relooking et prise de rendez-vous directe");
+              }}
+              className="px-2.5 py-1 rounded-lg bg-pink-500/10 hover:bg-pink-500/20 text-pink-700 dark:text-pink-300 font-bold shrink-0 transition-colors cursor-pointer"
+            >
+              ✂️ Salon de Coiffure & Beauté
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAiPrompt("Grand Annonceur / Marque : Campagne nationale de visibilité et rafraîchissement dans les lieux partenaires");
+              }}
+              className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold shrink-0 transition-colors cursor-pointer"
+            >
+              🏢 Annonceur & Marque Corporate
+            </button>
+          </div>
         </div>
       )}
 

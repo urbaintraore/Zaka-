@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../store';
 import { Tab } from '../components/BottomNav';
-import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight, Eye, Trophy, TrendingUp, Award, Clock, Share2, AlertCircle, BookOpen } from 'lucide-react';
+import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight, Eye, Trophy, TrendingUp, Award, Clock, Share2, AlertCircle, BookOpen, Phone } from 'lucide-react';
 import { stripHtml } from '../utils/htmlHelpers';
 import { ReservationModal } from '../components/ReservationModal';
 import { Publication, Establishment } from '../types';
@@ -748,7 +748,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
 
       {/* Ad Placement Banner on Home Header */}
       <div className="px-4">
-        <AdPlacementBanner placement="home_header" />
+        <AdPlacementBanner placement="home_banner" />
       </div>
 
       {/* Map Interactive */}
@@ -1469,6 +1469,9 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           </section>
         )}
 
+        {/* Native ZAKA Ads Sponsored Feed Card */}
+        <AdPlacementBanner placement="home_sponsored" />
+
         {promos.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-4">
@@ -1659,6 +1662,39 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
 
               {activePubTab === 'info' ? (
                 <>
+                  {/* Publisher / Establishment Info Card */}
+                  {(() => {
+                    const publisher = getPublisher(selectedPub.establishmentId);
+                    const targetEst = establishments.find(e => e.id === selectedPub.establishmentId);
+                    return (
+                      <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl p-4 border border-orange-200/60 flex items-center justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-orange-600 text-white font-extrabold flex items-center justify-center text-sm shrink-0 shadow-sm">
+                            {publisher.name.charAt(0)}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-black text-sm text-gray-900 truncate">{publisher.name}</h4>
+                            <p className="text-xs text-gray-600 flex items-center gap-1 font-medium truncate">
+                              <MapPin className="w-3 h-3 text-orange-500 shrink-0" />
+                              {publisher.neighborhood || 'Burkina Faso'}
+                            </p>
+                          </div>
+                        </div>
+                        {targetEst && (
+                          <button
+                            onClick={() => {
+                              setSelectedRankEst(targetEst);
+                              setSelectedPub(null);
+                            }}
+                            className="px-3 py-1.5 bg-white border border-orange-300 text-orange-800 hover:bg-orange-100 font-extrabold text-[11px] rounded-xl shrink-0 transition-colors cursor-pointer shadow-xs"
+                          >
+                            Voir Fiche
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {selectedPub.imageUrl && (
                     <div className="w-full h-56 rounded-2xl overflow-hidden border border-gray-100 shadow-sm flex-shrink-0">
                       <img src={selectedPub.imageUrl} alt={selectedPub.title} className="w-full h-full object-cover" />
@@ -1675,8 +1711,65 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                     </div>
                   )}
 
-                  <div className="text-gray-600 text-sm mb-5 leading-relaxed prose prose-sm max-w-none">
-                    <div dangerouslySetInnerHTML={{ __html: selectedPub.description }} />
+                  {/* Detailed Description */}
+                  <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                    <h4 className="text-xs font-black uppercase text-gray-500 tracking-wider mb-2">Détails de l'Annonce</h4>
+                    <div className="text-gray-800 text-sm leading-relaxed prose prose-sm max-w-none">
+                      <div dangerouslySetInnerHTML={{ __html: selectedPub.description }} />
+                    </div>
+                  </div>
+
+                  {/* Contact Methods Card */}
+                  <div className="bg-emerald-50/60 rounded-2xl p-4 border border-emerald-200/60 space-y-3">
+                    <h4 className="text-xs font-black uppercase text-emerald-900 tracking-wider flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-emerald-600" /> Options de Contact Direct
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-bold">
+                      {selectedPub.whatsapp && (
+                        <a
+                          href={`https://wa.me/${selectedPub.whatsapp.replace(/[^\d+]/g, '')}?text=${encodeURIComponent(`Bonjour, je vous contacte sur ZAKA+ à propos de : ${selectedPub.title}`)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-center gap-2 p-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors shadow-xs"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                          <span>WhatsApp Direct</span>
+                        </a>
+                      )}
+                      {selectedPub.applyEmail && (
+                        <a
+                          href={`mailto:${selectedPub.applyEmail}?subject=${encodeURIComponent(`Candidature ZAKA+ : ${selectedPub.title}`)}`}
+                          className="flex items-center justify-center gap-2 p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-xs"
+                        >
+                          <span>📧 Postuler par Email</span>
+                        </a>
+                      )}
+                      {(() => {
+                        const targetEst = establishments.find(e => e.id === selectedPub.establishmentId);
+                        if (targetEst?.phone) {
+                          return (
+                            <a
+                              href={`tel:${targetEst.phone}`}
+                              className="flex items-center justify-center gap-2 p-2.5 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors shadow-xs"
+                            >
+                              <Phone className="w-4 h-4" />
+                              <span>Appeler ({targetEst.phone})</span>
+                            </a>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Guidance for User */}
+                  <div className="bg-amber-50/80 rounded-2xl p-3.5 border border-amber-200/80 text-xs text-amber-900 space-y-1">
+                    <div className="font-black flex items-center gap-1.5 text-amber-950">
+                      <span>💡 Guide d'action pour les utilisateurs</span>
+                    </div>
+                    <p className="leading-relaxed font-medium">
+                      Consultez attentivement la description ci-dessus. Pour toute demande d'information, de réservation ou de postulation, contactez directement l'établissement ou l'annonceur via les boutons WhatsApp et Téléphone.
+                    </p>
                   </div>
 
                   {selectedPub.type === 'evenement' && (

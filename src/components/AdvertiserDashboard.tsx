@@ -6,7 +6,8 @@ import { ZakaAdsPacksModal } from './ZakaAdsPacksModal';
 import { 
   Sparkles, Plus, Eye, MousePointer, Target, DollarSign, 
   BarChart3, TrendingUp, Calendar, MapPin, Layers, FileText, 
-  Bot, CheckCircle2, AlertCircle, ArrowUpRight, Share2, Download
+  Bot, CheckCircle2, AlertCircle, ArrowUpRight, Share2, Download,
+  Utensils, Scissors, Building2, Zap, ArrowRight
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, CartesianGrid } from 'recharts';
 
@@ -268,6 +269,109 @@ export const AdvertiserDashboard: React.FC = () => {
               </div>
             </div>
 
+          </div>
+
+          {/* Sector Value Proposition & Solutions Grid */}
+          <div className="bg-gradient-to-br from-amber-500/5 via-orange-500/5 to-transparent p-6 rounded-3xl border border-orange-500/20 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="px-2.5 py-0.5 rounded-full bg-orange-500/10 text-orange-600 font-extrabold text-[10px] uppercase tracking-wider">
+                  Stratégies AdTech Sur Mesure
+                </span>
+                <h3 className="font-black text-lg text-gray-900 dark:text-white mt-1">
+                  Solutions & Opportunités ZAKA Ads par Secteur
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowPacksModal(true)}
+                className="text-xs font-bold text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <span>Voir les Forfaits Dediés</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              
+              {/* Card 1: Restaurants */}
+              <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between space-y-4">
+                <div>
+                  <div className="w-10 h-10 rounded-2xl bg-orange-500/10 text-orange-600 flex items-center justify-center font-bold mb-3">
+                    <Utensils className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-extrabold text-sm text-gray-900 dark:text-white mb-1">
+                    Restaurants & Gastronomie
+                  </h4>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-3">
+                    Remplissez vos tables et déclenchez des commandes instantanées.
+                  </p>
+                  <ul className="space-y-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+                    <li className="flex items-center gap-1.5">• Sponsoring "Menu du Jour" en tête de feed</li>
+                    <li className="flex items-center gap-1.5">• Diffusion ciblée heures de repas (11h-13h & 18h-20h)</li>
+                    <li className="flex items-center gap-1.5">• Bouton "Réserver une Table" & WhatsApp direct</li>
+                  </ul>
+                </div>
+                <button
+                  onClick={() => setActiveTab('new_campaign')}
+                  className="w-full py-2 bg-orange-500/10 hover:bg-orange-500 text-orange-600 hover:text-white font-extrabold text-xs rounded-xl transition-all cursor-pointer text-center"
+                >
+                  Lancer une Pub Resto
+                </button>
+              </div>
+
+              {/* Card 2: Salons de Beauté */}
+              <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between space-y-4">
+                <div>
+                  <div className="w-10 h-10 rounded-2xl bg-pink-500/10 text-pink-600 flex items-center justify-center font-bold mb-3">
+                    <Scissors className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-extrabold text-sm text-gray-900 dark:text-white mb-1">
+                    Salons de Coiffure & Beauté
+                  </h4>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-3">
+                    Remplissez votre carnet de rendez-vous et vos fauteuils.
+                  </p>
+                  <ul className="space-y-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+                    <li className="flex items-center gap-1.5">• Galerie Tresses & Coupes tendance sponsorisée</li>
+                    <li className="flex items-center gap-1.5">• Prise de rendez-vous directe in-app</li>
+                    <li className="flex items-center gap-1.5">• Offres "Heures Creuses" en semaine & week-end</li>
+                  </ul>
+                </div>
+                <button
+                  onClick={() => setActiveTab('new_campaign')}
+                  className="w-full py-2 bg-pink-500/10 hover:bg-pink-600 text-pink-600 hover:text-white font-extrabold text-xs rounded-xl transition-all cursor-pointer text-center"
+                >
+                  Lancer une Pub Beauté
+                </button>
+              </div>
+
+              {/* Card 3: Grands Annonceurs & Marques */}
+              <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between space-y-4">
+                <div>
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold mb-3">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-extrabold text-sm text-gray-900 dark:text-white mb-1">
+                    Grands Annonceurs & Marques
+                  </h4>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-3">
+                    Dominez la scène urbaine et captez les consommateurs actifs.
+                  </p>
+                  <ul className="space-y-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+                    <li className="flex items-center gap-1.5">• Bannières d'accueil & vidéos grand format</li>
+                    <li className="flex items-center gap-1.5">• Co-branding fiches maquis, lounges & bars</li>
+                    <li className="flex items-center gap-1.5">• Notifications push geofencées Ouaga & Bobo</li>
+                  </ul>
+                </div>
+                <button
+                  onClick={() => setActiveTab('new_campaign')}
+                  className="w-full py-2 bg-amber-500/10 hover:bg-amber-600 text-amber-600 hover:text-white font-extrabold text-xs rounded-xl transition-all cursor-pointer text-center"
+                >
+                  Lancer une Campagne Marque
+                </button>
+              </div>
+
+            </div>
           </div>
 
         </div>
