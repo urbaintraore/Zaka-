@@ -394,5 +394,38 @@ service cloud.firestore {
       );
       allow delete: if isUserAdmin();
     }
+
+    // ZAKA Ads Rules
+    match /campaigns/{campId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && (existing().advertiserId == request.auth.uid || isUserAdmin());
+    }
+
+    match /ads/{adId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if true; // allow incrementing impressions and clicks
+      allow delete: if isSignedIn() && (existing().advertiserId == request.auth.uid || isUserAdmin());
+    }
+
+    match /payments/{payId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isUserAdmin();
+      allow delete: if isUserAdmin();
+    }
+
+    match /invoices/{invId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isUserAdmin();
+    }
+
+    match /adStatistics/{statId} {
+      allow read: if isSignedIn();
+      allow create, update: if true;
+      allow delete: if isUserAdmin();
+    }
   }
 }

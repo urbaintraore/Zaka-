@@ -8,6 +8,7 @@ import { Publication, Establishment } from '../types';
 import { db } from '../lib/firebase';
 import { EstablishmentDetailModal } from '../components/EstablishmentDetailModal';
 import { StoriesSection } from '../components/StoriesSection';
+import { AdPlacementBanner } from '../components/AdPlacementBanner';
 import { ParticipationButtons } from '../components/ParticipationButtons';
 import { EventAIAnalytics } from '../components/EventAIAnalytics';
 import { ChallengePhoto } from '../components/ChallengePhoto';
@@ -734,15 +735,20 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                 onClick={() => setMapCategory(cat)}
                 className={`shrink-0 px-4 py-2 rounded-full text-sm font-bold transition-all ${
                   mapCategory.toLowerCase() === cat.toLowerCase()
-                    ? 'bg-white text-orange-600 shadow-sm'
-                    : 'bg-white/20 text-white hover:bg-white/30'
-                }`}
+                ? 'bg-white text-orange-600 shadow-sm'
+                : 'bg-white/20 text-white hover:bg-white/30'
+            }`}
               >
                 {cat}
               </button>
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Ad Placement Banner on Home Header */}
+      <div className="px-4">
+        <AdPlacementBanner placement="home_header" />
       </div>
 
       {/* Map Interactive */}

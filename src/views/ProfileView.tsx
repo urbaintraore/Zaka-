@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
 import { Role, Category } from '../types';
-import { LogOut, User, Check, X, MessageSquare, Store, Sparkles, Calendar, Download, Star } from 'lucide-react';
+import { LogOut, User, Check, X, MessageSquare, Store, Sparkles, Calendar, Download, Star, Megaphone } from 'lucide-react';
 import { GerantDashboard } from './GerantDashboard';
 import { AdminDashboard } from './AdminDashboard';
 import { EntrepriseDashboard } from './EntrepriseDashboard';
+import { ZakaAdsDashboard } from '../components/ZakaAdsDashboard';
 import { useInstallApp } from '../hooks/useInstallApp';
 import { PersonalTimelineAndRecs } from '../components/PersonalTimelineAndRecs';
 
@@ -40,6 +41,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [subView, setSubView] = useState<'dashboard' | 'profile'>('dashboard');
   const [resActiveTab, setResActiveTab] = useState<'current' | 'history'>('current');
+  const [showAdsDashboard, setShowAdsDashboard] = useState(false);
 
   // Profile editing state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -168,6 +170,25 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   };
 
   if (currentUser) {
+    if (showAdsDashboard || currentUser.role === 'annonceur') {
+      return (
+        <div className="pb-24 max-w-5xl mx-auto p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setShowAdsDashboard(false)}
+              className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-bold text-xs hover:bg-gray-200 cursor-pointer"
+            >
+              ← Retour au Profil
+            </button>
+            <span className="text-xs font-bold text-orange-600 dark:text-orange-400">
+              Régie Publicitaire ZAKA Ads
+            </span>
+          </div>
+          <ZakaAdsDashboard />
+        </div>
+      );
+    }
+
     if (currentUser.role === 'entreprise') {
       return (
         <div className="pb-24">
@@ -506,6 +527,13 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 >
                   Modifier le profil
                 </button>
+                <button
+                  onClick={() => setShowAdsDashboard(true)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold rounded-xl hover:opacity-95 transition-all cursor-pointer shadow-md shadow-orange-500/20"
+                >
+                  <Megaphone className="w-5 h-5" />
+                  <span>Espace Pub ZAKA Ads</span>
+                </button>
                 {isInstallable && (
                   <button onClick={promptInstall} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 text-blue-600 font-bold rounded-xl hover:bg-blue-100 transition-colors cursor-pointer">
                     <Download className="w-5 h-5" />
@@ -583,9 +611,6 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                     </button>
                   </div>
                 </div>
-                <button onClick={() => setIsUpgrading(true)} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-50 text-orange-600 font-bold rounded-xl hover:bg-orange-100 transition-colors cursor-pointer">
-                  Devenir Gérant (Ajouter un établissement)
-                </button>
                 <button onClick={logout} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition-colors cursor-pointer">
                   <LogOut className="w-5 h-5" />
                   Déconnexion

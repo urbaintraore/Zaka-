@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage } from './types';
+import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
 import { 
@@ -32,6 +32,11 @@ interface AppState {
   staffReviews: StaffReview[];
   staffAttendances: StaffAttendance[];
   parrainages: Parrainage[];
+  campaigns: Campaign[];
+  ads: Ad[];
+  adPayments: AdPayment[];
+  adInvoices: AdInvoice[];
+  adDailyStats: AdDailyStat[];
   loading: boolean;
   globalError: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null;
   theme: 'light' | 'dark';
@@ -95,6 +100,18 @@ interface AppContextType extends AppState {
   updateStaffReviewStatus: (id: string, status: 'valide' | 'invalide', managerNote?: string, bonusOrSanction?: StaffReview['bonusOrSanction']) => Promise<void>;
   createStaffAttendance: (attendance: Omit<StaffAttendance, 'id' | 'createdAt'>) => Promise<void>;
   deleteStaffAttendance: (id: string) => Promise<void>;
+  // ZAKA Ads Methods
+  addCampaign: (
+    campaignData: Omit<Campaign, 'id' | 'createdAt' | 'budgetSpent'>, 
+    adCreatives?: Omit<Ad, 'id' | 'campaignId' | 'impressions' | 'views' | 'clicks' | 'conversions' | 'createdAt'>[]
+  ) => Promise<string>;
+  updateCampaignStatus: (campaignId: string, status: CampaignStatus) => Promise<void>;
+  addAdCreative: (adData: Omit<Ad, 'id' | 'impressions' | 'views' | 'clicks' | 'conversions' | 'createdAt'>) => Promise<void>;
+  trackAdImpression: (adId: string) => Promise<void>;
+  trackAdClick: (adId: string) => Promise<void>;
+  processAdPayment: (paymentData: Omit<AdPayment, 'id' | 'createdAt' | 'status'>) => Promise<string>;
+  validateAdPayment: (paymentId: string) => Promise<void>;
+  validateCampaignByAdmin: (campaignId: string) => Promise<void>;
   setGlobalError: (err: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null) => void;
   toggleTheme: () => void;
 }
@@ -171,6 +188,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     staffReviews: [],
     staffAttendances: [],
     parrainages: [],
+    campaigns: [],
+    ads: [],
+    adPayments: [],
+    adInvoices: [],
+    adDailyStats: [],
     loading: true,
     globalError: null,
     theme: (localStorage.getItem('app-theme') as 'light' | 'dark') || 
@@ -532,12 +554,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error("Erreur listening to entreprises:", error);
     });
 
+    // Listen to ZAKA Ads campaigns (public)
+    const campQuery = query(collection(db, 'campaigns'));
+    const unsubscribeCamp = onSnapshot(campQuery, (snapshot) => {
+      const camps: Campaign[] = [];
+      snapshot.forEach(docSnap => camps.push({ id: docSnap.id, ...docSnap.data() } as Campaign));
+      setState(s => ({ ...s, campaigns: camps }));
+    }, (error) => {
+      console.error("Erreur listening to campaigns:", error);
+    });
+
+    // Listen to ZAKA Ads (public)
+    const adsQuery = query(collection(db, 'ads'));
+    const unsubscribeAds = onSnapshot(adsQuery, (snapshot) => {
+      const adList: Ad[] = [];
+      snapshot.forEach(docSnap => adList.push({ id: docSnap.id, ...docSnap.data() } as Ad));
+      setState(s => ({ ...s, ads: adList }));
+    }, (error) => {
+      console.error("Erreur listening to ads:", error);
+    });
+
     return () => {
       unsubscribeEst();
       unsubscribePub();
       unsubscribeReview();
       unsubscribeMenu();
       unsubscribeEnt();
+      unsubscribeCamp();
+      unsubscribeAds();
     };
   }, []);
 
@@ -545,9 +589,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.currentUser) {
       // Clear authenticated state data when user logs out
-      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {}, carnetEntrees: [], parrainages: [] }));
+      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {}, carnetEntrees: [], parrainages: [], adPayments: [], adInvoices: [], adDailyStats: [] }));
       return;
     }
+
+    // Listen to ad payments
+    const payQuery = query(collection(db, 'payments'));
+    const unsubscribePayments = onSnapshot(payQuery, (snapshot) => {
+      const pList: AdPayment[] = [];
+      snapshot.forEach(docSnap => pList.push({ id: docSnap.id, ...docSnap.data() } as AdPayment));
+      setState(s => ({ ...s, adPayments: pList }));
+    }, (error) => {
+      console.error("Erreur listening to payments:", error);
+    });
+
+    // Listen to ad invoices
+    const invQuery = query(collection(db, 'invoices'));
+    const unsubscribeInvoices = onSnapshot(invQuery, (snapshot) => {
+      const iList: AdInvoice[] = [];
+      snapshot.forEach(docSnap => iList.push({ id: docSnap.id, ...docSnap.data() } as AdInvoice));
+      setState(s => ({ ...s, adInvoices: iList }));
+    }, (error) => {
+      console.error("Erreur listening to invoices:", error);
+    });
+
+    // Listen to ad daily stats
+    const statsQuery = query(collection(db, 'adStatistics'));
+    const unsubscribeStats = onSnapshot(statsQuery, (snapshot) => {
+      const sList: AdDailyStat[] = [];
+      snapshot.forEach(docSnap => sList.push({ id: docSnap.id, ...docSnap.data() } as AdDailyStat));
+      setState(s => ({ ...s, adDailyStats: sList }));
+    }, (error) => {
+      console.error("Erreur listening to adStatistics:", error);
+    });
 
     // Listen to users
     const usersQuery = query(collection(db, 'users'));
@@ -666,6 +740,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
+      unsubscribePayments();
+      unsubscribeInvoices();
+      unsubscribeStats();
       unsubscribeUsers();
       unsubscribeRel();
       unsubscribeStaffReviews();
@@ -1782,6 +1859,222 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // --- ZAKA ADS METHODS ---
+  const addCampaign = async (
+    campaignData: Omit<Campaign, 'id' | 'createdAt' | 'budgetSpent'>, 
+    adCreatives?: Omit<Ad, 'id' | 'campaignId' | 'impressions' | 'views' | 'clicks' | 'conversions' | 'createdAt'>[]
+  ): Promise<string> => {
+    try {
+      const now = new Date().toISOString();
+      const campRef = await addDoc(collection(db, 'campaigns'), {
+        ...campaignData,
+        budgetSpent: 0,
+        createdAt: now
+      });
+
+      if (adCreatives && adCreatives.length > 0) {
+        for (const creative of adCreatives) {
+          await addDoc(collection(db, 'ads'), {
+            ...creative,
+            campaignId: campRef.id,
+            advertiserId: campaignData.advertiserId,
+            advertiserName: campaignData.advertiserName,
+            impressions: 0,
+            views: 0,
+            clicks: 0,
+            conversions: 0,
+            status: campaignData.status === 'active' ? 'active' : 'en_attente',
+            createdAt: now
+          });
+        }
+      }
+
+      console.log("[ZAKA Ads] Campaign created:", campRef.id);
+      return campRef.id;
+    } catch (error) {
+      console.error("Erreur addCampaign:", error);
+      handleFirestoreError(error, OperationType.CREATE, 'campaigns');
+      throw error;
+    }
+  };
+
+  const updateCampaignStatus = async (campaignId: string, status: CampaignStatus) => {
+    try {
+      await updateDoc(doc(db, 'campaigns', campaignId), { status });
+      // Update ads status as well
+      const matchingAds = state.ads.filter(a => a.campaignId === campaignId);
+      for (const adItem of matchingAds) {
+        await updateDoc(doc(db, 'ads', adItem.id), {
+          status: status === 'active' ? 'active' : status === 'pause' ? 'pause' : 'en_attente'
+        });
+      }
+    } catch (error) {
+      console.error("Erreur updateCampaignStatus:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `campaigns/${campaignId}`);
+    }
+  };
+
+  const addAdCreative = async (adData: Omit<Ad, 'id' | 'impressions' | 'views' | 'clicks' | 'conversions' | 'createdAt'>) => {
+    try {
+      const now = new Date().toISOString();
+      await addDoc(collection(db, 'ads'), {
+        ...adData,
+        impressions: 0,
+        views: 0,
+        clicks: 0,
+        conversions: 0,
+        createdAt: now
+      });
+    } catch (error) {
+      console.error("Erreur addAdCreative:", error);
+      handleFirestoreError(error, OperationType.CREATE, 'ads');
+    }
+  };
+
+  const trackAdImpression = async (adId: string) => {
+    try {
+      const targetAd = state.ads.find(a => a.id === adId);
+      if (!targetAd) return;
+
+      // Update Ad document
+      const newImp = (targetAd.impressions || 0) + 1;
+      await updateDoc(doc(db, 'ads', adId), { impressions: newImp });
+
+      // Record daily stat
+      const today = new Date().toISOString().split('T')[0];
+      const existingStat = state.adDailyStats.find(s => s.campaignId === targetAd.campaignId && s.date === today);
+
+      if (existingStat) {
+        await updateDoc(doc(db, 'adStatistics', existingStat.id), {
+          impressions: (existingStat.impressions || 0) + 1
+        });
+      } else {
+        await addDoc(collection(db, 'adStatistics'), {
+          campaignId: targetAd.campaignId,
+          advertiserId: targetAd.advertiserId,
+          date: today,
+          impressions: 1,
+          clicks: 0,
+          views: 0,
+          conversions: 0
+        });
+      }
+    } catch (error) {
+      console.error("Erreur trackAdImpression:", error);
+    }
+  };
+
+  const trackAdClick = async (adId: string) => {
+    try {
+      const targetAd = state.ads.find(a => a.id === adId);
+      if (!targetAd) return;
+
+      const newClicks = (targetAd.clicks || 0) + 1;
+      await updateDoc(doc(db, 'ads', adId), { clicks: newClicks });
+
+      // Record daily stat
+      const today = new Date().toISOString().split('T')[0];
+      const existingStat = state.adDailyStats.find(s => s.campaignId === targetAd.campaignId && s.date === today);
+
+      if (existingStat) {
+        await updateDoc(doc(db, 'adStatistics', existingStat.id), {
+          clicks: (existingStat.clicks || 0) + 1
+        });
+      } else {
+        await addDoc(collection(db, 'adStatistics'), {
+          campaignId: targetAd.campaignId,
+          advertiserId: targetAd.advertiserId,
+          date: today,
+          impressions: 0,
+          clicks: 1,
+          views: 0,
+          conversions: 0
+        });
+      }
+    } catch (error) {
+      console.error("Erreur trackAdClick:", error);
+    }
+  };
+
+  const processAdPayment = async (paymentData: Omit<AdPayment, 'id' | 'createdAt' | 'status'>): Promise<string> => {
+    try {
+      const now = new Date().toISOString();
+      const isAdmin = state.currentUser?.role === 'admin';
+      const initialStatus = isAdmin ? 'valide' : 'en_attente';
+
+      const payRef = await addDoc(collection(db, 'payments'), {
+        ...paymentData,
+        status: initialStatus,
+        createdAt: now
+      });
+
+      if (initialStatus === 'valide') {
+        // Auto-generate invoice
+        const invoiceNum = `INV-ZAKA-${Math.floor(100000 + Math.random() * 900000)}`;
+        await addDoc(collection(db, 'invoices'), {
+          paymentId: payRef.id,
+          advertiserId: paymentData.advertiserId,
+          advertiserName: paymentData.advertiserName,
+          amount: paymentData.amount,
+          packOrCampaign: paymentData.packName || 'Campagne Publicitaire',
+          pdfNumber: invoiceNum,
+          date: now,
+          status: 'payee'
+        });
+
+        if (paymentData.campaignId) {
+          await updateDoc(doc(db, 'campaigns', paymentData.campaignId), { status: 'active' });
+        }
+      }
+
+      return payRef.id;
+    } catch (error) {
+      console.error("Erreur processAdPayment:", error);
+      handleFirestoreError(error, OperationType.CREATE, 'payments');
+      throw error;
+    }
+  };
+
+  const validateAdPayment = async (paymentId: string) => {
+    try {
+      const payment = state.adPayments.find(p => p.id === paymentId);
+      if (!payment) return;
+
+      await updateDoc(doc(db, 'payments', paymentId), { status: 'valide' });
+
+      // Generate Invoice
+      const now = new Date().toISOString();
+      const invoiceNum = `INV-ZAKA-${Math.floor(100000 + Math.random() * 900000)}`;
+      await addDoc(collection(db, 'invoices'), {
+        paymentId,
+        advertiserId: payment.advertiserId,
+        advertiserName: payment.advertiserName,
+        amount: payment.amount,
+        packOrCampaign: payment.packName || 'Campagne Publicitaire',
+        pdfNumber: invoiceNum,
+        date: now,
+        status: 'payee'
+      });
+
+      // Activate campaign if linked
+      if (payment.campaignId) {
+        await updateCampaignStatus(payment.campaignId, 'active');
+      }
+    } catch (error) {
+      console.error("Erreur validateAdPayment:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `payments/${paymentId}`);
+    }
+  };
+
+  const validateCampaignByAdmin = async (campaignId: string) => {
+    try {
+      await updateCampaignStatus(campaignId, 'active');
+    } catch (error) {
+      console.error("Erreur validateCampaignByAdmin:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `campaigns/${campaignId}`);
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       ...state,
@@ -1828,6 +2121,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateStaffReviewStatus,
       createStaffAttendance,
       deleteStaffAttendance,
+      addCampaign,
+      updateCampaignStatus,
+      addAdCreative,
+      trackAdImpression,
+      trackAdClick,
+      processAdPayment,
+      validateAdPayment,
+      validateCampaignByAdmin,
       setGlobalError,
       toggleTheme
     }}>

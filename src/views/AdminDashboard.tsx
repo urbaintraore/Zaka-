@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
+import { ZakaAdsAdminTab } from '../components/ZakaAdsAdminTab';
 import { 
   LogOut, 
   CheckCircle, 
@@ -17,7 +18,8 @@ import {
   ShieldAlert, 
   Check, 
   Eye, 
-  EyeOff
+  EyeOff,
+  Sparkles
 } from 'lucide-react';
 import { useInstallApp } from '../hooks/useInstallApp';
 import { Establishment, Category } from '../types';
@@ -36,7 +38,7 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const { isInstallable, promptInstall } = useInstallApp();
 
   // Navigation and filtering states
-  const [activeTab, setActiveTab] = useState<'validation' | 'establishments'>('validation');
+  const [activeTab, setActiveTab] = useState<'validation' | 'establishments' | 'zaka_ads'>('validation');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Tous');
   const [selectedStatus, setSelectedStatus] = useState<string>('Tous');
@@ -181,12 +183,12 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex bg-gray-100 dark:bg-gray-800/60 p-1.5 rounded-2xl">
+      <div className="flex bg-gray-100 dark:bg-gray-800/60 p-1.5 rounded-2xl gap-1">
         <button 
           onClick={() => setActiveTab('validation')}
           className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${activeTab === 'validation' ? 'bg-white dark:bg-gray-800 text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
         >
-          <span>Demandes en attente</span>
+          <span>Demandes</span>
           {(pendingEsts.length + pendingEnts.length) > 0 && (
             <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
               {pendingEsts.length + pendingEnts.length}
@@ -199,7 +201,17 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
         >
           <span>Établissements ({establishments.length})</span>
         </button>
+        <button 
+          onClick={() => setActiveTab('zaka_ads')}
+          className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${activeTab === 'zaka_ads' ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>ZAKA Ads</span>
+        </button>
       </div>
+
+      {/* Tab 3: ZAKA Ads Admin */}
+      {activeTab === 'zaka_ads' && <ZakaAdsAdminTab />}
 
       {/* Tab 1: Validation */}
       {activeTab === 'validation' && (

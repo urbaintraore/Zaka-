@@ -10,6 +10,7 @@ import { MapView } from '../components/MapView';
 import { Establishment } from '../types';
 import { HeartButton } from '../components/HeartButton';
 import { OuagadougouHeatmap } from '../components/OuagadougouHeatmap';
+import { AdPlacementBanner } from '../components/AdPlacementBanner';
 
 import { JoinRoleModal } from '../components/JoinRoleModal';
 
@@ -281,6 +282,7 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
         <OuagadougouHeatmap />
       ) : (
         <div className="flex flex-col gap-4">
+          <AdPlacementBanner placement="feed_native" />
           {filtered.map(est => {
             const djRequests = relationshipRequests.filter(r => r.establishmentId === est.id && r.status === 'acceptee' && r.isDJ);
             const djs = djRequests.map(r => {

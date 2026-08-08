@@ -8,6 +8,7 @@ import { LiveDAmbiance } from './LiveDAmbiance';
 import { AffluenceTracker } from './AffluenceTracker';
 import { PlaylistDJ } from './PlaylistDJ';
 import { TableauDeBordRH } from './TableauDeBordRH';
+import { AdPlacementBanner } from './AdPlacementBanner';
 import { useAppStore } from '../store';
 import { shareContent } from '../utils/platform';
 
@@ -235,6 +236,9 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
               </button>
             )}
           </div>
+
+          {/* Targeted Ad Placement */}
+          <AdPlacementBanner placement="establishment_detail" targetCity={establishment.city} />
 
           {currentUser && currentUser.id === establishment.ownerId && (
             <div className="p-4 bg-orange-50/70 dark:bg-orange-950/20 rounded-2xl border-2 border-orange-200 dark:border-orange-900/60 space-y-4 animate-in fade-in slide-in-from-top-4 duration-200">

@@ -203,6 +203,43 @@
         "unlockedAt": { "type": "string" }
       },
       "required": ["parrainId", "parraineId", "status", "date"]
+    },
+    "Campaign": {
+      "title": "Campaign",
+      "description": "ZAKA Ads Campaign",
+      "type": "object",
+      "properties": {
+        "advertiserId": { "type": "string" },
+        "advertiserName": { "type": "string" },
+        "title": { "type": "string" },
+        "objective": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "budgetTotal": { "type": "number" },
+        "budgetSpent": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["advertiserId", "title", "objective", "status"]
+    },
+    "Ad": {
+      "title": "Ad",
+      "description": "ZAKA Ads Creative",
+      "type": "object",
+      "properties": {
+        "campaignId": { "type": "string" },
+        "advertiserId": { "type": "string" },
+        "advertiserName": { "type": "string" },
+        "title": { "type": "string" },
+        "format": { "type": "string" },
+        "impressions": { "type": "number" },
+        "clicks": { "type": "number" },
+        "views": { "type": "number" },
+        "conversions": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["campaignId", "advertiserId", "title", "format"]
     }
   },
   "firestore": {
@@ -253,6 +290,26 @@
     "parrainages": {
       "schema": { "$ref": "#/entities/Parrainage" },
       "description": "Referrals collection"
+    },
+    "campaigns": {
+      "schema": { "$ref": "#/entities/Campaign" },
+      "description": "ZAKA Ads Campaigns"
+    },
+    "ads": {
+      "schema": { "$ref": "#/entities/Ad" },
+      "description": "ZAKA Ads Creatives"
+    },
+    "payments": {
+      "schema": { "$ref": "#/entities/AdPayment" },
+      "description": "ZAKA Ads Payments"
+    },
+    "invoices": {
+      "schema": { "$ref": "#/entities/AdPayment" },
+      "description": "ZAKA Ads Invoices"
+    },
+    "adStatistics": {
+      "schema": { "$ref": "#/entities/Ad" },
+      "description": "ZAKA Ads Daily Statistics"
     }
   }
 }

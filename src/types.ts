@@ -1,4 +1,4 @@
-export type Role = 'client' | 'gerant' | 'admin' | 'entreprise' | 'salon_coiffure';
+export type Role = 'client' | 'gerant' | 'admin' | 'entreprise' | 'salon_coiffure' | 'annonceur';
 
 export interface User {
   id: string;
@@ -12,6 +12,109 @@ export interface User {
   referralCode?: string;
   code_parrainage?: string;
   avatar?: string;
+}
+
+// ZAKA Ads Module Types
+export type CampaignObjective = 'notoriete' | 'promo_evenement' | 'acquisition' | 'vente' | 'telechargement';
+export type CampaignStatus = 'brouillon' | 'en_attente' | 'active' | 'pause' | 'terminee' | 'refusee';
+export type AdFormat = 'banniere' | 'video' | 'publication_sponsorisee';
+export type AdCTA = 'Appeler' | 'WhatsApp' | 'Réserver' | 'Découvrir' | 'Acheter';
+export type AdPlacementType = 'home_banner' | 'home_sponsored' | 'establishment_recommended' | 'event_sponsored' | 'push_notification' | 'messaging_native';
+
+export interface CampaignTargeting {
+  cities: string[]; // ['Ouagadougou', 'Bobo-Dioulasso', 'Koudougou', etc.]
+  neighborhoods?: string[]; // ['Ouaga 2000', 'Zone du Bois', 'Gounghin', 'Tampouy', etc.]
+  ageRanges?: string[]; // ['18-25', '26-35', '36-50']
+  interests?: string[]; // ['sorties', 'musique', 'restaurants', 'événements', 'sport', 'mode', 'culture']
+  keyMoments?: string[]; // ['vendredi_soir', 'samedi_soir', 'evenements_speciaux']
+}
+
+export interface Advertiser {
+  id: string; // User ID / Entreprise ID
+  name: string;
+  sector: string;
+  logo?: string;
+  phone?: string;
+  email?: string;
+  description?: string;
+  status: 'en_attente' | 'valide' | 'suspendu';
+  balance?: number; // FCFA
+  createdAt: string;
+}
+
+export interface Ad {
+  id: string;
+  campaignId: string;
+  advertiserId: string;
+  advertiserName: string;
+  title: string;
+  format: AdFormat;
+  dimensions?: '300x250' | '728x90' | 'mobile';
+  mediaUrl?: string;
+  videoDuration?: number; // 5 to 30s
+  description?: string;
+  ctaText?: AdCTA;
+  ctaLink?: string; // Phone number, WhatsApp link, or URL
+  placements: AdPlacementType[];
+  impressions: number;
+  views: number;
+  clicks: number;
+  conversions: number;
+  status: 'active' | 'pause' | 'expiree' | 'en_attente';
+  createdAt: string;
+}
+
+export interface Campaign {
+  id: string;
+  advertiserId: string;
+  advertiserName: string;
+  title: string;
+  objective: CampaignObjective;
+  startDate: string;
+  endDate: string;
+  budgetTotal: number; // in FCFA
+  budgetSpent: number;
+  status: CampaignStatus;
+  targeting: CampaignTargeting;
+  ads?: Ad[];
+  createdAt: string;
+}
+
+export interface AdPayment {
+  id: string;
+  advertiserId: string;
+  advertiserName: string;
+  campaignId?: string;
+  amount: number; // FCFA
+  method: 'Orange Money' | 'Moov Money' | 'Paiement Manuel Admin';
+  phoneUsed?: string;
+  transactionRef?: string;
+  status: 'en_attente' | 'valide' | 'echoue';
+  packName?: 'STARTER' | 'BUSINESS' | 'PREMIUM' | 'BOOST' | 'SUR_MESURE';
+  createdAt: string;
+}
+
+export interface AdInvoice {
+  id: string;
+  paymentId: string;
+  advertiserId: string;
+  advertiserName: string;
+  amount: number;
+  packOrCampaign: string;
+  pdfNumber: string;
+  date: string;
+  status: 'payee' | 'annulee';
+}
+
+export interface AdDailyStat {
+  id: string;
+  campaignId: string;
+  advertiserId: string;
+  date: string; // YYYY-MM-DD
+  impressions: number;
+  clicks: number;
+  views: number;
+  conversions: number;
 }
 
 export interface Coiffeur {
@@ -256,4 +359,24 @@ export interface Parrainage {
   date: string;
   status: 'en_attente' | 'debloque';
 }
+
+/* ==========================================================================
+   ZAKA ADS - ADDITIONAL COMPONENT TYPES
+   ========================================================================== */
+
+export interface AdPackage {
+  id: string;
+  name: string;
+  price: number;
+  durationDays: number;
+  estimatedImpressions: number;
+  estimatedClicks?: number;
+  features: string[];
+  recommendedPlacement?: string[];
+  isPopular?: boolean;
+}
+
+export type AdPaymentMethod = 'orange_money' | 'moov_money' | 'wave' | 'carte_bancaire' | 'Orange Money' | 'Moov Money' | 'Paiement Manuel Admin';
+
+
 
