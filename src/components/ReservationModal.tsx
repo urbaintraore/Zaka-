@@ -10,6 +10,7 @@ interface ReservationModalProps {
     time: string;
     guests: number;
     details: string;
+    allergiesOrDiet?: string;
   }) => void;
 }
 
@@ -19,6 +20,7 @@ export function ReservationModal({ establishmentName, onClose, onSubmit }: Reser
   const [selectedTime, setSelectedTime] = useState('');
   const [guests, setGuests] = useState(2);
   const [details, setDetails] = useState('');
+  const [allergiesOrDiet, setAllergiesOrDiet] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
   // Custom interactive calendar states
@@ -73,7 +75,8 @@ export function ReservationModal({ establishmentName, onClose, onSubmit }: Reser
       date: selectedDate, 
       time: selectedTime, 
       guests, 
-      details 
+      details,
+      allergiesOrDiet: allergiesOrDiet.trim() || undefined
     });
     setSubmitted(true);
     setTimeout(() => onClose(), 2000);
@@ -258,6 +261,20 @@ export function ReservationModal({ establishmentName, onClose, onSubmit }: Reser
                 {guests}
               </span>
             </div>
+          </div>
+
+          {/* Allergies & Régimes alimentaires */}
+          <div className="space-y-1.5 p-3 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/40 rounded-xl">
+            <label className="text-[11px] uppercase tracking-wider font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+              ⚠️ Allergies / Régimes alimentaires (Restaurants)
+            </label>
+            <input 
+              type="text"
+              placeholder="Ex: Allergie arachides/crustacés, végétarien, halal, sans gluten..."
+              value={allergiesOrDiet}
+              onChange={e => setAllergiesOrDiet(e.target.value)}
+              className="w-full bg-white dark:bg-gray-900 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-xs font-medium text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none placeholder:text-gray-400"
+            />
           </div>
 
           {/* Details / Order Info */}

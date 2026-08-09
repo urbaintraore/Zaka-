@@ -366,7 +366,28 @@ export function UserGuideModal({ onClose }: UserGuideModalProps) {
                 <div className="flex gap-3">
                   <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-extrabold flex items-center justify-center text-xs flex-shrink-0">3</div>
                   <div>
-                    <strong className="text-gray-900 dark:text-white">Fidélité & Carnet :</strong> Marquez votre visite dans un établissement pour valider votre venue, gagnez des points, complétez des défis photo et laissez des avis détaillés pour faire monter l'établissement dans le classement hebdomadaire.
+                    <strong className="text-gray-900 dark:text-white">Fidélité & Carnet ("J'y suis allé") :</strong> Cliquez sur "J'y suis allé" pour enregistrer votre passage. Chaque visite incrémente votre carte de fidélité auprès de l'établissement. Dès le seuil atteint, débloquez des récompenses exclusives !
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-extrabold flex items-center justify-center text-xs flex-shrink-0">4</div>
+                  <div>
+                    <strong className="text-gray-900 dark:text-white">Avis Photos avec Compression Client :</strong> Joignez jusqu'à 3 photos à vos avis. La compression est automatique avant envoi. Les autres clients peuvent cliquer sur les vignettes pour agrandir les photos.
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-extrabold flex items-center justify-center text-xs flex-shrink-0">5</div>
+                  <div>
+                    <strong className="text-gray-900 dark:text-white">Réservations avec Allergies / Régime :</strong> Indiquez vos allergies ou besoins alimentaires (halal, sans gluten, végétarien) directement lors de la réservation de votre table.
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-extrabold flex items-center justify-center text-xs flex-shrink-0">6</div>
+                  <div>
+                    <strong className="text-gray-900 dark:text-white">Sortie de Groupe & Mode « Maintenant » :</strong> Organisez des sorties entre amis avec sondages et fil de réponse. Activez le Mode « Maintenant » pour filtrer les lieux selon leur affluence en temps réel.
                   </div>
                 </div>
               </div>
@@ -399,7 +420,21 @@ export function UserGuideModal({ onClose }: UserGuideModalProps) {
                 <div className="flex gap-3">
                   <div className="w-6 h-6 rounded-full bg-red-100 text-red-600 font-extrabold flex items-center justify-center text-xs flex-shrink-0">3</div>
                   <div>
-                    <strong className="text-gray-900 dark:text-white">Réservations & Recrutement :</strong> Traitez en temps réel les demandes de réservation de vos clients et recrutez votre staff de nuit (serveurs, barmaids, sécurité) directement en publiant des offres.
+                    <strong className="text-gray-900 dark:text-white">Jauge d'Affluence en Temps Réel ⏱️ :</strong> Définissez votre statut (« Calme », « Animé », « Complet ») en 1 clic. Un badge dynamique avec fraîcheur temporelle s'affiche sur votre fiche publique et expire automatiquement après 4 heures.
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-red-100 text-red-600 font-extrabold flex items-center justify-center text-xs flex-shrink-0">4</div>
+                  <div>
+                    <strong className="text-gray-900 dark:text-white">Programme de Fidélité Client 🎁 :</strong> Configurez le nombre de passages requis et la récompense. Dès qu'un client atteint le seuil via ses visites "J'y suis allé", un badge « Récompense disponible » apparaît dans sa fiche client pour la valider.
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-red-100 text-red-600 font-extrabold flex items-center justify-center text-xs flex-shrink-0">5</div>
+                  <div>
+                    <strong className="text-gray-900 dark:text-white">Gestion des Réservations & Allergies :</strong> Consultez les réservations reçues. Les allergies et régimes alimentaires saisis par les clients apparaissent en rouge prioritaire dans votre tableau de bord et sur les exports PDF.
                   </div>
                 </div>
               </div>

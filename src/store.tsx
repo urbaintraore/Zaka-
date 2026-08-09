@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus } from './types';
+import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
 import { 
@@ -37,6 +37,9 @@ interface AppState {
   adPayments: AdPayment[];
   adInvoices: AdInvoice[];
   adDailyStats: AdDailyStat[];
+  loyaltyCards: LoyaltyCard[];
+  zakaRedemptions: ZakaRedemption[];
+  groupOutings: GroupOuting[];
   loading: boolean;
   globalError: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null;
   theme: 'light' | 'dark';
@@ -112,6 +115,17 @@ interface AppContextType extends AppState {
   processAdPayment: (paymentData: Omit<AdPayment, 'id' | 'createdAt' | 'status'>) => Promise<string>;
   validateAdPayment: (paymentId: string) => Promise<void>;
   validateCampaignByAdmin: (campaignId: string) => Promise<void>;
+  // New features methods
+  updateCrowdStatus: (establishmentId: string, status: 'calme' | 'anime' | 'complet' | null) => Promise<void>;
+  updateLoyaltyConfig: (establishmentId: string, enabled: boolean, requiredVisits: number, reward: string) => Promise<void>;
+  consumeLoyaltyReward: (cardId: string) => Promise<void>;
+  updateZakaPointsConfig: (establishmentId: string, acceptsPoints: boolean, pointsCost: number, rewardDescription: string) => Promise<void>;
+  awardZakaPoints: (userId: string, pointsAmount: number, reason: string) => Promise<void>;
+  redeemZakaPoints: (establishmentId: string, pointsCost: number, rewardDescription: string) => Promise<string>;
+  consumeZakaRedemption: (redemptionId: string) => Promise<void>;
+  createGroupOuting: (outing: Omit<GroupOuting, 'id' | 'responses' | 'createdAt' | 'creatorId' | 'creatorName' | 'shareCode'>) => Promise<string>;
+  respondGroupOuting: (outingId: string, status: 'je_viens' | 'peut_etre' | 'je_ne_peux_pas') => Promise<void>;
+  deleteGroupOuting: (outingId: string) => Promise<void>;
   setGlobalError: (err: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null) => void;
   toggleTheme: () => void;
 }
@@ -165,123 +179,11 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 const DEFAULT_ESTABLISHMENTS: Establishment[] = [];
 
-const DEFAULT_PUBLICATIONS: Publication[] = [
-  {
-    id: 'pub_ann_brakina_01',
-    establishmentId: 'est_brakina_official',
-    title: '📢 Communiqué Officiel BRAKINA : Partenariat ZAKA+ & Offres Grandes Vacances',
-    description: 'BRAKINA informe l\'ensemble de ses fidèles consommateurs et des gérants de maquis, bars et lounges de son partenariat stratégique avec la plateforme ZAKA+. Profitez de promotions exclusives sur toutes vos commandes de boissons fraîches !',
-    type: 'annonce',
-    createdAt: new Date().toISOString(),
-    status: 'boostee',
-    isEmergency: false,
-    views: 125,
-    clicks: 34
-  },
-  {
-    id: 'pub_ann_recrutement_01',
-    establishmentId: 'est_jardin_gourmet',
-    title: '💼 Offre d\'Emploi : Le Jardin Gourmet Recrute 5 Serveuses & Barmaids',
-    description: 'Dans le cadre de l\'extension de notre terrasse VIP à Ouaga 2000, nous recrutons d\'urgence un personnel accueillant et dynamique. Salaire attractif + primes de ponctualité ZAKA+.',
-    type: 'annonce',
-    createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-    status: 'active',
-    isEmergency: false,
-    views: 89,
-    clicks: 12
-  },
-  {
-    id: 'pub_ann_renovation_01',
-    establishmentId: 'est_lounge_ouaga',
-    title: '🎉 Communiqué : Réouverture de la Terrasse Climatisée & Soirées DJ Live',
-    description: 'Votre espace préféré fait peau neuve ! Venez découvrir notre nouveau cadre lounge avec climatisation renforcée, nouveau menu de cocktails et prestations DJ en direct tous les soirs.',
-    type: 'annonce',
-    createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-    status: 'active',
-    isEmergency: false,
-    views: 210,
-    clicks: 45
-  }
-];
+const DEFAULT_PUBLICATIONS: Publication[] = [];
 
-const DEFAULT_CAMPAIGNS: Campaign[] = [
-  {
-    id: 'camp_demo_resto',
-    advertiserId: 'advertiser_01',
-    advertiserName: 'Le Jardin Gourmet',
-    title: 'Campagne Resto Gourmet & Grillades',
-    objective: 'notoriete',
-    budgetTotal: 150000,
-    budgetSpent: 45000,
-    status: 'active',
-    startDate: new Date(Date.now() - 86400000 * 3).toISOString().split('T')[0],
-    endDate: new Date(Date.now() + 86400000 * 20).toISOString().split('T')[0],
-    targeting: {
-      cities: ['Ouagadougou', 'Bobo-Dioulasso'],
-      neighborhoods: ['Ouaga 2000', 'Zone du Bois'],
-      ageRanges: ['18-25', '26-35', '36-50']
-    },
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'camp_demo_brakina',
-    advertiserId: 'advertiser_02',
-    advertiserName: 'BRAKINA Partenaire Officiel',
-    title: 'Campagne Nationale Brakina Soirées Fraîcheur',
-    objective: 'promo_evenement',
-    budgetTotal: 500000,
-    budgetSpent: 120000,
-    status: 'active',
-    startDate: new Date(Date.now() - 86400000 * 5).toISOString().split('T')[0],
-    endDate: new Date(Date.now() + 86400000 * 30).toISOString().split('T')[0],
-    targeting: {
-      cities: ['Ouagadougou', 'Bobo-Dioulasso', 'Koudougou'],
-      ageRanges: ['18-25', '26-35', '36-50']
-    },
-    createdAt: new Date().toISOString()
-  }
-];
+const DEFAULT_CAMPAIGNS: Campaign[] = [];
 
-const DEFAULT_ADS: Ad[] = [
-  {
-    id: 'ad_demo_resto',
-    campaignId: 'camp_demo_resto',
-    advertiserId: 'advertiser_01',
-    title: '🍽️ Le Jardin Gourmet - Menu Spécial & Grillades',
-    description: 'Découvrez notre Menu du Jour & nos soirées grillades au feu de bois à Ouaga 2000. Réservez votre table en 1 clic !',
-    format: 'banniere',
-    mediaUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=1000',
-    ctaText: 'WhatsApp',
-    ctaLink: '+22670000000',
-    advertiserName: 'Le Jardin Gourmet • Ouaga 2000',
-    placements: ['home_banner', 'home_sponsored', 'establishment_recommended'],
-    impressions: 1250,
-    views: 890,
-    clicks: 142,
-    conversions: 18,
-    status: 'active',
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'ad_demo_brakina',
-    campaignId: 'camp_demo_brakina',
-    advertiserId: 'advertiser_02',
-    title: '🍺 Soirée Fraîcheur Brakina & Live DJ Sets',
-    description: 'Grandes promos sur les boissons fraîches et animations DJ en direct ce week-end dans tous les maquis partenaires !',
-    format: 'banniere',
-    mediaUrl: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&q=80&w=1000',
-    ctaText: 'Découvrir',
-    ctaLink: 'https://zaka.bf',
-    advertiserName: 'BRAKINA Partenaire Officiel',
-    placements: ['home_banner', 'home_sponsored', 'event_sponsored'],
-    impressions: 3400,
-    views: 2100,
-    clicks: 310,
-    conversions: 45,
-    status: 'active',
-    createdAt: new Date().toISOString()
-  }
-];
+const DEFAULT_ADS: Ad[] = [];
 
 const AppContext = createContext<AppContextType | null>(null);
 
@@ -309,6 +211,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     adPayments: [],
     adInvoices: [],
     adDailyStats: [],
+    loyaltyCards: [],
+    zakaRedemptions: [],
+    groupOutings: [],
     loading: true,
     globalError: null,
     theme: (localStorage.getItem('app-theme') as 'light' | 'dark') || 
@@ -721,7 +626,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.currentUser) {
       // Clear authenticated state data when user logs out
-      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {}, carnetEntrees: [], parrainages: [], adPayments: [], adInvoices: [], adDailyStats: [] }));
+      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {}, carnetEntrees: [], parrainages: [], adPayments: [], adInvoices: [], adDailyStats: [], loyaltyCards: [], zakaRedemptions: [], groupOutings: [] }));
       return;
     }
 
@@ -871,6 +776,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error("Erreur listening to carnet_entrees:", error);
     });
 
+    // Listen to loyalty_cards
+    const loyaltyQuery = query(collection(db, 'loyalty_cards'));
+    const unsubscribeLoyalty = onSnapshot(loyaltyQuery, (snapshot) => {
+      const cards: LoyaltyCard[] = [];
+      snapshot.forEach(docSnap => cards.push({ id: docSnap.id, ...docSnap.data() } as LoyaltyCard));
+      setState(s => ({ ...s, loyaltyCards: cards }));
+    }, (error) => {
+      console.error("Erreur listening to loyalty_cards:", error);
+    });
+
+    // Listen to zaka_redemptions
+    const zakaRedQuery = query(collection(db, 'zaka_redemptions'));
+    const unsubscribeZakaRed = onSnapshot(zakaRedQuery, (snapshot) => {
+      const redList: ZakaRedemption[] = [];
+      snapshot.forEach(docSnap => redList.push({ id: docSnap.id, ...docSnap.data() } as ZakaRedemption));
+      setState(s => ({ ...s, zakaRedemptions: redList }));
+    }, (error) => {
+      console.error("Erreur listening to zaka_redemptions:", error);
+    });
+
+    // Listen to group_outings
+    const groupOutingsQuery = query(collection(db, 'group_outings'));
+    const unsubscribeGroupOutings = onSnapshot(groupOutingsQuery, (snapshot) => {
+      const gList: GroupOuting[] = [];
+      snapshot.forEach(docSnap => gList.push({ id: docSnap.id, ...docSnap.data() } as GroupOuting));
+      setState(s => ({ ...s, groupOutings: gList }));
+    }, (error) => {
+      console.error("Erreur listening to group_outings:", error);
+    });
+
     return () => {
       unsubscribePayments();
       unsubscribeInvoices();
@@ -884,6 +819,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unsubscribeFav();
       unsubscribeCarnet();
       unsubscribeParrainages();
+      unsubscribeLoyalty();
+      unsubscribeZakaRed();
+      unsubscribeGroupOutings();
     };
   }, [state.currentUser?.id]);
 
@@ -1834,6 +1772,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         date: new Date().toISOString()
       });
 
+      // Award +10 Zaka points for leaving a review
+      awardZakaPoints(review.clientId, 10, 'Avis publié');
+
       // Handle referral unlock if this is the client's first review
       try {
         const clientReviews = state.reviews.filter(r => r.clientId === review.clientId);
@@ -2004,10 +1945,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addCarnetEntry = async (entry: Omit<CarnetEntry, 'id'>) => {
     try {
+      const now = entry.date || new Date().toISOString();
       await addDoc(collection(db, 'carnet_entrees'), {
         ...entry,
-        date: entry.date || new Date().toISOString()
+        date: now
       });
+
+      // If user checks in a visit ("J'y suis allé")
+      if (entry.type === 'visite' && state.currentUser) {
+        // 1. Award +15 Zaka points
+        awardZakaPoints(state.currentUser.id, 15, 'Visite établissement');
+
+        // 2. Check if establishment has loyalty enabled
+        const est = state.establishments.find(e => e.id === entry.establishmentId);
+        if (est && est.loyaltyEnabled) {
+          const reqVisits = est.loyaltyRequiredVisits || 5;
+          const cardId = `${state.currentUser.id}_${entry.establishmentId}`;
+          const cardRef = doc(db, 'loyalty_cards', cardId);
+          const cardSnap = await getDoc(cardRef);
+
+          if (cardSnap.exists()) {
+            const currentData = cardSnap.data() as LoyaltyCard;
+            const newCount = (currentData.visitCount || 0) + 1;
+            const unlocked = newCount >= reqVisits;
+            await updateDoc(cardRef, {
+              visitCount: newCount,
+              rewardUnlocked: unlocked || currentData.rewardUnlocked,
+              lastVisitDate: now,
+              clientName: state.currentUser.name
+            });
+          } else {
+            const unlocked = 1 >= reqVisits;
+            await setDoc(cardRef, {
+              clientId: state.currentUser.id,
+              clientName: state.currentUser.name,
+              establishmentId: entry.establishmentId,
+              visitCount: 1,
+              rewardUnlocked: unlocked,
+              lastVisitDate: now
+            });
+          }
+        }
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'carnet_entrees');
     }
@@ -2028,6 +2007,187 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await deleteDoc(doc(db, 'carnet_entrees', id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `carnet_entrees/${id}`);
+    }
+  };
+
+  // --- NEW FEATURES METHODS ---
+  const updateCrowdStatus = async (establishmentId: string, status: 'calme' | 'anime' | 'complet' | null) => {
+    try {
+      await updateDoc(doc(db, 'establishments', establishmentId), {
+        crowdStatus: status,
+        crowdStatusUpdatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Erreur updateCrowdStatus:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `establishments/${establishmentId}`);
+    }
+  };
+
+  const updateLoyaltyConfig = async (establishmentId: string, enabled: boolean, requiredVisits: number, reward: string) => {
+    try {
+      await updateDoc(doc(db, 'establishments', establishmentId), {
+        loyaltyEnabled: enabled,
+        loyaltyRequiredVisits: requiredVisits,
+        loyaltyReward: reward
+      });
+    } catch (error) {
+      console.error("Erreur updateLoyaltyConfig:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `establishments/${establishmentId}`);
+    }
+  };
+
+  const consumeLoyaltyReward = async (cardId: string) => {
+    try {
+      const cardRef = doc(db, 'loyalty_cards', cardId);
+      const cardSnap = await getDoc(cardRef);
+      if (cardSnap.exists()) {
+        const data = cardSnap.data() as LoyaltyCard;
+        const est = state.establishments.find(e => e.id === data.establishmentId);
+        const reqVisits = est?.loyaltyRequiredVisits || 5;
+        const remainingVisits = Math.max(0, (data.visitCount || 0) - reqVisits);
+        await updateDoc(cardRef, {
+          visitCount: remainingVisits,
+          rewardUnlocked: remainingVisits >= reqVisits
+        });
+      }
+    } catch (error) {
+      console.error("Erreur consumeLoyaltyReward:", error);
+    }
+  };
+
+  const updateZakaPointsConfig = async (establishmentId: string, acceptsPoints: boolean, pointsCost: number, rewardDescription: string) => {
+    try {
+      await updateDoc(doc(db, 'establishments', establishmentId), {
+        acceptsZakaPoints: acceptsPoints,
+        zakaPointsCost: pointsCost,
+        zakaPointsReward: rewardDescription
+      });
+    } catch (error) {
+      console.error("Erreur updateZakaPointsConfig:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `establishments/${establishmentId}`);
+    }
+  };
+
+  const awardZakaPoints = async (userId: string, pointsAmount: number, reason: string) => {
+    try {
+      const userRef = doc(db, 'users', userId);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        const currentPoints = userSnap.data().points || 0;
+        await updateDoc(userRef, {
+          points: currentPoints + pointsAmount
+        });
+        console.log(`[Zaka Points] Awarded ${pointsAmount} pts to ${userId} for ${reason}`);
+      }
+    } catch (error) {
+      console.error("Erreur awardZakaPoints:", error);
+    }
+  };
+
+  const redeemZakaPoints = async (establishmentId: string, pointsCost: number, rewardDescription: string): Promise<string> => {
+    try {
+      if (!state.currentUser) throw new Error("Veuillez vous connecter pour utiliser vos points");
+      const userRef = doc(db, 'users', state.currentUser.id);
+      const userSnap = await getDoc(userRef);
+      const currentPoints = (userSnap.exists() ? userSnap.data().points : state.currentUser.points) || 0;
+
+      if (currentPoints < pointsCost) {
+        throw new Error(`Solde de points Zaka insuffisant (${currentPoints}/${pointsCost} pts)`);
+      }
+
+      const est = state.establishments.find(e => e.id === establishmentId);
+      const estName = est ? est.name : 'Établissement';
+      const code = 'ZAKA-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+
+      await updateDoc(userRef, {
+        points: currentPoints - pointsCost
+      });
+
+      await addDoc(collection(db, 'zaka_redemptions'), {
+        clientId: state.currentUser.id,
+        clientName: state.currentUser.name,
+        establishmentId,
+        establishmentName: estName,
+        pointsUsed: pointsCost,
+        reward: rewardDescription,
+        code,
+        status: 'valide',
+        createdAt: new Date().toISOString()
+      });
+
+      return code;
+    } catch (error) {
+      console.error("Erreur redeemZakaPoints:", error);
+      throw error;
+    }
+  };
+
+  const consumeZakaRedemption = async (redemptionId: string) => {
+    try {
+      await updateDoc(doc(db, 'zaka_redemptions', redemptionId), {
+        status: 'consomme'
+      });
+    } catch (error) {
+      console.error("Erreur consumeZakaRedemption:", error);
+    }
+  };
+
+  const createGroupOuting = async (outing: Omit<GroupOuting, 'id' | 'responses' | 'createdAt' | 'creatorId' | 'creatorName' | 'shareCode'>): Promise<string> => {
+    try {
+      if (!state.currentUser) throw new Error("Veuillez vous connecter");
+      const shareCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const now = new Date().toISOString();
+      const docRef = await addDoc(collection(db, 'group_outings'), {
+        ...outing,
+        creatorId: state.currentUser.id,
+        creatorName: state.currentUser.name,
+        shareCode,
+        responses: [
+          {
+            userId: state.currentUser.id,
+            userName: state.currentUser.name,
+            status: 'je_viens',
+            updatedAt: now
+          }
+        ],
+        createdAt: now
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error("Erreur createGroupOuting:", error);
+      throw error;
+    }
+  };
+
+  const respondGroupOuting = async (outingId: string, status: 'je_viens' | 'peut_etre' | 'je_ne_peux_pas') => {
+    try {
+      if (!state.currentUser) throw new Error("Veuillez vous connecter");
+      const docRef = doc(db, 'group_outings', outingId);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) throw new Error("Sortie de groupe introuvable");
+      const data = snap.data() as GroupOuting;
+      const now = new Date().toISOString();
+
+      const responses = (data.responses || []).filter(r => r.userId !== state.currentUser!.id);
+      responses.push({
+        userId: state.currentUser.id,
+        userName: state.currentUser.name,
+        status,
+        updatedAt: now
+      });
+
+      await updateDoc(docRef, { responses });
+    } catch (error) {
+      console.error("Erreur respondGroupOuting:", error);
+      throw error;
+    }
+  };
+
+  const deleteGroupOuting = async (outingId: string) => {
+    try {
+      await deleteDoc(doc(db, 'group_outings', outingId));
+    } catch (error) {
+      console.error("Erreur deleteGroupOuting:", error);
     }
   };
 
@@ -2301,6 +2461,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       processAdPayment,
       validateAdPayment,
       validateCampaignByAdmin,
+      updateCrowdStatus,
+      updateLoyaltyConfig,
+      consumeLoyaltyReward,
+      updateZakaPointsConfig,
+      awardZakaPoints,
+      redeemZakaPoints,
+      consumeZakaRedemption,
+      createGroupOuting,
+      respondGroupOuting,
+      deleteGroupOuting,
       setGlobalError,
       toggleTheme
     }}>

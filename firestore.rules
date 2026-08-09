@@ -36,7 +36,8 @@ service cloud.firestore {
         && (data.get('email', '') is string && data.get('email', '').size() <= 100)
         && (data.get('phone', '') is string && data.get('phone', '').size() <= 30)
         && (data.get('country', '') is string && data.get('country', '').size() <= 100)
-        && (data.get('city', '') is string && data.get('city', '').size() <= 100);
+        && (data.get('city', '') is string && data.get('city', '').size() <= 100)
+        && (data.get('points', 0) is number);
     }
 
     function isValidEstablishment(data) {
@@ -56,7 +57,15 @@ service cloud.firestore {
         && (data.get('photos', []) is list && data.get('photos', []).size() <= 10)
         && (data.get('tags', []) is list && data.get('tags', []).size() <= 50)
         && (data.get('openingHours', '') is string && data.get('openingHours', '').size() <= 500)
-        && (data.get('hairSalonData', {}) is map);
+        && (data.get('hairSalonData', {}) is map)
+        && (data.get('crowdStatus', '') is string)
+        && (data.get('crowdStatusUpdatedAt', '') is string)
+        && (data.get('loyaltyEnabled', false) is bool)
+        && (data.get('loyaltyRequiredVisits', 5) is number)
+        && (data.get('loyaltyReward', '') is string)
+        && (data.get('acceptsZakaPoints', false) is bool)
+        && (data.get('zakaPointsReward', '') is string)
+        && (data.get('zakaPointsCost', 100) is number);
     }
 
     function isValidReview(data) {
@@ -65,7 +74,8 @@ service cloud.firestore {
         && data.establishmentId is string && data.establishmentId.size() > 0
         && data.rating is number && data.rating >= 1 && data.rating <= 5
         && data.comment is string && data.comment.size() <= 1000
-        && data.date is string && data.date.size() > 0;
+        && data.date is string && data.date.size() > 0
+        && (data.get('photos', []) is list && data.get('photos', []).size() <= 5);
     }
 
     function isValidPublication(data) {
@@ -141,6 +151,7 @@ service cloud.firestore {
         && data.guestsCount is number && data.guestsCount > 0
         && data.status in ['en_attente', 'confirmee', 'refusee', 'annulee']
         && (data.get('note', '') is string)
+        && (data.get('allergiesOrDiet', '') is string)
         && (data.get('managerMessage', '') is string);
     }
 
@@ -450,6 +461,18 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create, update: if true;
       allow delete: if isUserAdmin();
+    }
+
+    match /loyalty_cards/{cardId} {
+      allow read, list, create, update, delete: if isSignedIn();
+    }
+
+    match /zaka_redemptions/{redemptionId} {
+      allow read, list, create, update, delete: if isSignedIn();
+    }
+
+    match /group_outings/{outingId} {
+      allow read, list, create, update, delete: if isSignedIn();
     }
   }
 }

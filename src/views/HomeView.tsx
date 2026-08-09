@@ -16,6 +16,8 @@ import { EventSocialMur } from '../components/EventSocialMur';
 import { MapView } from '../components/MapView';
 import { ShareableVisual } from '../components/ShareableVisual';
 import { UserGuideModal } from '../components/UserGuideModal';
+import { CrowdStatusBadge } from '../components/CrowdStatusBadge';
+import { GroupOutingModal } from '../components/GroupOutingModal';
 import { motion } from 'motion/react';
 
 export function EmergencyCountdown({ expiresAt }: { expiresAt: string }) {
@@ -74,6 +76,8 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [filterMemberOnly, setFilterMemberOnly] = useState(false);
   const [showExpired, setShowExpired] = useState(false);
+  const [modeMaintenant, setModeMaintenant] = useState(false);
+  const [showGroupOutingModal, setShowGroupOutingModal] = useState(false);
   const [activePubTab, setActivePubTab] = useState<'info' | 'photos' | 'wall'>('info');
   const [mapCategory, setMapCategory] = useState<string>('Tous');
 
@@ -615,13 +619,31 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
   const promos = sortedPublications.filter(p => p.type === 'promo' || p.type === 'bon_plan') as ProcessedPub[];
   const annonces = sortedPublications.filter(p => p.type === 'annonce') as ProcessedPub[];
   
-  const topEstablishments = [...establishments]
+  const getCrowdWeight = (e: Establishment) => {
+    if (!e.crowdStatus || !e.crowdStatusUpdatedAt) return 0;
+    const diffMins = (Date.now() - new Date(e.crowdStatusUpdatedAt).getTime()) / (1000 * 60);
+    if (diffMins > 240) return 0; // Expired
+    if (e.crowdStatus === 'anime') return 100;
+    if (e.crowdStatus === 'complet') return 80;
+    if (e.crowdStatus === 'calme') return 50;
+    return 10;
+  };
+
+  const sortedEstablishments = [...establishments]
     .filter(e => e.status === 'valide')
-    .sort((a,b) => b.averageRating - a.averageRating)
-    .slice(0, 5);
+    .sort((a, b) => {
+      if (modeMaintenant) {
+        const weightA = getCrowdWeight(a);
+        const weightB = getCrowdWeight(b);
+        if (weightB !== weightA) return weightB - weightA;
+      }
+      return b.averageRating - a.averageRating;
+    });
+
+  const topEstablishments = sortedEstablishments.slice(0, modeMaintenant ? 12 : 5);
 
   const filteredEstablishments = filterMemberOnly
-    ? establishments.filter(e => e.status === 'valide' && joinedEstIds.includes(e.id))
+    ? sortedEstablishments.filter(e => joinedEstIds.includes(e.id))
     : topEstablishments;
 
   // Calendar helpers
@@ -710,18 +732,29 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           <p className="text-orange-100 mb-6 font-medium text-sm pr-8">
             Découvrez les meilleurs maquis, bars et restaurants près de chez vous.
           </p>
-          <div className="flex flex-wrap items-center gap-2 mb-6">
+          <div className="flex flex-wrap items-center gap-2 mb-4">
             <button 
               onClick={() => onNavigate?.('explore')}
-              className="bg-white text-orange-600 px-6 py-3 rounded-full font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-sm flex items-center gap-2"
+              className="bg-white text-orange-600 px-5 py-2.5 rounded-full font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-xs flex items-center gap-2"
             >
               <MapPin className="w-4 h-4" /> Explorer la carte
             </button>
             <button 
-              onClick={() => setShowGuideModal(true)}
-              className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-5 py-3 rounded-full font-bold active:scale-95 transition-all text-sm flex items-center gap-1.5"
+              onClick={() => setModeMaintenant(!modeMaintenant)}
+              className={`px-5 py-2.5 rounded-full font-extrabold active:scale-95 transition-all text-xs flex items-center gap-2 shadow-md ${
+                modeMaintenant 
+                  ? 'bg-amber-300 text-gray-950 ring-2 ring-amber-200 animate-pulse' 
+                  : 'bg-black/30 hover:bg-black/40 text-white border border-white/30'
+              }`}
             >
-              <BookOpen className="w-4 h-4 text-orange-200" /> Guide Zaka+
+              <Flame className="w-4 h-4 text-amber-300 fill-amber-300" /> 
+              {modeMaintenant ? "⚡ Mode Maintenant Actif !" : "⚡ Mode Maintenant"}
+            </button>
+            <button 
+              onClick={() => setShowGroupOutingModal(true)}
+              className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-5 py-2.5 rounded-full font-bold active:scale-95 transition-all text-xs flex items-center gap-1.5"
+            >
+              <Users className="w-4 h-4 text-orange-200" /> Sortie de Groupe
             </button>
           </div>
         </div>
@@ -1564,6 +1597,9 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                     <div className="h-32 relative">
                        <img src={imageUrl} alt={est.name} className="w-full h-full object-cover" />
                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                       <div className="absolute top-3 left-3">
+                         <CrowdStatusBadge establishment={est} showControlForOwner={false} />
+                       </div>
                        <div className="absolute bottom-3 right-3 flex items-center gap-1 text-yellow-400 font-bold bg-black/40 backdrop-blur-md px-2.5 py-1 rounded-lg text-sm">
                          <Star className="w-4 h-4 fill-yellow-400" /> {est.averageRating.toFixed(1)}
                        </div>
@@ -1852,6 +1888,10 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
 
       {showGuideModal && (
         <UserGuideModal onClose={() => setShowGuideModal(false)} />
+      )}
+
+      {showGroupOutingModal && (
+        <GroupOutingModal onClose={() => setShowGroupOutingModal(false)} />
       )}
     </div>
   );

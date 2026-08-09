@@ -129,7 +129,8 @@ export function ReservationsDashboard({ establishmentId, onClose }: Reservations
       const statusLabel = statusMap[res.status] || res.status;
       doc.text(statusLabel, 150, y);
       
-      const notePreview = res.note ? res.note.substring(0, 12) : '';
+      const noteText = [res.allergiesOrDiet ? `[ALLERGIE: ${res.allergiesOrDiet}]` : '', res.note || ''].filter(Boolean).join(' ');
+      const notePreview = noteText ? noteText.substring(0, 18) : '';
       doc.text(notePreview, 175, y);
 
       totalGuests += res.guestsCount;
@@ -274,6 +275,18 @@ export function ReservationsDashboard({ establishmentId, onClose }: Reservations
                         </div>
                       </div>
                     </div>
+
+                    {res.allergiesOrDiet && (
+                      <div className="text-xs text-rose-900 dark:text-rose-200 bg-rose-50 dark:bg-rose-950/40 p-2.5 rounded-lg border border-rose-300 dark:border-rose-800 flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 flex-shrink-0 mt-0.5 animate-pulse" />
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-wider text-rose-700 dark:text-rose-300 block">
+                            ⚠️ Allergies / Régime alimentaire :
+                          </span>
+                          <span className="font-bold">{res.allergiesOrDiet}</span>
+                        </div>
+                      </div>
+                    )}
 
                     {res.note && (
                       <div className="text-xs text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-900/30 p-2.5 rounded-lg border border-gray-150 dark:border-gray-900">

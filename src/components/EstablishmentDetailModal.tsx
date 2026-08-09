@@ -9,6 +9,8 @@ import { AffluenceTracker } from './AffluenceTracker';
 import { PlaylistDJ } from './PlaylistDJ';
 import { TableauDeBordRH } from './TableauDeBordRH';
 import { AdPlacementBanner } from './AdPlacementBanner';
+import { CrowdStatusBadge } from './CrowdStatusBadge';
+import { LoyaltyAndPointsModule } from './LoyaltyAndPointsModule';
 import { useAppStore } from '../store';
 import { shareContent } from '../utils/platform';
 
@@ -201,8 +203,11 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
 
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
           <div>
-            <div className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-1">
-              {getCategoryLabel(establishment.category)}
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">
+                {getCategoryLabel(establishment.category)}
+              </span>
+              <CrowdStatusBadge establishment={establishment} showControlForOwner={true} />
             </div>
             <h2 className="text-2xl font-black text-gray-900 leading-tight mb-2">{establishment.name}</h2>
             <div className="flex items-center gap-2 text-sm text-gray-500 font-bold">
@@ -211,6 +216,9 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
               <span className="text-gray-300">•</span>
               <span>{establishment.neighborhood}</span>
             </div>
+
+            {/* Loyalty and Points Module */}
+            <LoyaltyAndPointsModule establishment={establishment} />
 
             {currentUser && currentUser.role === 'client' && (
               <button

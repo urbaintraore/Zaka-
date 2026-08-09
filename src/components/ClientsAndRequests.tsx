@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
-import { Check, X, MessageSquare, User, AlertCircle, Info, Send, Loader2 } from 'lucide-react';
+import { Check, X, MessageSquare, User, AlertCircle, Info, Send, Loader2, Award, Gift } from 'lucide-react';
 
 export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWithConv }: { establishmentId: string; onNavigate?: (tab: any) => void; onStartChatWithConv?: (convId: string) => void }) {
   const { 
@@ -18,7 +18,9 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
     createStaffAttendance,
     deleteStaffAttendance,
     users, 
-    establishments 
+    establishments,
+    loyaltyCards,
+    consumeLoyaltyReward
   } = useAppStore();
 
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -386,8 +388,12 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
           </p>
         ) : (
           <div className="flex flex-col gap-2.5">
-            {members.map(member => (
-              <div key={member.requestId} className="flex items-center justify-between p-3.5 bg-gray-50/50 hover:bg-gray-50 rounded-xl border border-gray-100 transition-all">
+            {members.map(member => {
+              const clientLoyaltyCard = loyaltyCards.find(c => c.clientId === member.clientId && c.establishmentId === establishmentId);
+              const isRewardUnlocked = clientLoyaltyCard && (clientLoyaltyCard.rewardUnlocked || (clientLoyaltyCard.visitCount >= (est?.loyaltyRequiredVisits || 5)));
+
+              return (
+              <div key={member.requestId} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 bg-gray-50/50 hover:bg-gray-50 rounded-xl border border-gray-100 transition-all gap-2">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center">
                     {(member.user?.name || 'Client').substring(0, 2).toUpperCase()}
@@ -405,14 +411,41 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
                           {member.requestedRole}
                         </span>
                       )}
+                      {isRewardUnlocked && (
+                        <span className="text-[10px] bg-amber-500 text-white font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-xs animate-pulse">
+                          <Gift className="w-3 h-3" /> Récompense disponible ({clientLoyaltyCard?.visitCount} passages)
+                        </span>
+                      )}
                     </div>
-                    <div className="text-[10px] text-gray-400 font-semibold">
-                      {member.user?.phone || member.user?.email || 'Pas de contact'}
+                    <div className="text-[10px] text-gray-400 font-semibold flex items-center gap-2">
+                      <span>{member.user?.phone || member.user?.email || 'Pas de contact'}</span>
+                      {clientLoyaltyCard && (
+                        <span className="text-amber-600 font-extrabold">
+                          • {clientLoyaltyCard.visitCount} / {est?.loyaltyRequiredVisits || 5} visites
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {isRewardUnlocked && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await consumeLoyaltyReward(clientLoyaltyCard.id);
+                          setSuccessMsg(`Récompense validée pour ${member.user?.name || 'le client'} !`);
+                        } catch (err: any) {
+                          setErrorMsg("Erreur lors de la validation de la récompense.");
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <Award className="w-3.5 h-3.5" /> Valider récompense
+                    </button>
+                  )}
+
                   <button 
                     onClick={() => startChat(member.clientId)} 
                     className="p-2 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors"
@@ -454,7 +487,8 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
                   )}
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>

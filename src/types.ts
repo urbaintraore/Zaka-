@@ -221,6 +221,14 @@ export interface Establishment {
   menuPdfUrl?: string;
   menuImages?: string[];
   hairSalonData?: HairSalonData;
+  crowdStatus?: 'calme' | 'anime' | 'complet' | null;
+  crowdStatusUpdatedAt?: string;
+  loyaltyEnabled?: boolean;
+  loyaltyRequiredVisits?: number;
+  loyaltyReward?: string;
+  acceptsZakaPoints?: boolean;
+  zakaPointsReward?: string;
+  zakaPointsCost?: number;
 }
 
 export type PubType = 'annonce' | 'promo' | 'bon_plan' | 'evenement' | 'recrutement';
@@ -251,6 +259,7 @@ export interface Review {
   rating: number;
   comment: string;
   date: string;
+  photos?: string[];
 }
 
 export interface CarnetEntry {
@@ -341,10 +350,57 @@ export interface Reservation {
   time: string; // HH:MM
   guestsCount: number;
   note?: string;
+  allergiesOrDiet?: string;
   status: 'en_attente' | 'confirmee' | 'refusee' | 'annulee';
   createdAt: string;
   history?: { status: string; updatedAt: string; comment?: string }[];
   managerMessage?: string;
+}
+
+export interface LoyaltyCard {
+  id: string; // `${clientId}_${establishmentId}`
+  clientId: string;
+  clientName?: string;
+  establishmentId: string;
+  visitCount: number;
+  rewardUnlocked: boolean;
+  unlockedAt?: string;
+  lastVisitDate?: string;
+}
+
+export interface ZakaRedemption {
+  id: string;
+  clientId: string;
+  clientName: string;
+  establishmentId: string;
+  establishmentName: string;
+  pointsUsed: number;
+  reward: string;
+  code: string;
+  status: 'valide' | 'consomme';
+  createdAt: string;
+}
+
+export interface GroupOutingResponse {
+  userId: string;
+  userName: string;
+  status: 'je_viens' | 'peut_etre' | 'je_ne_peux_pas';
+  updatedAt: string;
+}
+
+export interface GroupOuting {
+  id: string;
+  creatorId: string;
+  creatorName: string;
+  title: string;
+  establishmentId?: string;
+  establishmentName?: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:MM
+  note?: string;
+  shareCode: string;
+  responses: GroupOutingResponse[];
+  createdAt: string;
 }
 
 export interface MenuItem {
