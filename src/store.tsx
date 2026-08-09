@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting } from './types';
+import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting, Friendship } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
 import { 
@@ -16,6 +16,7 @@ import { doc, setDoc, getDoc, collection, onSnapshot, query, addDoc, updateDoc, 
 interface AppState {
   currentUser: User | null;
   users: User[];
+  friendships: Friendship[];
   establishments: Establishment[];
   publications: Publication[];
   entreprises: Entreprise[];
@@ -123,9 +124,14 @@ interface AppContextType extends AppState {
   awardZakaPoints: (userId: string, pointsAmount: number, reason: string) => Promise<void>;
   redeemZakaPoints: (establishmentId: string, pointsCost: number, rewardDescription: string) => Promise<string>;
   consumeZakaRedemption: (redemptionId: string) => Promise<void>;
-  createGroupOuting: (outing: Omit<GroupOuting, 'id' | 'responses' | 'createdAt' | 'creatorId' | 'creatorName' | 'shareCode'>) => Promise<string>;
+  createGroupOuting: (outing: Omit<GroupOuting, 'id' | 'responses' | 'createdAt' | 'creatorId' | 'creatorName' | 'shareCode'>, invitedFriendIds?: string[]) => Promise<string>;
   respondGroupOuting: (outingId: string, status: 'je_viens' | 'peut_etre' | 'je_ne_peux_pas') => Promise<void>;
   deleteGroupOuting: (outingId: string) => Promise<void>;
+  inviteFriendsToGroupOuting: (outingId: string, friendIds: string[]) => Promise<void>;
+  sendFriendRequest: (targetUserId: string) => Promise<void>;
+  acceptFriendRequest: (friendshipId: string) => Promise<void>;
+  declineFriendRequest: (friendshipId: string) => Promise<void>;
+  removeFriend: (friendshipId: string) => Promise<void>;
   setGlobalError: (err: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null) => void;
   toggleTheme: () => void;
 }
@@ -191,6 +197,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>({
     currentUser: null,
     users: [],
+    friendships: [],
     establishments: [],
     publications: [],
     entreprises: [],
@@ -670,6 +677,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setState(s => ({ ...s, users: uList }));
     }, (error) => {
       console.error("Erreur listening to users:", error);
+    });
+
+    // Listen to friendships
+    const friendshipsQuery = query(collection(db, 'friendships'));
+    const unsubscribeFriendships = onSnapshot(friendshipsQuery, (snapshot) => {
+      const fList: Friendship[] = [];
+      snapshot.forEach(docSnap => {
+        fList.push({ id: docSnap.id, ...docSnap.data() } as Friendship);
+      });
+      setState(s => ({ ...s, friendships: fList }));
+    }, (error) => {
+      console.error("Erreur listening to friendships:", error);
     });
 
     // Listen to parrainages
@@ -2132,29 +2151,141 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const createGroupOuting = async (outing: Omit<GroupOuting, 'id' | 'responses' | 'createdAt' | 'creatorId' | 'creatorName' | 'shareCode'>): Promise<string> => {
+  const createGroupOuting = async (
+    outing: Omit<GroupOuting, 'id' | 'responses' | 'createdAt' | 'creatorId' | 'creatorName' | 'shareCode'>,
+    invitedFriendIds?: string[]
+  ): Promise<string> => {
     try {
       if (!state.currentUser) throw new Error("Veuillez vous connecter");
       const shareCode = Math.random().toString(36).substring(2, 8).toUpperCase();
       const now = new Date().toISOString();
+
+      const initialResponses: any[] = [
+        {
+          userId: state.currentUser.id,
+          userName: state.currentUser.name,
+          status: 'je_viens',
+          updatedAt: now
+        }
+      ];
+
+      if (invitedFriendIds && invitedFriendIds.length > 0) {
+        invitedFriendIds.forEach(friendId => {
+          const friendUser = state.users.find(u => u.id === friendId);
+          if (friendUser && friendId !== state.currentUser?.id) {
+            initialResponses.push({
+              userId: friendUser.id,
+              userName: friendUser.name,
+              status: 'peut_etre',
+              updatedAt: now
+            });
+          }
+        });
+      }
+
       const docRef = await addDoc(collection(db, 'group_outings'), {
         ...outing,
         creatorId: state.currentUser.id,
         creatorName: state.currentUser.name,
         shareCode,
-        responses: [
-          {
-            userId: state.currentUser.id,
-            userName: state.currentUser.name,
-            status: 'je_viens',
-            updatedAt: now
-          }
-        ],
+        responses: initialResponses,
         createdAt: now
       });
       return docRef.id;
     } catch (error) {
       console.error("Erreur createGroupOuting:", error);
+      throw error;
+    }
+  };
+
+  const inviteFriendsToGroupOuting = async (outingId: string, friendIds: string[]) => {
+    try {
+      const docRef = doc(db, 'group_outings', outingId);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) throw new Error("Sortie introuvable");
+      const data = snap.data() as GroupOuting;
+      const now = new Date().toISOString();
+
+      const existingResponses = [...(data.responses || [])];
+      friendIds.forEach(friendId => {
+        if (!existingResponses.some(r => r.userId === friendId)) {
+          const friendUser = state.users.find(u => u.id === friendId);
+          if (friendUser) {
+            existingResponses.push({
+              userId: friendUser.id,
+              userName: friendUser.name,
+              status: 'peut_etre',
+              updatedAt: now
+            });
+          }
+        }
+      });
+
+      await updateDoc(docRef, { responses: existingResponses });
+    } catch (error) {
+      console.error("Erreur inviteFriendsToGroupOuting:", error);
+      throw error;
+    }
+  };
+
+  const sendFriendRequest = async (targetUserId: string) => {
+    try {
+      if (!state.currentUser) throw new Error("Veuillez vous connecter pour ajouter un ami");
+      if (state.currentUser.id === targetUserId) throw new Error("Vous ne pouvez pas vous ajouter vous-même.");
+      
+      const u1 = state.currentUser.id < targetUserId ? state.currentUser.id : targetUserId;
+      const u2 = state.currentUser.id < targetUserId ? targetUserId : state.currentUser.id;
+      
+      const existing = state.friendships.find(f => f.user1Id === u1 && f.user2Id === u2);
+      if (existing) {
+        if (existing.status === 'accepted') {
+          throw new Error("Vous êtes déjà ami(e)s !");
+        } else if (existing.status === 'pending') {
+          throw new Error("Une demande d'amitié est déjà en cours.");
+        }
+      }
+
+      const now = new Date().toISOString();
+      await addDoc(collection(db, 'friendships'), {
+        user1Id: u1,
+        user2Id: u2,
+        requesterId: state.currentUser.id,
+        status: 'pending',
+        createdAt: now
+      });
+    } catch (error) {
+      console.error("Erreur sendFriendRequest:", error);
+      throw error;
+    }
+  };
+
+  const acceptFriendRequest = async (friendshipId: string) => {
+    try {
+      await updateDoc(doc(db, 'friendships', friendshipId), {
+        status: 'accepted'
+      });
+    } catch (error) {
+      console.error("Erreur acceptFriendRequest:", error);
+      throw error;
+    }
+  };
+
+  const declineFriendRequest = async (friendshipId: string) => {
+    try {
+      await updateDoc(doc(db, 'friendships', friendshipId), {
+        status: 'declined'
+      });
+    } catch (error) {
+      console.error("Erreur declineFriendRequest:", error);
+      throw error;
+    }
+  };
+
+  const removeFriend = async (friendshipId: string) => {
+    try {
+      await deleteDoc(doc(db, 'friendships', friendshipId));
+    } catch (error) {
+      console.error("Erreur removeFriend:", error);
       throw error;
     }
   };
@@ -2471,6 +2602,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createGroupOuting,
       respondGroupOuting,
       deleteGroupOuting,
+      inviteFriendsToGroupOuting,
+      sendFriendRequest,
+      acceptFriendRequest,
+      declineFriendRequest,
+      removeFriend,
       setGlobalError,
       toggleTheme
     }}>

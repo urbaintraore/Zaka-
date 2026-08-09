@@ -740,6 +740,12 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
               <MapPin className="w-4 h-4" /> Explorer la carte
             </button>
             <button 
+              onClick={() => setShowGuideModal(true)}
+              className="bg-amber-400 hover:bg-amber-300 text-gray-950 px-5 py-2.5 rounded-full font-extrabold shadow-md active:scale-95 transition-all text-xs flex items-center gap-1.5"
+            >
+              <BookOpen className="w-4 h-4 text-gray-900" /> Guide d'Utilisation
+            </button>
+            <button 
               onClick={() => setModeMaintenant(!modeMaintenant)}
               className={`px-5 py-2.5 rounded-full font-extrabold active:scale-95 transition-all text-xs flex items-center gap-2 shadow-md ${
                 modeMaintenant 
@@ -798,6 +804,31 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
 
       {/* Ephemeral Stories (Style Instagram) */}
       <StoriesSection onStartChat={onStartChat} />
+
+      {/* Bannière d'accès direct au Guide d'Utilisation */}
+      <div className="px-4">
+        <div 
+          onClick={() => setShowGuideModal(true)}
+          className="bg-gradient-to-r from-slate-900 via-orange-950 to-orange-900 text-white rounded-2xl p-4 shadow-md border border-orange-500/30 flex items-center justify-between cursor-pointer hover:scale-[1.01] active:scale-[0.99] transition-all group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-orange-500/20 border border-orange-400/40 flex items-center justify-center text-orange-400 shrink-0 group-hover:rotate-6 transition-transform">
+              <BookOpen className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-widest text-orange-400">Guide Complet Zaka+</span>
+                <span className="bg-orange-500 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase">Mise à jour</span>
+              </div>
+              <h4 className="text-sm font-bold text-white leading-snug">Découvrez le Guide d'Utilisation & Nouveautés 📖</h4>
+              <p className="text-[11px] text-gray-300">Gérants, Clients, Annonceurs, Entreprises : Affluence, Points, Sorties de groupe...</p>
+            </div>
+          </div>
+          <button className="bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl shrink-0 transition-colors shadow-sm">
+            Ouvrir
+          </button>
+        </div>
+      </div>
 
       {/* Dynamic Widget: Coups de cœur de la communauté */}
       {communityFavoritesReviews.length > 0 && (

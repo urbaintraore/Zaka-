@@ -8,6 +8,7 @@ import { EntrepriseDashboard } from './EntrepriseDashboard';
 import { ZakaAdsDashboard } from '../components/ZakaAdsDashboard';
 import { useInstallApp } from '../hooks/useInstallApp';
 import { PersonalTimelineAndRecs } from '../components/PersonalTimelineAndRecs';
+import { FriendsModule } from '../components/FriendsModule';
 
 interface ProfileViewProps {
   onNavigate?: (tab: any) => void;
@@ -366,6 +367,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                     </form>
                   )}
                 </div>
+                <FriendsModule />
               </div>
             )}
           </div>
@@ -773,6 +775,9 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
             </div>
           </div>
         </div>
+
+        {/* Mes Ami(e)s ZAKA */}
+        <FriendsModule />
 
         {/* Historique Personnel & Recommandations IA */}
         <PersonalTimelineAndRecs />

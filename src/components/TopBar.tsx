@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { MapPin, Bell, LogOut } from 'lucide-react';
+import { MapPin, Bell, LogOut, BookOpen } from 'lucide-react';
 import { useAppStore } from '../store';
 import { NotificationsModal } from './NotificationsModal';
+import { UserGuideModal } from './UserGuideModal';
 import logoImg from '../assets/images/zaka_black_z_logo_1784458806560.jpg';
 
 export function TopBar() {
   const { currentUser, logout, serviceRequests, relationshipRequests, establishments } = useAppStore();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showGuideModal, setShowGuideModal] = useState(false);
 
   const myEsts = establishments.filter(e => e.ownerId === currentUser?.id);
   const myEstIds = myEsts.map(e => e.id);
@@ -43,6 +45,14 @@ export function TopBar() {
             Ouaga
           </div>
           <button 
+            onClick={() => setShowGuideModal(true)}
+            className="p-2 text-orange-600 hover:bg-orange-50 rounded-full flex items-center gap-1 font-bold text-xs"
+            title="Guide d'utilisation Zaka+"
+          >
+            <BookOpen className="w-5 h-5 text-orange-600" />
+            <span className="hidden sm:inline">Guide</span>
+          </button>
+          <button 
             onClick={() => setShowNotifications(true)}
             className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-full"
           >
@@ -64,6 +74,10 @@ export function TopBar() {
 
       {showNotifications && (
         <NotificationsModal onClose={() => setShowNotifications(false)} />
+      )}
+
+      {showGuideModal && (
+        <UserGuideModal onClose={() => setShowGuideModal(false)} />
       )}
     </>
   );

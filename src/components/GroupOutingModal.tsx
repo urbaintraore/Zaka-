@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
-import { Users, Calendar, Clock, Share2, Check, HelpCircle, XCircle, Plus, Trash2, Send, CheckCircle2, Sparkles } from 'lucide-react';
-import { GroupOuting } from '../types';
+import { Users, Calendar, Clock, Share2, Check, HelpCircle, XCircle, Plus, Trash2, Send, CheckCircle2, Sparkles, UserPlus, ShieldCheck } from 'lucide-react';
+import { GroupOuting, User } from '../types';
 
 interface GroupOutingModalProps {
   onClose: () => void;
@@ -9,7 +9,18 @@ interface GroupOutingModalProps {
 }
 
 export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupOutingModalProps) {
-  const { currentUser, establishments, groupOutings, createGroupOuting, respondGroupOuting, deleteGroupOuting, addReservation } = useAppStore();
+  const { 
+    currentUser, 
+    users,
+    friendships,
+    establishments, 
+    groupOutings, 
+    createGroupOuting, 
+    respondGroupOuting, 
+    deleteGroupOuting, 
+    inviteFriendsToGroupOuting,
+    addReservation 
+  } = useAppStore();
 
   const [activeTab, setActiveTab] = useState<'mes_sorties' | 'creer'>('mes_sorties');
   const [selectedOutingId, setSelectedOutingId] = useState<string | null>(null);
@@ -20,15 +31,44 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
   const [date, setDate] = useState('');
   const [time, setTime] = useState('20:00');
   const [note, setNote] = useState('');
+  const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [convertedReservationId, setConvertedReservationId] = useState<string | null>(null);
+  const [showInviteMoreFriends, setShowInviteMoreFriends] = useState(false);
+  const [moreFriendIds, setMoreFriendIds] = useState<string[]>([]);
 
   const selectedEst = establishments.find(e => e.id === estId);
+
+  // User's accepted friends
+  const myAcceptedFriendships = (friendships || []).filter(
+    f => currentUser && (f.user1Id === currentUser.id || f.user2Id === currentUser.id) && f.status === 'accepted'
+  );
+
+  const myFriends: User[] = myAcceptedFriendships.map(f => {
+    const friendId = f.user1Id === currentUser?.id ? f.user2Id : f.user1Id;
+    return users.find(u => u.id === friendId) || {
+      id: friendId,
+      name: 'Ami(e) ZAKA',
+      role: 'client' as const
+    };
+  });
 
   // User's group outings (creator or participant)
   const myOutings = currentUser ? groupOutings.filter(g => g.creatorId === currentUser.id || (g.responses && g.responses.some(r => r.userId === currentUser.id))) : [];
   const activeOuting = selectedOutingId ? groupOutings.find(g => g.id === selectedOutingId) : (myOutings[0] || null);
+
+  const toggleFriendSelection = (friendId: string) => {
+    setSelectedFriendIds(prev => 
+      prev.includes(friendId) ? prev.filter(id => id !== friendId) : [...prev, friendId]
+    );
+  };
+
+  const toggleMoreFriendSelection = (friendId: string) => {
+    setMoreFriendIds(prev => 
+      prev.includes(friendId) ? prev.filter(id => id !== friendId) : [...prev, friendId]
+    );
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,13 +85,30 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
         date,
         time,
         note
-      });
+      }, selectedFriendIds);
+
       setSelectedOutingId(outingId);
       setActiveTab('mes_sorties');
       setTitle('');
       setNote('');
+      setSelectedFriendIds([]);
     } catch (err: any) {
       alert("Erreur lors de la création : " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInviteMoreFriends = async (outingId: string) => {
+    if (moreFriendIds.length === 0) return;
+    try {
+      setLoading(true);
+      await inviteFriendsToGroupOuting(outingId, moreFriendIds);
+      setMoreFriendIds([]);
+      setShowInviteMoreFriends(false);
+      alert("Invitations envoyées à vos ami(e)s !");
+    } catch (err: any) {
+      alert("Erreur lors de l'envoi des invitations : " + err.message);
     } finally {
       setLoading(false);
     }
@@ -194,12 +251,59 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
                   Message / Invitation aux amis
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={note}
                   onChange={e => setNote(e.target.value)}
                   placeholder="Ex: On se retrouve là-bas pour fêter la fin des examens ! Confirmez vite votre présence."
                   className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 dark:bg-gray-900 text-xs font-medium text-gray-900 dark:text-white outline-none resize-none"
                 />
+              </div>
+
+              {/* Friend Selector */}
+              <div className="p-3.5 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-amber-500" />
+                    Inviter mes ami(e)s ZAKA ({selectedFriendIds.length} sélectionné(s))
+                  </label>
+                  <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
+                    {myFriends.length} ami(e)s disponibles
+                  </span>
+                </div>
+
+                {myFriends.length === 0 ? (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+                    Vous n'avez pas encore d'ami(e)s ajoutés. Allez dans votre profil pour ajouter des ami(e)s et les inviter en un clic !
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1 pt-1">
+                    {myFriends.map(friend => {
+                      const isSelected = selectedFriendIds.includes(friend.id);
+                      return (
+                        <button
+                          key={friend.id}
+                          type="button"
+                          onClick={() => toggleFriendSelection(friend.id)}
+                          className={`flex items-center justify-between p-2 rounded-xl text-left border transition-all ${
+                            isSelected
+                              ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                              : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-amber-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={`w-7 h-7 rounded-full font-bold text-xs flex items-center justify-center ${
+                              isSelected ? 'bg-white text-amber-600' : 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
+                            }`}>
+                              {friend.name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-xs font-semibold truncate max-w-[120px]">{friend.name}</span>
+                          </div>
+                          {isSelected && <Check className="w-4 h-4 text-white" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <button
@@ -208,7 +312,7 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
                 className="w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
                 <Send className="w-4 h-4" />
-                Créer la sortie et générer le lien
+                Créer la sortie et envoyer les invitations
               </button>
             </form>
           )}
@@ -324,12 +428,76 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
 
                       {/* Guest Responses Table */}
                       <div className="space-y-2">
-                        <p className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center justify-between">
-                          <span>Participants ({(activeOuting.responses || []).length})</span>
-                          <span className="text-emerald-600 font-extrabold text-[11px]">
-                            🟢 {(activeOuting.responses || []).filter(r => r.status === 'je_viens').length} confirmés
-                          </span>
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                            Participants ({(activeOuting.responses || []).length})
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-emerald-600 font-extrabold text-[11px]">
+                              🟢 {(activeOuting.responses || []).filter(r => r.status === 'je_viens').length} confirmés
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowInviteMoreFriends(!showInviteMoreFriends)}
+                              className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all"
+                            >
+                              <UserPlus className="w-3 h-3" />
+                              Inviter des ami(e)s
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Invite Friends Panel */}
+                        {showInviteMoreFriends && (
+                          <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-800/40 space-y-2">
+                            <p className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
+                              Sélectionnez des ami(e)s à inviter à cette sortie :
+                            </p>
+                            {(() => {
+                              const uninvitedFriends = myFriends.filter(
+                                f => !(activeOuting.responses || []).some(r => r.userId === f.id)
+                              );
+                              if (uninvitedFriends.length === 0) {
+                                return (
+                                  <p className="text-[11px] text-slate-500 italic">
+                                    Tous vos ami(e)s sont déjà invités à cette sortie !
+                                  </p>
+                                );
+                              }
+                              return (
+                                <div className="space-y-2">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-32 overflow-y-auto">
+                                    {uninvitedFriends.map(friend => {
+                                      const isSelected = moreFriendIds.includes(friend.id);
+                                      return (
+                                        <button
+                                          key={friend.id}
+                                          type="button"
+                                          onClick={() => toggleMoreFriendSelection(friend.id)}
+                                          className={`flex items-center justify-between p-1.5 rounded-lg text-left border text-xs font-semibold ${
+                                            isSelected 
+                                              ? 'bg-amber-500 text-white border-amber-600'
+                                              : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700'
+                                          }`}
+                                        >
+                                          <span>{friend.name}</span>
+                                          {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                  <button
+                                    onClick={() => handleInviteMoreFriends(activeOuting.id)}
+                                    disabled={loading || moreFriendIds.length === 0}
+                                    className="w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg disabled:opacity-50"
+                                  >
+                                    Envoyer l'invitation ({moreFriendIds.length})
+                                  </button>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
 
                         <div className="space-y-1.5 max-h-40 overflow-y-auto">
                           {(activeOuting.responses || []).map((resp, idx) => (

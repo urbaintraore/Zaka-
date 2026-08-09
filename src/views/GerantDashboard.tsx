@@ -10,6 +10,7 @@ import { useInstallApp } from '../hooks/useInstallApp';
 import { ReservationsDashboard } from '../components/ReservationsDashboard';
 import { MenuDuJourForm } from '../components/MenuDuJourForm';
 import { SalonManagement } from '../components/SalonManagement';
+import { AffluenceManager } from '../components/AffluenceManager';
 
 export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: { onLogout: () => void; onNavigate?: (tab: any) => void; onStartChatWithConv?: (convId: string) => void }) {
   const { 
@@ -518,6 +519,12 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
                     </button>
                   </div>
                 </div>
+
+                {/* Affluence Manager */}
+                <div className="mb-4">
+                  <AffluenceManager establishmentId={est.id} />
+                </div>
+
                 <div className="grid grid-cols-2 gap-2 mb-4">
                   <button onClick={() => { setPubModalEstId(est.id); setPubModalType('promo'); }} className="flex flex-col items-center justify-center p-3 bg-orange-50 text-orange-600 hover:bg-orange-100 font-bold text-xs rounded-xl transition-colors text-center tracking-wide gap-1">
                     <Megaphone className="w-5 h-5" />

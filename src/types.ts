@@ -476,5 +476,15 @@ export interface AdPackage {
 
 export type AdPaymentMethod = 'orange_money' | 'moov_money' | 'wave' | 'carte_bancaire' | 'Orange Money' | 'Moov Money' | 'Paiement Manuel Admin';
 
+export interface Friendship {
+  id: string;
+  user1Id: string;
+  user2Id: string;
+  requesterId: string;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: string;
+}
+
+
 
 
