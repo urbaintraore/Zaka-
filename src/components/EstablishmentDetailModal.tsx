@@ -258,7 +258,7 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
           </div>
 
           {/* Targeted Ad Placement */}
-          <AdPlacementBanner placement="establishment_detail" targetCity={establishment.city} />
+          <AdPlacementBanner placement="establishment_detail" cityFilter={establishment.city} />
 
           {currentUser && currentUser.id === establishment.ownerId && (
             <div className="p-4 bg-orange-50/70 dark:bg-orange-950/20 rounded-2xl border-2 border-orange-200 dark:border-orange-900/60 space-y-4 animate-in fade-in slide-in-from-top-4 duration-200">

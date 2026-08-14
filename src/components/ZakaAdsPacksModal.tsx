@@ -133,9 +133,9 @@ export const ZakaAdsPacksModal: React.FC<ZakaAdsPacksModalProps> = ({
       await processAdPayment({
         advertiserId: currentUser.id,
         advertiserName: currentUser.name || 'Annonceur ZAKA+',
-        packName: selectedPack.name,
+        packName: (selectedPack.id === 'boost_express' ? 'BOOST' : selectedPack.id.toUpperCase()) as any,
         amount: selectedPack.price,
-        method: paymentMethod,
+        method: (paymentMethod === 'orange_money' ? 'Orange Money' : paymentMethod === 'moov_money' ? 'Moov Money' : 'Paiement Manuel Admin') as any,
         phoneUsed: phoneNumber,
         transactionRef: transactionRef || `REF-${Math.floor(100000 + Math.random() * 900000)}`
       });

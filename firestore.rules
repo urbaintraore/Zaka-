@@ -466,6 +466,36 @@ service cloud.firestore {
       allow delete: if isUserAdmin();
     }
 
+    match /adOrganizations/{orgId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && (existing().ownerId == request.auth.uid || isUserAdmin());
+    }
+
+    match /adAuditLogs/{logId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isUserAdmin();
+    }
+
+    match /adRates/{rateId} {
+      allow read: if true;
+      allow create, update, delete: if isUserAdmin();
+    }
+
+    match /adSupportTickets/{ticketId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isUserAdmin();
+    }
+
+    match /adCreatives/{creativeId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && (existing().advertiserId == request.auth.uid || isUserAdmin());
+    }
+
     match /loyalty_cards/{cardId} {
       allow read: if true;
       allow write: if isSignedIn();

@@ -10,7 +10,9 @@ interface BottomNavProps {
 }
 
 export function BottomNav({ currentTab, onChange }: BottomNavProps) {
-  const { unreadCount, favorites } = useAppStore();
+  const { unreadCount, favorites, currentUser } = useAppStore();
+
+  const favCount = currentUser && favorites[currentUser.id] ? favorites[currentUser.id].length : 0;
 
   const tabs = [
     { id: 'home', label: 'Accueil', icon: Home },
@@ -28,7 +30,7 @@ export function BottomNav({ currentTab, onChange }: BottomNavProps) {
           const Icon = tab.icon;
           const isActive = currentTab === tab.id;
           const isMessagesBadge = tab.id === 'messages' && unreadCount > 0;
-          const isFavoritesBadge = tab.id === 'favorites' && favorites.length > 0;
+          const isFavoritesBadge = tab.id === 'favorites' && favCount > 0;
           
           return (
             <button
@@ -48,7 +50,7 @@ export function BottomNav({ currentTab, onChange }: BottomNavProps) {
                 )}
                 {isFavoritesBadge && (
                   <span className="absolute -top-1 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-orange-600 text-[9px] font-black text-white px-0.5 shadow-sm">
-                    {favorites.length}
+                    {favCount}
                   </span>
                 )}
               </div>

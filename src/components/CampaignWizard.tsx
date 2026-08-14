@@ -42,7 +42,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onSuccess, onCan
 
   // Step 1: Details
   const [title, setTitle] = useState<string>('');
-  const [advertiserName, setAdvertiserName] = useState<string>(currentUser?.entrepriseData?.name || currentUser?.name || 'Mon Entreprise');
+  const [advertiserName, setAdvertiserName] = useState<string>(currentUser?.name || 'Mon Entreprise');
   const [objective, setObjective] = useState<CampaignObjective>('notoriete');
   const [budgetTotal, setBudgetTotal] = useState<number>(50000);
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -128,7 +128,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onSuccess, onCan
           advertiserName,
           title,
           objective,
-          budgetType: 'total',
+          budgetType: 'lifetime',
           budgetTotal,
           startDate,
           endDate,
@@ -161,7 +161,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onSuccess, onCan
         advertiserId: currentUser.id,
         advertiserName,
         campaignId,
-        packName: `Campagne ${title}`,
+        packName: 'SUR_MESURE',
         amount: budgetTotal,
         method: paymentMethod,
         phoneUsed: paymentPhone || currentUser.phone || '70000000',

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../store';
-import { AdCTA, AdFormat, CampaignObjective, Establishment, Publication } from '../types';
+import { AdCTA, AdFormat, CampaignObjective, CampaignStatus, Establishment, Publication } from '../types';
 import { 
   Sparkles, Zap, Image as ImageIcon, Camera, ArrowRight, ArrowLeft, Check, 
   MapPin, DollarSign, Calendar, Clock, Bot, Star, ShieldCheck, AlertCircle, 
@@ -173,10 +173,11 @@ export const AdExpressWizard: React.FC<AdExpressWizardProps> = ({
           advertiserName: currentEst?.name || currentUser.name || 'Annonceur ZAKA+',
           title: adTitle,
           objective: 'promo_evenement' as CampaignObjective,
-          budgetType: 'total',
+          budgetType: 'lifetime',
           budgetTotal: finalAmount,
           startDate: todayStr,
           endDate: endDate,
+          status: 'en_attente' as CampaignStatus,
           targeting: {
             cities: [selectedCity],
             neighborhoods: currentEst?.neighborhood ? [currentEst.neighborhood] : [],

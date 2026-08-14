@@ -568,7 +568,7 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
                         onClick={() => {
                           const type = reviewBonusTypes[review.id] || review.bonusOrSanction?.type || 'bonus';
                           const amount = Number(reviewAmounts[review.id] !== undefined ? reviewAmounts[review.id] : (review.bonusOrSanction?.amount || 0));
-                          updateStaffReviewStatus(review.id, review.status, review.managerNote, { type, amount, reason: review.comment });
+                          updateStaffReviewStatus(review.id, review.status as any, review.managerNote, { type, amount, reason: review.comment });
                           setSuccessMsg("Sanction / Bonification enregistrée avec succès !");
                         }}
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"

@@ -4,7 +4,7 @@ import { AdPlacementType, Ad } from '../types';
 import { Sparkles, ExternalLink, Phone, MessageSquare, Calendar, ChevronRight, ShieldCheck, Tag, Info, X, MapPin, Building, InfoIcon } from 'lucide-react';
 
 interface AdPlacementBannerProps {
-  placement: AdPlacementType;
+  placement: AdPlacementType | 'establishment_detail' | 'feed_native' | 'home_header';
   cityFilter?: string;
   className?: string;
   compact?: boolean;

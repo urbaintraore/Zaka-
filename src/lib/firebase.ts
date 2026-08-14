@@ -1,6 +1,6 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import { initializeFirestore, Firestore, memoryLocalCache } from "firebase/firestore";
 import firebaseConfig from "../../firebase-applet-config.json";
 
 console.log("[Firebase Initialization]", {
@@ -10,7 +10,7 @@ console.log("[Firebase Initialization]", {
   currentDomain: typeof window !== 'undefined' ? window.location.hostname : 'node-environment'
 });
 
-export const app = initializeApp(firebaseConfig);
+export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
 // Explicitly set session persistence to local
@@ -19,12 +19,18 @@ setPersistence(auth, browserLocalPersistence)
     console.log("[Firebase Auth] Persistance configurée sur browserLocalPersistence.");
   })
   .catch((error) => {
-    console.error("[Firebase Auth] Échec de la configuration de la persistance :", error);
+    console.warn("[Firebase Auth] Échec de la configuration de la persistance :", error);
   });
 
-export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager()
-  })
-}, firebaseConfig.firestoreDatabaseId);
+let firestoreDb: Firestore;
+try {
+  firestoreDb = initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+    localCache: memoryLocalCache()
+  }, firebaseConfig.firestoreDatabaseId);
+} catch (e) {
+  console.warn("[Firebase Firestore] Fallback initializing Firestore:", e);
+  firestoreDb = initializeFirestore(app, {}, firebaseConfig.firestoreDatabaseId);
+}
+
+export const db = firestoreDb;

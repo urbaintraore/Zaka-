@@ -21,22 +21,43 @@ function AppContent() {
 
   const { currentUser, loading, reservations } = useAppStore();
 
+  // Logging rendering state
+  console.log('[AppContent Render]', {
+    currentTab,
+    loading,
+    currentUserExists: !!currentUser,
+    userId: currentUser?.id,
+    userRole: currentUser?.role,
+    reservationsCount: reservations?.length
+  });
+
   useEffect(() => {
+    console.log('[AppContent Mounted]');
     // Request push notification permissions on mount
     requestNotificationPermission().then(granted => {
       console.log('Notification permission granted:', granted);
-    }).catch(() => {
-      // Ignore permission request error in iframe
+    }).catch((err) => {
+      console.warn('Notification permission request ignored or failed in iframe:', err);
     });
   }, []);
 
   // Automated trigger: push reminder to client 2 hours before their reservation
   useEffect(() => {
-    if (!currentUser || !reservations) return;
+    if (!currentUser || !reservations) {
+      console.log('[AppContent] Skipping notification check: no user or no reservations loaded');
+      return;
+    }
 
-    const notifiedKeys = new Set<string>(
-      JSON.parse(localStorage.getItem('zaka_notified_reservations') || '[]')
-    );
+    console.log('[AppContent] Setting up notification check for reservations...', reservations.length);
+    let notifiedKeys = new Set<string>();
+    try {
+      const stored = localStorage.getItem('zaka_notified_reservations');
+      if (stored) {
+        notifiedKeys = new Set<string>(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.warn("Could not read zaka_notified_reservations from localStorage:", e);
+    }
 
     const checkReservations = () => {
       const now = new Date();
@@ -90,6 +111,7 @@ function AppContent() {
   }, [currentUser, reservations]);
 
   if (loading) {
+    console.log('[AppContent] Render showing Spinner (loading is true)');
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
@@ -98,6 +120,7 @@ function AppContent() {
   }
 
   const handleStartChat = (estId: string, recipient: 'gerant' | 'dj' = 'gerant') => {
+    console.log('[AppContent] handleStartChat triggered:', { estId, recipient });
     if (!currentUser) {
       setCurrentTab('profile');
       return;
@@ -108,9 +131,12 @@ function AppContent() {
   };
 
   const handleStartChatWithConv = (convId: string) => {
+    console.log('[AppContent] handleStartChatWithConv triggered:', { convId });
     setPreselectedConvId(convId);
     setCurrentTab('messages');
   };
+
+  console.log('[AppContent] Rendering layout, currentTab =', currentTab);
 
   return (
     <div className="min-h-screen bg-gray-50/50 dark:bg-gray-900 font-sans text-gray-900 dark:text-gray-100 selection:bg-orange-100 selection:text-orange-900 pb-safe">
@@ -146,6 +172,7 @@ function AppContent() {
 }
 
 export default function App() {
+  console.log('[App Mount] Rendering App component');
   return (
     <AppProvider>
       <AppContent />

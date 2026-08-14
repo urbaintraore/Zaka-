@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting, Friendship } from './types';
+import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting, Friendship, AdOrganization, AdAuditLog, AdRateConfig, AdSupportTicket, AdCreative } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
 import { 
@@ -39,6 +39,11 @@ interface AppState {
   adPayments: AdPayment[];
   adInvoices: AdInvoice[];
   adDailyStats: AdDailyStat[];
+  adOrganizations: AdOrganization[];
+  adAuditLogs: AdAuditLog[];
+  adRates: AdRateConfig[];
+  adSupportTickets: AdSupportTicket[];
+  adCreatives: AdCreative[];
   loyaltyCards: LoyaltyCard[];
   zakaRedemptions: ZakaRedemption[];
   groupOutings: GroupOuting[];
@@ -68,6 +73,7 @@ interface AppContextType extends AppState {
     email?: string;
     estData?: Partial<Establishment> & { description?: string, photos?: string[], tags?: string[] };
     entrepriseData?: { sector: string; logo: string; philosophy: string; description: string };
+    referralCodeUsed?: string;
   }) => Promise<void>;
   addEstablishment: (est: Omit<Establishment, 'id' | 'status' | 'averageRating'>) => Promise<void>;
   updateEstablishment: (id: string, data: Partial<Establishment>) => Promise<void>;
@@ -118,6 +124,14 @@ interface AppContextType extends AppState {
   processAdPayment: (paymentData: Omit<AdPayment, 'id' | 'createdAt' | 'status'>) => Promise<string>;
   validateAdPayment: (paymentId: string) => Promise<void>;
   validateCampaignByAdmin: (campaignId: string) => Promise<void>;
+  createAdOrganization: (data: any) => Promise<string>;
+  updateAdOrganization: (id: string, data: any) => Promise<void>;
+  moderateCampaignByAdmin: (campaignId: string, status: CampaignStatus, rejectionReason?: string, comment?: string) => Promise<void>;
+  addAdAuditLog: (log: Omit<AdAuditLog, 'id' | 'timestamp'>) => Promise<void>;
+  updateAdRateConfig: (config: any) => Promise<void>;
+  createAdSupportTicket: (ticket: any) => Promise<string>;
+  respondAdSupportTicket: (id: string, response: string) => Promise<void>;
+  addAdCreativeLibraryItem: (item: any) => Promise<string>;
   // New features methods
   updateCrowdStatus: (establishmentId: string, status: 'calme' | 'anime' | 'complet' | null) => Promise<void>;
   updateLoyaltyConfig: (establishmentId: string, enabled: boolean, requiredVisits: number, reward: string) => Promise<void>;
@@ -196,13 +210,26 @@ const DEFAULT_ADS: Ad[] = [];
 
 const AppContext = createContext<AppContextType | null>(null);
 
+const getInitialTheme = (): 'light' | 'dark' => {
+  try {
+    const saved = localStorage.getItem('app-theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+  } catch (e) {
+    console.warn("Theme storage access warning:", e);
+  }
+  return 'light';
+};
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>({
     currentUser: null,
     users: [],
     friendships: [],
-    establishments: [],
-    publications: [],
+    establishments: DEFAULT_ESTABLISHMENTS,
+    publications: DEFAULT_PUBLICATIONS,
     entreprises: [],
     reviews: [],
     favorites: {},
@@ -213,6 +240,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     reservations: [],
     menusDuJour: [],
     carnetEntrees: [],
+    coiffeurs: {},
     staffReviews: [],
     staffAttendances: [],
     parrainages: [],
@@ -221,14 +249,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     adPayments: [],
     adInvoices: [],
     adDailyStats: [],
+    adOrganizations: [],
+    adAuditLogs: [],
+    adRates: [],
+    adSupportTickets: [],
+    adCreatives: [],
     loyaltyCards: [],
     zakaRedemptions: [],
     groupOutings: [],
-    loading: true,
+    loading: false,
     globalError: null,
-    theme: (localStorage.getItem('app-theme') as 'light' | 'dark') || 
-           (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    theme: getInitialTheme()
   });
+
+  // Safety fallback: ensure loading state resolves even if firebase auth callback is delayed
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setState(s => s.loading ? { ...s, loading: false } : s);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (state.theme === 'dark') {
@@ -433,7 +473,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     role = 'gerant';
                     await updateDoc(doc(db, 'users', firebaseUser.uid), { role: 'gerant' });
                   } else {
-                    alert(`Erreur: Votre profil est incomplet ou corrompu (rôle non défini). L'application va utiliser un accès limité.`);
+                    console.warn(`[onAuthStateChanged] Votre profil est incomplet ou corrompu (rôle non défini). Utilisation du rôle 'client'.`);
                     role = 'client'; // Fallback
                     await updateDoc(doc(db, 'users', firebaseUser.uid), { role: 'client' });
                   }
@@ -640,9 +680,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.currentUser) {
       // Clear authenticated state data when user logs out
-      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {}, carnetEntrees: [], parrainages: [], adPayments: [], adInvoices: [], adDailyStats: [], loyaltyCards: [], zakaRedemptions: [], groupOutings: [], friendships: [] }));
+      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {}, carnetEntrees: [], parrainages: [], adPayments: [], adInvoices: [], adDailyStats: [], adOrganizations: [], adAuditLogs: [], adRates: [], adSupportTickets: [], adCreatives: [], loyaltyCards: [], zakaRedemptions: [], groupOutings: [], friendships: [] }));
       return;
     }
+
+    // Listen to ad organizations
+    const orgsQuery = query(collection(db, 'adOrganizations'));
+    const unsubscribeOrgs = onSnapshot(orgsQuery, (snapshot) => {
+      const oList: AdOrganization[] = [];
+      snapshot.forEach(docSnap => oList.push({ id: docSnap.id, ...docSnap.data() } as AdOrganization));
+      setState(s => ({ ...s, adOrganizations: oList }));
+    }, (error) => {
+      console.error("Erreur listening to adOrganizations:", error);
+    });
+
+    // Listen to ad audit logs
+    const auditQuery = query(collection(db, 'adAuditLogs'));
+    const unsubscribeAudit = onSnapshot(auditQuery, (snapshot) => {
+      const aList: AdAuditLog[] = [];
+      snapshot.forEach(docSnap => aList.push({ id: docSnap.id, ...docSnap.data() } as AdAuditLog));
+      setState(s => ({ ...s, adAuditLogs: aList }));
+    }, (error) => {
+      console.error("Erreur listening to adAuditLogs:", error);
+    });
+
+    // Listen to ad rates
+    const ratesQuery = query(collection(db, 'adRates'));
+    const unsubscribeRates = onSnapshot(ratesQuery, (snapshot) => {
+      const rList: AdRateConfig[] = [];
+      snapshot.forEach(docSnap => rList.push({ id: docSnap.id, ...docSnap.data() } as AdRateConfig));
+      setState(s => ({ ...s, adRates: rList }));
+    }, (error) => {
+      console.error("Erreur listening to adRates:", error);
+    });
+
+    // Listen to ad support tickets
+    const ticketsQuery = query(collection(db, 'adSupportTickets'));
+    const unsubscribeTickets = onSnapshot(ticketsQuery, (snapshot) => {
+      const tList: AdSupportTicket[] = [];
+      snapshot.forEach(docSnap => tList.push({ id: docSnap.id, ...docSnap.data() } as AdSupportTicket));
+      setState(s => ({ ...s, adSupportTickets: tList }));
+    }, (error) => {
+      console.error("Erreur listening to adSupportTickets:", error);
+    });
+
+    // Listen to ad creatives
+    const creativesQuery = query(collection(db, 'adCreatives'));
+    const unsubscribeCreatives = onSnapshot(creativesQuery, (snapshot) => {
+      const cList: AdCreative[] = [];
+      snapshot.forEach(docSnap => cList.push({ id: docSnap.id, ...docSnap.data() } as AdCreative));
+      setState(s => ({ ...s, adCreatives: cList }));
+    }, (error) => {
+      console.error("Erreur listening to adCreatives:", error);
+    });
 
     // Listen to ad payments
     const payQuery = query(collection(db, 'payments'));
@@ -2590,9 +2680,186 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const validateCampaignByAdmin = async (campaignId: string) => {
     try {
       await updateCampaignStatus(campaignId, 'active');
+      await addAdAuditLog({
+        userId: state.currentUser?.id || 'admin',
+        userName: state.currentUser?.name || 'Admin',
+        action: 'Campaign Approved',
+        resourceType: 'campaign',
+        resourceId: campaignId,
+        details: 'Campagne approuvée directement par un administrateur régie.'
+      });
     } catch (error) {
       console.error("Erreur validateCampaignByAdmin:", error);
       handleFirestoreError(error, OperationType.UPDATE, `campaigns/${campaignId}`);
+    }
+  };
+
+  const createAdOrganization = async (orgData: Omit<AdOrganization, 'id' | 'createdAt'>): Promise<string> => {
+    try {
+      const now = new Date().toISOString();
+      const docRef = await addDoc(collection(db, 'adOrganizations'), {
+        ...orgData,
+        createdAt: now
+      });
+      await addAdAuditLog({
+        userId: state.currentUser?.id || 'user',
+        userName: state.currentUser?.name || 'Utilisateur',
+        action: 'Organization Created',
+        resourceType: 'organization',
+        resourceId: docRef.id,
+        details: `Création de l'organisation ${orgData.name} (${orgData.type})`
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error("Erreur createAdOrganization:", error);
+      throw error;
+    }
+  };
+
+  const updateAdOrganization = async (id: string, data: Partial<AdOrganization>) => {
+    try {
+      await updateDoc(doc(db, 'adOrganizations', id), data);
+    } catch (error) {
+      console.error("Erreur updateAdOrganization:", error);
+      throw error;
+    }
+  };
+
+  const moderateCampaignByAdmin = async (
+    campaignId: string, 
+    status: CampaignStatus, 
+    rejectionReason?: Campaign['rejectionReason'], 
+    comment?: string
+  ) => {
+    try {
+      const updatePayload: any = { status };
+      if (rejectionReason) updatePayload.rejectionReason = rejectionReason;
+      if (comment) updatePayload.moderationComment = comment;
+
+      await updateDoc(doc(db, 'campaigns', campaignId), updatePayload);
+      
+      // Update ads matching this campaign
+      const matchingAds = state.ads.filter(a => a.campaignId === campaignId);
+      for (const adItem of matchingAds) {
+        await updateDoc(doc(db, 'ads', adItem.id), {
+          status: status === 'active' ? 'active' : status === 'pause' ? 'pause' : 'en_attente'
+        });
+      }
+
+      await addAdAuditLog({
+        userId: state.currentUser?.id || 'admin',
+        userName: state.currentUser?.name || 'Régie Admin',
+        action: `Campaign Status -> ${status}`,
+        resourceType: 'campaign',
+        resourceId: campaignId,
+        details: comment ? `Raison: ${rejectionReason || 'Non spécifiée'} - ${comment}` : `Statut mis à jour vers ${status}`
+      });
+    } catch (error) {
+      console.error("Erreur moderateCampaignByAdmin:", error);
+      throw error;
+    }
+  };
+
+  const addAdAuditLog = async (log: Omit<AdAuditLog, 'id' | 'timestamp'>) => {
+    try {
+      const now = new Date().toISOString();
+      await addDoc(collection(db, 'adAuditLogs'), {
+        ...log,
+        timestamp: now
+      });
+    } catch (error) {
+      console.error("Erreur addAdAuditLog:", error);
+    }
+  };
+
+  const updateAdRateConfig = async (rate: Omit<AdRateConfig, 'updatedAt'>) => {
+    try {
+      const now = new Date().toISOString();
+      if (rate.id) {
+        await setDoc(doc(db, 'adRates', rate.id), { ...rate, updatedAt: now }, { merge: true });
+      } else {
+        await addDoc(collection(db, 'adRates'), { ...rate, updatedAt: now });
+      }
+      await addAdAuditLog({
+        userId: state.currentUser?.id || 'admin',
+        userName: state.currentUser?.name || 'Admin',
+        action: 'Rate Config Updated',
+        resourceType: 'rate',
+        resourceId: rate.placement || 'general',
+        details: `Mise à jour tarif: CPM=${rate.cpmPrice} FCFA, CPC=${rate.cpcPrice} FCFA`
+      });
+    } catch (error) {
+      console.error("Erreur updateAdRateConfig:", error);
+    }
+  };
+
+  const createAdSupportTicket = async (ticket: Omit<AdSupportTicket, 'id' | 'createdAt' | 'updatedAt' | 'messages'> & { initialMessage: string }): Promise<string> => {
+    try {
+      const now = new Date().toISOString();
+      const docRef = await addDoc(collection(db, 'adSupportTickets'), {
+        advertiserId: ticket.advertiserId,
+        advertiserName: ticket.advertiserName,
+        campaignId: ticket.campaignId || '',
+        subject: ticket.subject,
+        category: ticket.category,
+        status: 'ouvert',
+        priority: ticket.priority,
+        messages: [{
+          id: `msg-${Date.now()}`,
+          senderId: state.currentUser?.id || ticket.advertiserId,
+          senderName: state.currentUser?.name || ticket.advertiserName,
+          text: ticket.initialMessage,
+          createdAt: now,
+          isAdmin: state.currentUser?.role === 'admin'
+        }],
+        createdAt: now,
+        updatedAt: now
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error("Erreur createAdSupportTicket:", error);
+      throw error;
+    }
+  };
+
+  const respondAdSupportTicket = async (ticketId: string, messageText: string, isAdmin: boolean = false) => {
+    try {
+      const now = new Date().toISOString();
+      const ticket = state.adSupportTickets.find(t => t.id === ticketId);
+      if (!ticket) return;
+
+      const newMsg = {
+        id: `msg-${Date.now()}`,
+        senderId: state.currentUser?.id || 'user',
+        senderName: state.currentUser?.name || (isAdmin ? 'Support ZAKA' : 'Annonceur'),
+        text: messageText,
+        createdAt: now,
+        isAdmin
+      };
+
+      const updatedMsgs = [...(ticket.messages || []), newMsg];
+      await updateDoc(doc(db, 'adSupportTickets', ticketId), {
+        messages: updatedMsgs,
+        status: isAdmin ? 'en_cours' : 'ouvert',
+        updatedAt: now
+      });
+    } catch (error) {
+      console.error("Erreur respondAdSupportTicket:", error);
+      throw error;
+    }
+  };
+
+  const addAdCreativeLibraryItem = async (creative: Omit<AdCreative, 'id' | 'createdAt'>): Promise<string> => {
+    try {
+      const now = new Date().toISOString();
+      const docRef = await addDoc(collection(db, 'adCreatives'), {
+        ...creative,
+        createdAt: now
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error("Erreur addAdCreativeLibraryItem:", error);
+      throw error;
     }
   };
 
@@ -2651,6 +2918,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       processAdPayment,
       validateAdPayment,
       validateCampaignByAdmin,
+      createAdOrganization,
+      updateAdOrganization,
+      moderateCampaignByAdmin,
+      addAdAuditLog,
+      updateAdRateConfig,
+      createAdSupportTicket,
+      respondAdSupportTicket,
+      addAdCreativeLibraryItem,
       updateCrowdStatus,
       updateLoyaltyConfig,
       consumeLoyaltyReward,

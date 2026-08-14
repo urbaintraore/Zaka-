@@ -1,4 +1,4 @@
-export type Role = 'client' | 'gerant' | 'admin' | 'entreprise' | 'salon_coiffure' | 'annonceur';
+export type Role = 'client' | 'gerant' | 'admin' | 'entreprise' | 'salon_coiffure' | 'annonceur' | 'partenaire' | 'dj';
 
 export interface User {
   id: string;
@@ -8,10 +8,13 @@ export interface User {
   role: Role;
   country?: string;
   city?: string;
+  category?: Category;
   points?: number;
   referralCode?: string;
   code_parrainage?: string;
+  referralCodeUsed?: string;
   avatar?: string;
+  entrepriseData?: { sector: string; logo: string; philosophy: string; description: string };
 }
 
 // ZAKA Ads Module Types
@@ -27,6 +30,7 @@ export interface CampaignTargeting {
   ageRanges?: string[]; // ['18-25', '26-35', '36-50']
   interests?: string[]; // ['sorties', 'musique', 'restaurants', 'événements', 'sport', 'mode', 'culture']
   keyMoments?: string[]; // ['vendredi_soir', 'samedi_soir', 'evenements_speciaux']
+  gender?: 'tous' | 'hommes' | 'femmes';
 }
 
 export interface Advertiser {
@@ -39,6 +43,34 @@ export interface Advertiser {
   description?: string;
   status: 'en_attente' | 'valide' | 'suspendu';
   balance?: number; // FCFA
+  createdAt: string;
+  organizationId?: string;
+}
+
+export type AdOrganizationType = 'COMPANY' | 'BRAND' | 'AGENCY';
+export type AdOrganizationRole = 'ORGANIZATION_OWNER' | 'CAMPAIGN_MANAGER' | 'ANALYST' | 'FINANCE_MANAGER' | 'CREATIVE_MANAGER' | 'AGENCY_MANAGER';
+
+export interface AdOrganizationMember {
+  userId: string;
+  userName: string;
+  userEmail: string;
+  role: AdOrganizationRole;
+}
+
+export interface AdOrganization {
+  id: string;
+  name: string;
+  logo?: string;
+  type: AdOrganizationType;
+  sector: string;
+  country?: string;
+  city: string;
+  phone: string;
+  email: string;
+  status: 'valide' | 'en_attente' | 'suspendu';
+  ownerId: string;
+  members: AdOrganizationMember[];
+  clientIds?: string[]; // If agency: IDs of client organizations or advertisers managed
   createdAt: string;
 }
 
@@ -62,6 +94,7 @@ export interface Ad {
   conversions: number;
   status: 'active' | 'pause' | 'expiree' | 'en_attente';
   createdAt: string;
+  organizationId?: string;
 }
 
 export interface Campaign {
@@ -77,6 +110,99 @@ export interface Campaign {
   status: CampaignStatus;
   targeting: CampaignTargeting;
   ads?: Ad[];
+  createdAt: string;
+  // Professional & B2B Extensions
+  organizationId?: string;
+  agencyId?: string;
+  budgetType?: 'daily' | 'lifetime';
+  frequencyCap?: number; // max impressions per user
+  timeSchedule?: {
+    daysOfWeek: number[]; // 0-6 (Sunday to Saturday)
+    startHour: number; // 0-23
+    endHour: number; // 0-23
+  };
+  utmParameters?: {
+    utmSource: string;
+    utmMedium: string;
+    utmCampaign: string;
+    utmContent?: string;
+  };
+  rejectionReason?: 'contenu_interdit' | 'publicite_trompeuse' | 'informations_fausses' | 'non_conforme' | 'droits' | 'autre';
+  moderationComment?: string;
+  abTestConfig?: {
+    isABTest: boolean;
+    variantBTitle?: string;
+    variantBMediaUrl?: string;
+    variantBCtaText?: AdCTA;
+    metrics?: {
+      variantAImpressions: number;
+      variantAClicks: number;
+      variantBImpressions: number;
+      variantBClicks: number;
+    };
+  };
+}
+
+export interface AdAuditLog {
+  id: string;
+  userId: string;
+  userName: string;
+  action: string;
+  resourceType: 'campaign' | 'payment' | 'advertiser' | 'rate' | 'organization' | 'ticket';
+  resourceId: string;
+  details?: string;
+  previousValue?: string;
+  newValue?: string;
+  timestamp: string;
+}
+
+export interface AdRateConfig {
+  id: string;
+  placement: AdPlacementType | string;
+  placementLabel: string;
+  cpmPrice: number; // FCFA per 1000 impressions
+  cpcPrice: number; // FCFA per click
+  dailyPrice: number; // FCFA per day
+  minBudget: number; // FCFA
+  maxBudget?: number;
+  isActive: boolean;
+  updatedAt: string;
+}
+
+export interface AdSupportTicketMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  createdAt: string;
+  isAdmin?: boolean;
+}
+
+export interface AdSupportTicket {
+  id: string;
+  advertiserId: string;
+  advertiserName: string;
+  campaignId?: string;
+  subject: string;
+  category: 'technique' | 'paiement' | 'moderation' | 'statistiques' | 'autre';
+  status: 'ouvert' | 'en_cours' | 'resolu' | 'ferme';
+  priority: 'basse' | 'moyenne' | 'haute' | 'urgente';
+  messages: AdSupportTicketMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdCreative {
+  id: string;
+  organizationId?: string;
+  advertiserId: string;
+  title: string;
+  format: AdFormat;
+  mediaUrl: string;
+  description?: string;
+  ctaText?: AdCTA;
+  ctaLink?: string;
+  tags?: string[];
   createdAt: string;
 }
 
@@ -218,6 +344,7 @@ export interface Establishment {
   country?: string;
   city: string;
   neighborhood: string;
+  quarter?: string;
   address: string;
   phone: string;
   description: string;
@@ -227,6 +354,10 @@ export interface Establishment {
   status: 'en_attente' | 'valide' | 'suspendu';
   averageRating: number;
   geolocation?: string;
+  lat?: number;
+  lng?: number;
+  currentClients?: number;
+  isEntreprise?: boolean;
   openingHours?: string;
   menuPdfUrl?: string;
   menuImages?: string[];
@@ -267,6 +398,7 @@ export interface Publication {
 export interface Review {
   id: string;
   clientId: string;
+  clientName?: string;
   establishmentId: string;
   rating: number;
   comment: string;
@@ -294,6 +426,7 @@ export interface Application {
   message: string;
   status: 'en_attente' | 'acceptee' | 'refusee';
   date: string;
+  createdAt?: string;
 }
 
 export interface RelationshipRequest {
@@ -363,6 +496,7 @@ export interface Reservation {
   guestsCount: number;
   note?: string;
   allergiesOrDiet?: string;
+  reservationType?: string;
   status: 'en_attente' | 'confirmee' | 'refusee' | 'annulee';
   createdAt: string;
   history?: { status: string; updatedAt: string; comment?: string }[];

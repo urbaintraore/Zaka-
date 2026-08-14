@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
-import { ZakaAdsAdminTab } from '../components/ZakaAdsAdminTab';
+import { ZakaAdsAdmin } from '../components/ads/ZakaAdsAdmin';
 import { 
   LogOut, 
   CheckCircle, 
@@ -201,7 +201,7 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
       </div>
 
       {/* Tab 3: ZAKA Ads Admin */}
-      {activeTab === 'zaka_ads' && <ZakaAdsAdminTab />}
+      {activeTab === 'zaka_ads' && <ZakaAdsAdmin />}
 
       {/* Tab 1: Validation */}
       {activeTab === 'validation' && (

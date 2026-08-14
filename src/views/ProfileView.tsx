@@ -541,7 +541,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               <p className="text-gray-500 font-medium">{currentUser.email || currentUser.phone}</p>
               <p className="text-gray-400 text-sm mt-1">{currentUser.city}, {currentUser.country}</p>
               <div className="mt-4 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold uppercase tracking-wider">
-                Compte {currentUser.role === 'gerant' ? 'Gérant' : currentUser.role === 'admin' ? 'Administrateur' : 'Client'}
+                Compte {(currentUser.role as any) === 'gerant' ? 'Gérant' : (currentUser.role as any) === 'admin' ? 'Administrateur' : 'Client'}
               </div>
 
               <div className="mt-8 w-full flex flex-col gap-3">
@@ -718,7 +718,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 <input 
                   type="text" 
                   disabled 
-                  value={currentUser.role === 'gerant' ? 'Gérant' : currentUser.role === 'admin' ? 'Administrateur' : 'Client'} 
+                  value={(currentUser.role as any) === 'gerant' ? 'Gérant' : (currentUser.role as any) === 'admin' ? 'Administrateur' : 'Client'} 
                   className="w-full px-4 py-3 bg-gray-100 text-gray-400 rounded-xl border border-gray-200 outline-none font-medium cursor-not-allowed select-none" 
                 />
               </div>
@@ -1216,7 +1216,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
           await login(identifier, password);
         } else {
           await register(
-            { email: identifier, name, role, country, city, phone: phone },
+            { email: identifier, name, role, country, city, phone: phone, referralCodeUsed },
             password,
             role === 'gerant' ? {
               name: estName,
@@ -1232,8 +1232,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               logo: entLogo,
               philosophy: entPhilosophy,
               description: entDescription
-            } : undefined,
-            referralCodeUsed
+            } : undefined
           );
         }
       } catch (err: any) {
