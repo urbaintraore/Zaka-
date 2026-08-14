@@ -11,6 +11,8 @@ import { TableauDeBordRH } from './TableauDeBordRH';
 import { AdPlacementBanner } from './AdPlacementBanner';
 import { CrowdStatusBadge } from './CrowdStatusBadge';
 import { LoyaltyAndPointsModule } from './LoyaltyAndPointsModule';
+import { EstablishmentPhotoGallery } from './EstablishmentPhotoGallery';
+import { EstablishmentPhotoGalleryManager } from './EstablishmentPhotoGalleryManager';
 import { useAppStore } from '../store';
 import { shareContent } from '../utils/platform';
 
@@ -40,7 +42,8 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
   const [geoInput, setGeoInput] = useState(establishment.geolocation || '');
   const [isSavingGeo, setIsSavingGeo] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
-  const [activeSubTab, setActiveSubTab] = useState<'info' | 'live' | 'affluence' | 'dj' | 'equipe' | 'rh'>('info');
+  const [activeSubTab, setActiveSubTab] = useState<'info' | 'galerie' | 'live' | 'affluence' | 'dj' | 'equipe' | 'rh'>('info');
+  const [showGalleryManager, setShowGalleryManager] = useState(false);
   const [justVisited, setJustVisited] = useState(false);
   const [ratingStaffId, setRatingStaffId] = useState<string | null>(null);
   const [staffRatingVal, setStaffRatingVal] = useState(5);
@@ -132,7 +135,16 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
   }
 
   if (showReservation) {
-    return <ReservationModal establishmentName={establishment.name} onClose={() => setShowReservation(false)} onSubmit={handleReservationSubmit} />;
+    return (
+      <ReservationModal 
+        establishmentName={establishment.name} 
+        isClosed={establishment.reservationsClosed}
+        closedReason={establishment.reservationsClosedReason}
+        establishmentPhone={establishment.phone}
+        onClose={() => setShowReservation(false)} 
+        onSubmit={handleReservationSubmit} 
+      />
+    );
   }
 
   const allPhotos = establishment.photos.length > 0 
@@ -337,10 +349,11 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
           )}
 
           {/* Sub Tab Navigation */}
-          <div className="flex bg-gray-100 dark:bg-gray-900 rounded-2xl p-1 gap-1 border border-gray-150 dark:border-gray-800 flex-shrink-0">
+          <div className="flex bg-gray-100 dark:bg-gray-900 rounded-2xl p-1 gap-1 border border-gray-150 dark:border-gray-800 flex-shrink-0 overflow-x-auto hide-scrollbar">
             {[
               { id: 'info', label: 'ℹ️ Infos' },
-              { id: 'live', label: '📺 Live d\'Ambiance' },
+              { id: 'galerie', label: '📸 Galerie' },
+              { id: 'live', label: '📺 Live' },
               { id: 'affluence', label: '⚡ Affluence' },
               { id: 'dj', label: '🎵 Playlist DJ' },
               { id: 'equipe', label: '👥 Personnel' },
@@ -349,7 +362,7 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
               <button
                 key={tab.id}
                 onClick={() => setActiveSubTab(tab.id as any)}
-                className={`flex-1 py-2 text-[10px] font-black uppercase rounded-xl transition-all cursor-pointer text-center ${
+                className={`flex-1 min-w-[70px] py-2 text-[10px] font-black uppercase rounded-xl transition-all cursor-pointer text-center ${
                   activeSubTab === tab.id
                     ? 'bg-orange-600 text-white shadow-sm font-extrabold'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
@@ -501,6 +514,11 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
             <AvisUtilisateurs establishmentId={establishment.id} />
           </div>
             </>
+          ) : activeSubTab === 'galerie' ? (
+            <EstablishmentPhotoGallery 
+              establishment={establishment} 
+              onOpenManager={() => setShowGalleryManager(true)} 
+            />
           ) : activeSubTab === 'live' ? (
             <LiveDAmbiance establishmentId={establishment.id} establishmentName={establishment.name} />
           ) : activeSubTab === 'affluence' ? (
@@ -663,14 +681,29 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
             )}
             <button 
               onClick={() => setShowReservation(true)}
-              className="flex-1 flex items-center justify-center gap-2 bg-orange-600 text-white font-bold py-4 rounded-2xl hover:bg-orange-700 active:scale-[0.98] transition-all shadow-lg shadow-orange-600/20 cursor-pointer"
+              className={`flex-1 flex items-center justify-center gap-2 font-bold py-4 rounded-2xl active:scale-[0.98] transition-all shadow-lg cursor-pointer ${
+                establishment.reservationsClosed
+                  ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20'
+                  : 'bg-orange-600 hover:bg-orange-700 text-white shadow-orange-600/20'
+              }`}
             >
               <Calendar className="w-5 h-5" />
-              {establishment.category === 'restaurant' ? 'Réserver une table' : 'Faire une réservation'}
+              {establishment.reservationsClosed ? (
+                <span>🔴 Réservations fermées</span>
+              ) : (
+                <span>{establishment.category === 'restaurant' ? 'Réserver une table' : 'Faire une réservation'}</span>
+              )}
             </button>
           </div>
         </div>
       </div>
+
+      {showGalleryManager && (
+        <EstablishmentPhotoGalleryManager
+          establishment={establishment}
+          onClose={() => setShowGalleryManager(false)}
+        />
+      )}
     </div>
   );
 }

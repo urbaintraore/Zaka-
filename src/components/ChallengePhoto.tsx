@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, FormEvent } from 'react';
+import { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react';
 import { db } from '../lib/firebase';
 import { 
   collection, 
@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { useAppStore } from '../store';
 import { triggerHapticFeedback } from '../utils/haptics';
+import { compressImage } from '../utils/imageCompressor';
 import { 
   Camera, 
   Heart, 
@@ -41,13 +42,6 @@ interface PhotoSubmission {
   createdAt: number;
 }
 
-const samplePhotos = [
-  'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=400',
-  'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=400',
-  'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=400',
-  'https://images.unsplash.com/photo-1541388263084-5ea4018310f5?auto=format&fit=crop&w=400'
-];
-
 export function ChallengePhoto({ eventId, eventTitle }: ChallengePhotoProps) {
   const { currentUser } = useAppStore();
   const [submissions, setSubmissions] = useState<PhotoSubmission[]>([]);
@@ -59,6 +53,24 @@ export function ChallengePhoto({ eventId, eventTitle }: ChallengePhotoProps) {
   const [emoji, setEmoji] = useState('🔥');
   const [iaChecking, setIaChecking] = useState(false);
   const [iaResult, setIaResult] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIaChecking(true);
+      setIaResult("Compression et préparation de l'image...");
+      const base64 = await compressImage(file, 1200, 1200, 0.82);
+      setPhotoUrl(base64);
+      setIaChecking(false);
+      setIaResult(null);
+    } catch (err) {
+      console.error(err);
+      setIaChecking(false);
+      setIaResult("Erreur lors de la compression de la photo.");
+    }
+  };
 
   // Sync entries in real-time
   useEffect(() => {
@@ -112,23 +124,17 @@ export function ChallengePhoto({ eventId, eventTitle }: ChallengePhotoProps) {
       return;
     }
 
+    if (!photoUrl.trim()) {
+      alert("Veuillez fournir une photo ou un lien d'image pour participer !");
+      return;
+    }
+
     triggerHapticFeedback(40);
     setIaChecking(true);
-    setIaResult("L'IA analyse l'image : sécurité, qualité, nudité, doublons...");
+    setIaResult("L'IA analyse l'image : sécurité, qualité, doublons...");
 
-    // Simulate AI Moderation
     setTimeout(async () => {
-      // 95% chance of success
-      const passed = Math.random() < 0.95;
-      if (!passed) {
-        setIaResult("❌ REJETÉ : L'IA a détecté un contenu non conforme ou de basse qualité (spam, doublon).");
-        setIaChecking(false);
-        triggerHapticFeedback([100, 100, 100]);
-        return;
-      }
-
-      // Success
-      const finalPhoto = photoUrl || samplePhotos[Math.floor(Math.random() * samplePhotos.length)];
+      const finalPhoto = photoUrl.trim();
       
       const payload: Omit<PhotoSubmission, 'id'> = {
         eventId,
@@ -154,7 +160,7 @@ export function ChallengePhoto({ eventId, eventTitle }: ChallengePhotoProps) {
       } finally {
         setIaChecking(false);
       }
-    }, 2000);
+    }, 1200);
   };
 
   // Get podium winners
@@ -252,14 +258,53 @@ export function ChallengePhoto({ eventId, eventTitle }: ChallengePhotoProps) {
           </div>
 
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageFileChange}
+            />
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="px-3.5 py-2.5 bg-white dark:bg-gray-950 border border-dashed border-orange-400 dark:border-orange-500/50 hover:bg-orange-50 dark:hover:bg-orange-950/20 rounded-xl text-xs font-bold text-orange-600 dark:text-orange-400 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Camera className="w-4 h-4 text-orange-500" />
+                <span>{photoUrl ? "Changer la photo sélectionnée" : "Choisir / Prendre une photo"}</span>
+              </button>
+
               <input
                 type="text"
-                value={photoUrl}
-                onChange={e => setPhotoUrl(e.target.value)}
-                placeholder="Lien d'image (ou laisser vide)"
-                className="px-3 py-2.5 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-medium text-gray-900 dark:text-white"
+                value={photoUrl.startsWith('data:') ? 'Photo sélectionnée depuis l\'appareil' : photoUrl}
+                onChange={e => {
+                  if (!photoUrl.startsWith('data:')) {
+                    setPhotoUrl(e.target.value);
+                  }
+                }}
+                placeholder="Ou coller un lien d'image..."
+                disabled={photoUrl.startsWith('data:')}
+                className="flex-1 px-3 py-2.5 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-medium text-gray-900 dark:text-white"
               />
+            </div>
+
+            {photoUrl && (
+              <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-orange-300 dark:border-orange-800 shadow-sm">
+                <img src={photoUrl} alt="Aperçu" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setPhotoUrl('')}
+                  className="absolute top-1 right-1 bg-black/70 hover:bg-black text-white p-1 rounded-full text-[10px]"
+                  title="Supprimer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <input
                 type="text"
                 value={caption}
@@ -268,27 +313,26 @@ export function ChallengePhoto({ eventId, eventTitle }: ChallengePhotoProps) {
                 className="px-3 py-2.5 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-medium text-gray-900 dark:text-white"
                 required
               />
-            </div>
+              <div className="flex gap-2">
+                <select
+                  value={emoji}
+                  onChange={e => setEmoji(e.target.value)}
+                  className="px-3 py-2.5 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-medium text-gray-900 dark:text-white"
+                >
+                  {['🔥', '🥳', '😎', '💃', '🕺', '🍻', '🍹', '🎧'].map(e => (
+                    <option key={e} value={e}>{e} {e}</option>
+                  ))}
+                </select>
 
-            <div className="flex gap-2">
-              <select
-                value={emoji}
-                onChange={e => setEmoji(e.target.value)}
-                className="px-3 py-2.5 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-medium text-gray-900 dark:text-white"
-              >
-                {['🔥', '🥳', '😎', '💃', '🕺', '🍻', '🍹', '🎧'].map(e => (
-                  <option key={e} value={e}>{e} {e}</option>
-                ))}
-              </select>
-
-              <button
-                type="submit"
-                disabled={iaChecking}
-                className="flex-1 px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-black uppercase rounded-xl cursor-pointer flex items-center justify-center gap-2 disabled:opacity-75"
-              >
-                <Upload className="w-4 h-4" />
-                <span>{iaChecking ? "Analyse IA..." : "Publier ma Photo"}</span>
-              </button>
+                <button
+                  type="submit"
+                  disabled={iaChecking || !photoUrl}
+                  className="flex-1 px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-black uppercase rounded-xl cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>{iaChecking ? "Analyse..." : "Publier"}</span>
+                </button>
+              </div>
             </div>
 
             {/* IA status loader */}

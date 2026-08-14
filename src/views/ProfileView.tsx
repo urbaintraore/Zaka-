@@ -9,6 +9,8 @@ import { ZakaAdsDashboard } from '../components/ZakaAdsDashboard';
 import { useInstallApp } from '../hooks/useInstallApp';
 import { PersonalTimelineAndRecs } from '../components/PersonalTimelineAndRecs';
 import { FriendsModule } from '../components/FriendsModule';
+import { AdExpressWizard } from '../components/AdExpressWizard';
+import { Zap, Rocket } from 'lucide-react';
 
 interface ProfileViewProps {
   onNavigate?: (tab: any) => void;
@@ -19,6 +21,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   const { 
     currentUser, 
     login, 
+    resetPassword,
     register, 
     logout, 
     upgradeToGerant, 
@@ -43,6 +46,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   const [subView, setSubView] = useState<'dashboard' | 'profile'>('dashboard');
   const [resActiveTab, setResActiveTab] = useState<'current' | 'history'>('current');
   const [showAdsDashboard, setShowAdsDashboard] = useState(false);
+  const [showExpressAdsModal, setShowExpressAdsModal] = useState(false);
 
   // Profile editing state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -129,6 +133,29 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   const [entLogo, setEntLogo] = useState('');
   const [entDescription, setEntDescription] = useState('');
   const [entPhilosophy, setEntPhilosophy] = useState('');
+
+  // Password reset state
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetSuccessMessage, setResetSuccessMessage] = useState('');
+  const [isSendingReset, setIsSendingReset] = useState(false);
+
+  const handleForgotPassword = async () => {
+    if (!identifier || !identifier.includes('@')) {
+      setError("Veuillez renseigner une adresse e-mail valide ci-dessus.");
+      return;
+    }
+    setError('');
+    setResetSuccessMessage('');
+    setIsSendingReset(true);
+    try {
+      await resetPassword(identifier);
+      setResetSuccessMessage(`Un e-mail de réinitialisation a été envoyé à ${identifier}. Consultez votre boîte de réception (et vos spams).`);
+    } catch (err: any) {
+      setError(err.message || "Erreur lors de l'envoi de l'e-mail de réinitialisation.");
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
 
   const handleUpgrade = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -525,11 +552,18 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                   Modifier le profil
                 </button>
                 <button
-                  onClick={() => setShowAdsDashboard(true)}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold rounded-xl hover:opacity-95 transition-all cursor-pointer shadow-md shadow-orange-500/20"
+                  onClick={() => setShowExpressAdsModal(true)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-orange-600 to-amber-500 text-white font-extrabold rounded-xl hover:opacity-95 transition-all cursor-pointer shadow-md shadow-orange-500/25"
                 >
-                  <Megaphone className="w-5 h-5" />
-                  <span>Espace Pub ZAKA Ads</span>
+                  <Rocket className="w-5 h-5 fill-white" />
+                  <span>🚀 Créer une Pub Express (2 min)</span>
+                </button>
+                <button
+                  onClick={() => setShowAdsDashboard(true)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700 font-bold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-750 transition-all cursor-pointer shadow-xs"
+                >
+                  <Megaphone className="w-5 h-5 text-orange-600" />
+                  <span>Tableau de bord ZAKA Ads</span>
                 </button>
                 {isInstallable && (
                   <button onClick={promptInstall} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 text-blue-600 font-bold rounded-xl hover:bg-blue-100 transition-colors cursor-pointer">
@@ -1160,6 +1194,14 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
           )}
         </div>
 
+        {/* ZAKA Ads Express Modal */}
+        {showExpressAdsModal && (
+          <AdExpressWizard
+            isOpen={showExpressAdsModal}
+            onClose={() => setShowExpressAdsModal(false)}
+          />
+        )}
+
       </div>
     );
   }
@@ -1289,6 +1331,13 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
           </div>
         )}
 
+        {resetSuccessMessage && (
+          <div className="mb-4 p-4 bg-emerald-50 text-emerald-800 text-sm rounded-2xl border border-emerald-200 flex flex-col gap-1">
+            <span className="font-bold flex items-center gap-1.5">✅ E-mail envoyé</span>
+            <span className="text-xs leading-relaxed">{resetSuccessMessage}</span>
+          </div>
+        )}
+
         {error && (
           <div className="mb-4 p-4 bg-red-50 text-red-700 text-sm rounded-2xl border border-red-100 flex flex-col gap-2">
             <span className="font-bold leading-snug">{error}</span>
@@ -1321,11 +1370,26 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               </div>
             )}
             {error.includes('auth/invalid-credential') && (
-              <div className="mt-2 pt-2 border-t border-red-100/60 text-xs text-red-600/90 flex flex-col gap-1.5 leading-relaxed">
-                <span className="font-bold text-red-800">💡 Conseil :</span>
-                <span>L'adresse e-mail, le mot de passe, ou le code de vérification saisi est incorrect.</span>
-                <span>• Si vous n'avez pas encore de compte, veuillez cliquer sur <strong>"Pas encore de compte ? S'inscrire"</strong> ci-dessous pour créer votre compte.</span>
-                <span>• Si vous possédez déjà un compte, vérifiez l'orthographe de votre e-mail et de votre mot de passe, ou assurez-vous que vous utilisez la bonne méthode de connexion (E-mail ou Téléphone).</span>
+              <div className="mt-2 pt-2 border-t border-red-100/60 text-xs text-red-600/90 flex flex-col gap-2 leading-relaxed">
+                <span className="font-bold text-red-800">💡 Que souhaitez-vous faire ?</span>
+                <span>L'adresse e-mail ou le mot de passe est incorrect, ou le compte n'a pas encore été créé.</span>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={isSendingReset}
+                    className="px-3 py-1.5 bg-orange-600 text-white font-bold rounded-lg text-xs hover:bg-orange-700 active:scale-95 transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    {isSendingReset ? 'Envoi en cours...' : '🔑 Réinitialiser mon mot de passe'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMode('register'); setError(''); }}
+                    className="px-3 py-1.5 bg-gray-100 text-gray-800 font-bold rounded-lg text-xs hover:bg-gray-200 active:scale-95 transition-all cursor-pointer"
+                  >
+                    ✨ Créer un nouveau compte
+                  </button>
+                </div>
               </div>
             )}
             {((error.toLowerCase().includes('email') && (error.toLowerCase().includes('déjà') || error.toLowerCase().includes('deja'))) || error.includes('auth/email-already-in-use')) && (
@@ -1519,7 +1583,19 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               )}
               
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-gray-500 ml-1">Mot de passe</label>
+                <div className="flex items-center justify-between ml-1">
+                  <label className="text-xs font-bold text-gray-500">Mot de passe</label>
+                  {mode === 'login' && (
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      disabled={isSendingReset}
+                      className="text-xs font-bold text-orange-600 hover:text-orange-700 hover:underline cursor-pointer disabled:opacity-50"
+                    >
+                      {isSendingReset ? 'Envoi...' : 'Mot de passe oublié ?'}
+                    </button>
+                  )}
+                </div>
                 <input type="password" placeholder="Mot de passe" required value={password} onChange={e => setPassword(e.target.value)} className="w-full px-4 py-3.5 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none transition-all font-medium" />
               </div>
             </>

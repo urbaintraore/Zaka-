@@ -201,6 +201,15 @@ export function getCategoryLabel(cat?: string): string {
   return cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 
+export interface GalleryPhoto {
+  id: string;
+  url: string;
+  caption?: string;
+  tag?: 'ambiance' | 'salle' | 'vip' | 'terrasse' | 'cuisine_cocktails' | 'evenements' | string;
+  createdAt?: string;
+  likesCount?: number;
+}
+
 export interface Establishment {
   id: string;
   ownerId: string;
@@ -213,6 +222,7 @@ export interface Establishment {
   phone: string;
   description: string;
   photos: string[];
+  galleryPhotos?: GalleryPhoto[];
   tags: string[];
   status: 'en_attente' | 'valide' | 'suspendu';
   averageRating: number;
@@ -229,6 +239,8 @@ export interface Establishment {
   acceptsZakaPoints?: boolean;
   zakaPointsReward?: string;
   zakaPointsCost?: number;
+  reservationsClosed?: boolean;
+  reservationsClosedReason?: string;
 }
 
 export type PubType = 'annonce' | 'promo' | 'bon_plan' | 'evenement' | 'recrutement';
@@ -388,6 +400,15 @@ export interface GroupOutingResponse {
   updatedAt: string;
 }
 
+export interface GroupOutingLocation {
+  userId: string;
+  userName: string;
+  lat: number;
+  lng: number;
+  updatedAt: string;
+  isSharing: boolean;
+}
+
 export interface GroupOuting {
   id: string;
   creatorId: string;
@@ -400,6 +421,7 @@ export interface GroupOuting {
   note?: string;
   shareCode: string;
   responses: GroupOutingResponse[];
+  liveLocations?: Record<string, GroupOutingLocation>;
   createdAt: string;
 }
 

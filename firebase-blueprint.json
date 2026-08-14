@@ -240,6 +240,53 @@
         "createdAt": { "type": "string" }
       },
       "required": ["campaignId", "advertiserId", "title", "format"]
+    },
+    "Friendship": {
+      "title": "Friendship",
+      "description": "Friendship relationship between two users",
+      "type": "object",
+      "properties": {
+        "user1Id": { "type": "string" },
+        "user2Id": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["user1Id", "user2Id", "status"]
+    },
+    "GroupOuting": {
+      "title": "GroupOuting",
+      "description": "A group outing organized among friends",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "establishmentId": { "type": "string" },
+        "date": { "type": "string" },
+        "members": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["title", "creatorId", "establishmentId"]
+    },
+    "LoyaltyCard": {
+      "title": "LoyaltyCard",
+      "description": "Digital fidelity card for an establishment",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "establishmentId": { "type": "string" },
+        "visitsCount": { "type": "number" }
+      },
+      "required": ["userId", "establishmentId"]
+    },
+    "ZakaRedemption": {
+      "title": "ZakaRedemption",
+      "description": "ZAKA points redemption record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "establishmentId": { "type": "string" },
+        "pointsUsed": { "type": "number" }
+      },
+      "required": ["userId", "establishmentId", "pointsUsed"]
     }
   },
   "firestore": {
@@ -310,6 +357,22 @@
     "adStatistics": {
       "schema": { "$ref": "#/entities/Ad" },
       "description": "ZAKA Ads Daily Statistics"
+    },
+    "friendships": {
+      "schema": { "$ref": "#/entities/Friendship" },
+      "description": "Friendships collection"
+    },
+    "group_outings": {
+      "schema": { "$ref": "#/entities/GroupOuting" },
+      "description": "Group Outings collection"
+    },
+    "loyalty_cards": {
+      "schema": { "$ref": "#/entities/LoyaltyCard" },
+      "description": "Loyalty Cards collection"
+    },
+    "zaka_redemptions": {
+      "schema": { "$ref": "#/entities/ZakaRedemption" },
+      "description": "Zaka Redemptions collection"
     }
   }
 }

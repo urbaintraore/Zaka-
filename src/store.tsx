@@ -8,6 +8,7 @@ import {
   signOut, 
   onAuthStateChanged,
   signInWithPhoneNumber,
+  sendPasswordResetEmail,
   RecaptchaVerifier,
   ConfirmationResult
 } from 'firebase/auth';
@@ -49,6 +50,7 @@ interface AppState {
 interface AppContextType extends AppState {
   unreadCount: number;
   login: (email: string, pass: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   register: (
     user: Omit<User, 'id'>, 
@@ -128,6 +130,7 @@ interface AppContextType extends AppState {
   respondGroupOuting: (outingId: string, status: 'je_viens' | 'peut_etre' | 'je_ne_peux_pas') => Promise<void>;
   deleteGroupOuting: (outingId: string) => Promise<void>;
   inviteFriendsToGroupOuting: (outingId: string, friendIds: string[]) => Promise<void>;
+  updateGroupOutingLocation: (outingId: string, location: { lat: number; lng: number; isSharing: boolean }) => Promise<void>;
   sendFriendRequest: (targetUserId: string) => Promise<void>;
   acceptFriendRequest: (friendshipId: string) => Promise<void>;
   declineFriendRequest: (friendshipId: string) => Promise<void>;
@@ -478,7 +481,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
               message: error?.message,
               stack: error?.stack
             });
-            setState(s => ({ ...s, currentUser: { id: firebaseUser.uid, name: firebaseUser.email || 'Utilisateur', email: firebaseUser.email || '', role: 'client' }, loading: false }));
+            if (error?.code === 'permission-denied') {
+              console.warn("Token invalide ou permissions insuffisantes, déconnexion...");
+              auth.signOut();
+            }
+            setState(s => ({ ...s, currentUser: null, loading: false }));
           });
         } else {
           console.log("[onAuthStateChanged] Aucun utilisateur n'est connecté.");
@@ -633,7 +640,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.currentUser) {
       // Clear authenticated state data when user logs out
-      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {}, carnetEntrees: [], parrainages: [], adPayments: [], adInvoices: [], adDailyStats: [], loyaltyCards: [], zakaRedemptions: [], groupOutings: [] }));
+      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {}, carnetEntrees: [], parrainages: [], adPayments: [], adInvoices: [], adDailyStats: [], loyaltyCards: [], zakaRedemptions: [], groupOutings: [], friendships: [] }));
       return;
     }
 
@@ -841,6 +848,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unsubscribeLoyalty();
       unsubscribeZakaRed();
       unsubscribeGroupOutings();
+      unsubscribeFriendships();
     };
   }, [state.currentUser?.id]);
 
@@ -1169,6 +1177,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.log("[Email Login] Connexion réussie.");
     } catch (error: any) {
       console.error("[Email Login] Échec de la connexion :", error);
+      const friendlyMessage = translateFirebaseError(error);
+      setGlobalError({
+        message: friendlyMessage,
+        code: error.code || 'unknown',
+        type: 'error'
+      });
+      throw new Error(friendlyMessage);
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      throw new Error("Veuillez saisir votre adresse e-mail.");
+    }
+    try {
+      console.log(`[Password Reset] Envoi du lien de réinitialisation pour : [${trimmedEmail}]`);
+      await sendPasswordResetEmail(auth, trimmedEmail);
+      console.log("[Password Reset] E-mail envoyé avec succès.");
+    } catch (error: any) {
+      console.error("[Password Reset] Échec de l'envoi :", error);
       const friendlyMessage = translateFirebaseError(error);
       setGlobalError({
         message: friendlyMessage,
@@ -2322,6 +2351,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateGroupOutingLocation = async (outingId: string, location: { lat: number; lng: number; isSharing: boolean }) => {
+    try {
+      if (!state.currentUser) throw new Error("Veuillez vous connecter");
+      const docRef = doc(db, 'group_outings', outingId);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) throw new Error("Sortie introuvable");
+      const data = snap.data() as GroupOuting;
+      const now = new Date().toISOString();
+
+      const existingLocations = data.liveLocations || {};
+      const updatedLocations = {
+        ...existingLocations,
+        [state.currentUser.id]: {
+          userId: state.currentUser.id,
+          userName: state.currentUser.name,
+          lat: location.lat,
+          lng: location.lng,
+          updatedAt: now,
+          isSharing: location.isSharing
+        }
+      };
+
+      await updateDoc(docRef, { liveLocations: updatedLocations });
+    } catch (error) {
+      console.error("Erreur updateGroupOutingLocation:", error);
+      throw error;
+    }
+  };
+
   // --- ZAKA ADS METHODS ---
   const addCampaign = async (
     campaignData: Omit<Campaign, 'id' | 'createdAt' | 'budgetSpent'>, 
@@ -2543,6 +2601,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...state,
       unreadCount,
       login,
+      resetPassword,
       logout,
       register,
       envoyerCodeOtp,
@@ -2603,6 +2662,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       respondGroupOuting,
       deleteGroupOuting,
       inviteFriendsToGroupOuting,
+      updateGroupOutingLocation,
       sendFriendRequest,
       acceptFriendRequest,
       declineFriendRequest,

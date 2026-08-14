@@ -18,6 +18,8 @@ import { ShareableVisual } from '../components/ShareableVisual';
 import { UserGuideModal } from '../components/UserGuideModal';
 import { CrowdStatusBadge } from '../components/CrowdStatusBadge';
 import { GroupOutingModal } from '../components/GroupOutingModal';
+import { AdExpressWizard } from '../components/AdExpressWizard';
+import { Rocket, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export function EmergencyCountdown({ expiresAt }: { expiresAt: string }) {
@@ -156,9 +158,10 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
     };
   }, [establishments, reviews]);
 
-  // Simulation Panel state
-  const [showSimPanel, setShowSimPanel] = useState(false);
-  const [simMessage, setSimMessage] = useState<string | null>(null);
+  // ZAKA Ads Express State
+  const [showExpressModal, setShowExpressModal] = useState(false);
+  const [expressTargetPub, setExpressTargetPub] = useState<Publication | null>(null);
+  const [expressTargetEst, setExpressTargetEst] = useState<Establishment | null>(null);
 
   // Rankings loading & daily recalculation
   useEffect(() => {
@@ -359,107 +362,6 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
     };
   }, [establishments, publications, reviews, recalcTrigger, users]);
 
-  const handleSimulateViews = async (recent: boolean) => {
-    try {
-      const { addDoc, collection } = await import('firebase/firestore');
-      if (establishments.length === 0) {
-        setSimMessage("Aucun établissement disponible pour simuler.");
-        return;
-      }
-      
-      const targetEsts = establishments.slice(0, 2);
-      const daysOffset = recent ? 2 : 10;
-      const timestamp = new Date(Date.now() - daysOffset * 24 * 60 * 60 * 1000).toISOString();
-      
-      for (const est of targetEsts) {
-        for (let i = 0; i < 3; i++) {
-          await addDoc(collection(db, 'establishment_views'), {
-            establishmentId: est.id,
-            userId: 'test-user-' + Math.random().toString(36).substring(2, 6),
-            timestamp
-          });
-        }
-      }
-      
-      setSimMessage(`Succès: 6 vues ${recent ? 'récentes (<7j)' : 'anciennes (>7j)'} ajoutées.`);
-    } catch (err) {
-      console.error(err);
-      setSimMessage("Erreur lors de la simulation des vues.");
-    }
-  };
-
-  const handleSimulateOwnerView = async () => {
-    try {
-      const { addDoc, collection } = await import('firebase/firestore');
-      if (establishments.length === 0) {
-        setSimMessage("Aucun établissement disponible.");
-        return;
-      }
-      const est = establishments[0];
-      await addDoc(collection(db, 'establishment_views'), {
-        establishmentId: est.id,
-        userId: est.ownerId,
-        timestamp: new Date().toISOString()
-      });
-      setSimMessage(`Succès: Vue Gérant sur sa propre fiche ajoutée pour ${est.name} (exclue du classement).`);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleSimulateGerantRoleView = async () => {
-    try {
-      const { addDoc, collection } = await import('firebase/firestore');
-      if (establishments.length === 0) {
-        setSimMessage("Aucun établissement disponible.");
-        return;
-      }
-      const est = establishments[0];
-      const gerantUser = users?.find(u => u.role === 'gerant') || { id: 'simulated-gerant-id' };
-      
-      await addDoc(collection(db, 'establishment_views'), {
-        establishmentId: est.id,
-        userId: gerantUser.id,
-        timestamp: new Date().toISOString()
-      });
-      setSimMessage(`Succès: Vue par un compte de rôle Gérant simulée pour ${est.name} (exclue du classement).`);
-    } catch (err) {
-      console.error(err);
-      setSimMessage("Erreur lors de la simulation.");
-    }
-  };
-
-  const handleSimulateRecentReviews = async () => {
-    try {
-      const { addDoc, collection } = await import('firebase/firestore');
-      if (establishments.length === 0) {
-        setSimMessage("Aucun établissement disponible.");
-        return;
-      }
-      const est = establishments[0];
-      const recentDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      
-      for (let i = 0; i < 3; i++) {
-        await addDoc(collection(db, 'reviews'), {
-          clientId: 'test-client-' + Math.random().toString(36).substring(2, 6),
-          establishmentId: est.id,
-          rating: 5,
-          comment: `Super expérience récente ! (Simulé #${i + 1})`,
-          date: recentDate
-        });
-      }
-      setSimMessage(`Succès: 3 avis récents (5★) ajoutés pour ${est.name} pour valider le seuil de 3 avis sur 7 jours.`);
-    } catch (err) {
-      console.error(err);
-      setSimMessage("Erreur lors de la simulation des avis.");
-    }
-  };
-
-  const handleForceRecalculate = () => {
-    setSimMessage("Mise à jour lancée...");
-    setRecalcTrigger(prev => prev + 1);
-  };
-  
   // Calendar state
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
@@ -1026,9 +928,8 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
               {isRankingsLoading ? (
                 <div className="py-6 text-center text-xs text-gray-400 animate-pulse">Chargement des avis récents...</div>
               ) : (!rankings?.bestRated || rankings.bestRated.length === 0) ? (
-                <div className="text-center py-6 text-xs text-gray-400 flex flex-col gap-1.5 items-center">
-                  <span>Aucun établissement n'a reçu 3 avis au cours des 7 derniers jours.</span>
-                  <span className="text-[10px] text-orange-500 font-bold">💡 Utilisez le simulateur en bas de page pour ajouter 3 avis récents en 1 clic !</span>
+                <div className="text-center py-6 text-xs text-gray-400">
+                  Aucun établissement n'a reçu 3 avis au cours des 7 derniers jours.
                 </div>
               ) : (
                 <div className="flex flex-col gap-2.5">
@@ -1133,77 +1034,6 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                 </div>
               )}
             </div>
-          </div>
-
-          {/* Simulation/Test panel helper */}
-          <div className="bg-white dark:bg-gray-950 p-6 rounded-3xl border border-gray-100 dark:border-gray-900 shadow-xs">
-            <button
-              onClick={() => {
-                setShowSimPanel(!showSimPanel);
-                setSimMessage(null);
-              }}
-              className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-bold flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>🛠️</span>
-              <span>{showSimPanel ? "Masquer le simulateur de test" : "Afficher le simulateur de test (vues / exclusions Gérant / seuil 3 avis)"}</span>
-            </button>
-
-            {showSimPanel && (
-              <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800">
-                <h4 className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2">Simulateur de Données de Classement</h4>
-                <p className="text-[11px] text-gray-500 leading-relaxed mb-4">
-                  Testez la conformité de l'exclusion des gérants et du seuil d'avis de 7j glissants. Ajoutez des actions fictives, puis cliquez sur "Forcer la mise à jour".
-                </p>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-                  <button
-                    onClick={() => handleSimulateViews(true)}
-                    className="px-3 py-2 bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 rounded-xl text-xs font-bold cursor-pointer text-left"
-                  >
-                    ➕ +6 Vues Récentes (&lt;7j)
-                  </button>
-                  <button
-                    onClick={() => handleSimulateViews(false)}
-                    className="px-3 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-900 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold cursor-pointer text-left"
-                  >
-                    ➕ +6 Vues Anciennes (&gt;7j)
-                  </button>
-                  <button
-                    onClick={handleSimulateOwnerView}
-                    className="px-3 py-2 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 rounded-xl text-xs font-bold cursor-pointer text-left"
-                  >
-                    🚫 Vue Propriétaire (Exclue d'office)
-                  </button>
-                  <button
-                    onClick={handleSimulateGerantRoleView}
-                    className="px-3 py-2 bg-pink-50 hover:bg-pink-100 dark:bg-pink-950/30 text-pink-700 dark:text-pink-400 rounded-xl text-xs font-bold cursor-pointer text-left"
-                  >
-                    🚫 Vue Compte Gérant (Exclue d'office)
-                  </button>
-                  <button
-                    onClick={handleSimulateRecentReviews}
-                    className="px-3 py-2 bg-yellow-50 hover:bg-yellow-100 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 rounded-xl text-xs font-bold cursor-pointer text-left col-span-1 sm:col-span-2"
-                  >
-                    ⭐ Simuler 3 avis récents (Seuil pour "Les mieux notés")
-                  </button>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleForceRecalculate}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  >
-                    🔄 Recalculer les widgets en direct
-                  </button>
-                </div>
-
-                {simMessage && (
-                  <div className="mt-3 p-3 bg-white dark:bg-gray-950 rounded-xl text-xs font-semibold text-orange-600 border border-orange-100 dark:border-orange-950/40">
-                    {simMessage}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
@@ -1884,6 +1714,23 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                 Story 9:16
               </button>
 
+              {/* Booster avec Ads Express si gérant/propriétaire ou créateur */}
+              {currentUser && (currentUser.role === 'gerant' || currentUser.role === 'admin' || currentUser.role === 'partenaire') && (
+                <button
+                  onClick={() => {
+                    const est = establishments.find(e => e.id === selectedPub.establishmentId);
+                    setExpressTargetEst(est || null);
+                    setExpressTargetPub(selectedPub);
+                    setShowExpressModal(true);
+                  }}
+                  className="py-3 px-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:opacity-95 text-white font-black rounded-xl active:scale-[0.98] transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20"
+                  title="Booster cette publication en 2 minutes avec l'IA"
+                >
+                  <Rocket className="w-3.5 h-3.5 fill-white" />
+                  <span>Booster</span>
+                </button>
+              )}
+
               {onStartChat && (
                 <button
                   onClick={() => {
@@ -1923,6 +1770,21 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
 
       {showGroupOutingModal && (
         <GroupOutingModal onClose={() => setShowGroupOutingModal(false)} />
+      )}
+
+      {/* ZAKA Ads Express Wizard Modal */}
+      {showExpressModal && (
+        <AdExpressWizard
+          isOpen={showExpressModal}
+          onClose={() => {
+            setShowExpressModal(false);
+            setExpressTargetPub(null);
+            setExpressTargetEst(null);
+          }}
+          prefillEstablishment={expressTargetEst || undefined}
+          prefillPublication={expressTargetPub || undefined}
+          prefillType={expressTargetPub?.type === 'evenement' ? 'evenement' : expressTargetPub ? 'promotion' : 'etablissement'}
+        />
       )}
     </div>
   );

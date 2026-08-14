@@ -52,39 +52,23 @@ interface SongSuggestion {
   createdAt: number;
 }
 
-const genres = ['Afrobeat', 'Amapiano', 'Coupe Decale', 'Dancehall', 'Hip Hop', 'Salsa', 'Zouk'];
+interface ArchivedPlaylist {
+  id: string;
+  establishmentId: string;
+  name: string;
+  date: string;
+  songsCount: number;
+  genre: string;
+  cover?: string;
+}
 
-const mockPastPlaylists = [
-  {
-    id: 'past-1',
-    name: 'Afrobeat Special Vendredi',
-    date: 'Vendredi dernier',
-    songsCount: 14,
-    genre: 'Afrobeat & Amapiano',
-    cover: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=400'
-  },
-  {
-    id: 'past-2',
-    name: 'Saint-Sylvestre Nouvel An',
-    date: '31 Dec 2025',
-    songsCount: 32,
-    genre: 'Generaliste Club',
-    cover: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=400'
-  },
-  {
-    id: 'past-3',
-    name: 'Soirée Salsa & Kizomba',
-    date: 'Jeudi Retro',
-    songsCount: 18,
-    genre: 'Latino & Caribéen',
-    cover: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=400'
-  }
-];
+const genres = ['Afrobeat', 'Amapiano', 'Coupe Decale', 'Dancehall', 'Hip Hop', 'Salsa', 'Zouk'];
 
 export function PlaylistDJ({ establishmentId }: PlaylistDJProps) {
   const { currentUser, establishments } = useAppStore();
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [suggestions, setSuggestions] = useState<SongSuggestion[]>([]);
+  const [archivedPlaylists, setArchivedPlaylists] = useState<ArchivedPlaylist[]>([]);
   const [activeTab, setActiveTab] = useState<'live' | 'proposals' | 'archives'>('live');
   
   // Suggest song form state
@@ -115,15 +99,7 @@ export function PlaylistDJ({ establishmentId }: PlaylistDJProps) {
         if (data.currentSong) {
           setCurrentSong(data.currentSong as Song);
         } else {
-          // Default mock starter song
-          setCurrentSong({
-            title: 'No Limit',
-            artist: 'Burna Boy',
-            duration: '3:24',
-            genre: 'Afrobeat',
-            coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=200',
-            playedAt: 'À l\'instant'
-          });
+          setCurrentSong(null);
         }
       }
     });
@@ -143,9 +119,23 @@ export function PlaylistDJ({ establishmentId }: PlaylistDJProps) {
       setSuggestions(list);
     });
 
+    // DJ Archived playlists listener
+    const archivesCol = collection(db, 'dj_archived_playlists');
+    const unsubArch = onSnapshot(archivesCol, (snapshot) => {
+      const list: ArchivedPlaylist[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.establishmentId === establishmentId) {
+          list.push({ id: docSnap.id, ...data } as ArchivedPlaylist);
+        }
+      });
+      setArchivedPlaylists(list);
+    });
+
     return () => {
       unsubEst();
       unsubSug();
+      unsubArch();
     };
   }, [establishmentId]);
 
@@ -496,27 +486,33 @@ export function PlaylistDJ({ establishmentId }: PlaylistDJProps) {
             Archives des Playlists & Mixes passés
           </div>
 
-          <div className="grid grid-cols-1 gap-2.5 max-h-80 overflow-y-auto">
-            {mockPastPlaylists.map((playlist) => (
-              <div
-                key={playlist.id}
-                className="p-3 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-3.5"
-              >
-                <img src={playlist.cover} alt="Playlist Cover" className="w-12 h-12 rounded-xl object-cover" />
-                <div className="min-w-0 flex-1">
-                  <h4 className="text-xs font-black text-gray-900 dark:text-white truncate">{playlist.name}</h4>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold">{playlist.genre} • {playlist.songsCount} titres</p>
-                  <span className="text-[9px] text-orange-600 dark:text-orange-400 font-bold">{playlist.date}</span>
-                </div>
-                <button
-                  onClick={() => { triggerHapticFeedback(20); alert("Lecture du mix ou téléchargement de la playlist archivée !"); }}
-                  className="p-2 bg-white dark:bg-gray-800 hover:bg-gray-100 rounded-full cursor-pointer shadow-sm border border-gray-150 dark:border-gray-700"
+          {archivedPlaylists.length > 0 ? (
+            <div className="grid grid-cols-1 gap-2.5 max-h-80 overflow-y-auto">
+              {archivedPlaylists.map((playlist) => (
+                <div
+                  key={playlist.id}
+                  className="p-3 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-3.5"
                 >
-                  <Music className="w-4 h-4 text-orange-500" />
-                </button>
-              </div>
-            ))}
-          </div>
+                  {playlist.cover ? (
+                    <img src={playlist.cover} alt="Playlist Cover" className="w-12 h-12 rounded-xl object-cover" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-950 flex items-center justify-center text-orange-600">
+                      <Music className="w-6 h-6" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-xs font-black text-gray-900 dark:text-white truncate">{playlist.name}</h4>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold">{playlist.genre} • {playlist.songsCount} titres</p>
+                    <span className="text-[9px] text-orange-600 dark:text-orange-400 font-bold">{playlist.date}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-8 text-center text-xs text-gray-400 italic">
+              Aucune archive de playlist enregistrée pour cet établissement.
+            </div>
+          )}
         </div>
       )}
     </div>

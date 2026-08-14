@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { X, Calendar, Clock, Users, FileText, Send, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Calendar, Clock, Users, FileText, Send, CheckCircle2, ChevronLeft, ChevronRight, Ban, Phone } from 'lucide-react';
 
 interface ReservationModalProps {
   establishmentName: string;
+  isClosed?: boolean;
+  closedReason?: string;
+  establishmentPhone?: string;
   onClose: () => void;
   onSubmit: (data: {
     reservationType: string;
@@ -14,7 +17,14 @@ interface ReservationModalProps {
   }) => void;
 }
 
-export function ReservationModal({ establishmentName, onClose, onSubmit }: ReservationModalProps) {
+export function ReservationModal({ 
+  establishmentName, 
+  isClosed, 
+  closedReason, 
+  establishmentPhone, 
+  onClose, 
+  onSubmit 
+}: ReservationModalProps) {
   const [reservationType, setReservationType] = useState('en famille');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
@@ -25,6 +35,65 @@ export function ReservationModal({ establishmentName, onClose, onSubmit }: Reser
 
   // Custom interactive calendar states
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
+
+  if (isClosed) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-200">
+        <div className="bg-white dark:bg-gray-950 rounded-3xl w-full max-w-md p-6 space-y-5 text-center shadow-2xl border border-gray-150 dark:border-gray-800 animate-in zoom-in-95 duration-200 relative">
+          <button 
+            type="button"
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-gray-100 dark:bg-gray-900 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors"
+            title="Fermer la fenêtre"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          <div className="w-16 h-16 bg-rose-100 dark:bg-rose-950/60 rounded-full flex items-center justify-center mx-auto text-rose-600 dark:text-rose-400 shadow-inner mt-2">
+            <Ban className="w-8 h-8" />
+          </div>
+
+          <div>
+            <h3 className="text-lg font-black text-gray-900 dark:text-white">
+              Réservations temporairement fermées
+            </h3>
+            <p className="text-xs text-orange-600 dark:text-orange-400 font-bold mt-0.5">
+              {establishmentName}
+            </p>
+          </div>
+
+          <div className="p-4 bg-rose-50/80 dark:bg-rose-950/30 rounded-2xl border border-rose-200 dark:border-rose-900/60 text-left space-y-2">
+            <p className="text-xs font-bold text-rose-900 dark:text-rose-200">
+              ⚠️ Cet établissement n'accepte pas de nouvelles demandes de réservation en ligne actuellement.
+            </p>
+            {closedReason && (
+              <p className="text-xs font-medium text-rose-800 dark:text-rose-300">
+                <span className="font-extrabold">Motif :</span> {closedReason}
+              </p>
+            )}
+          </div>
+
+          {establishmentPhone && (
+            <a
+              href={`tel:${establishmentPhone}`}
+              className="w-full py-3.5 px-4 bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-xs rounded-2xl shadow-md shadow-orange-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+            >
+              <Phone className="w-4 h-4" />
+              <span>Appeler le {establishmentPhone}</span>
+            </a>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-3 px-4 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-extrabold text-xs rounded-2xl transition-all cursor-pointer"
+          >
+            Compris / Fermer
+          </button>
+        </div>
+      </div>
+    );
+  }
   
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -85,8 +154,16 @@ export function ReservationModal({ establishmentName, onClose, onSubmit }: Reser
   if (submitted) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm">
-        <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-8 flex flex-col items-center justify-center text-center shadow-2xl border border-gray-100 dark:border-gray-800 animate-in zoom-in-95 duration-200">
-          <div className="w-16 h-16 bg-green-100 dark:bg-green-950/50 rounded-full flex items-center justify-center mb-4">
+        <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-8 flex flex-col items-center justify-center text-center shadow-2xl border border-gray-100 dark:border-gray-800 animate-in zoom-in-95 duration-200 relative">
+          <button 
+            type="button"
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-full cursor-pointer transition-colors"
+            title="Fermer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <div className="w-16 h-16 bg-green-100 dark:bg-green-950/50 rounded-full flex items-center justify-center mb-4 mt-2">
             <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-400" />
           </div>
           <h2 className="text-xl font-black text-gray-900 dark:text-white mb-2">Demande envoyée !</h2>

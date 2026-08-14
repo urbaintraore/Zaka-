@@ -54,7 +54,8 @@ service cloud.firestore {
         && (data.get('description', '') is string && data.get('description', '').size() <= 1000)
         && (data.get('geolocation', '') is string && data.get('geolocation', '').size() <= 500)
         && (data.get('averageRating', 0) is number)
-        && (data.get('photos', []) is list && data.get('photos', []).size() <= 10)
+        && (data.get('photos', []) is list && data.get('photos', []).size() <= 50)
+        && (data.get('galleryPhotos', []) is list)
         && (data.get('tags', []) is list && data.get('tags', []).size() <= 50)
         && (data.get('openingHours', '') is string && data.get('openingHours', '').size() <= 500)
         && (data.get('hairSalonData', {}) is map)
@@ -65,7 +66,9 @@ service cloud.firestore {
         && (data.get('loyaltyReward', '') is string)
         && (data.get('acceptsZakaPoints', false) is bool)
         && (data.get('zakaPointsReward', '') is string)
-        && (data.get('zakaPointsCost', 100) is number);
+        && (data.get('zakaPointsCost', 100) is number)
+        && (data.get('reservationsClosed', false) is bool)
+        && (data.get('reservationsClosedReason', '') is string);
     }
 
     function isValidReview(data) {
@@ -224,7 +227,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get, list: if isSignedIn();
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming()) && incoming().role != 'admin';
       allow update: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming()) && incoming().role == existing().role || isUserAdmin();
     }
@@ -282,7 +285,7 @@ service cloud.firestore {
       allow delete: if false;
       
       match /messages/{msgId} {
-        allow get, list: if isSignedIn() && (
+        allow read: if isSignedIn() && (
           isUserAdmin()
           || !exists(/databases/$(database)/documents/conversations/$(convId))
           || (exists(/databases/$(database)/documents/conversations/$(convId)) && get(/databases/$(database)/documents/conversations/$(convId)).data.clientId == request.auth.uid)
@@ -298,7 +301,7 @@ service cloud.firestore {
     }
 
     match /relationshipRequests/{reqId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn() && request.resource.data.initiatorId == request.auth.uid;
       allow update: if isSignedIn() && (resource.data.initiatorId == request.auth.uid || resource.data.targetId == request.auth.uid);
     }
@@ -310,25 +313,25 @@ service cloud.firestore {
     }
 
     match /favorites/{userId} {
-      allow get, list, read: if true;
+      allow read: if isSignedIn();
       allow create, update: if isSignedIn() && request.auth.uid == userId && isValidFavorites(incoming());
       allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 
     match /song_suggestions/{docId} {
-      allow read, list: if true;
+      allow read: if isSignedIn();
       allow create, update: if isSignedIn();
       allow delete: if isUserAdmin();
     }
 
     match /photo_challenges/{docId} {
-      allow read, list: if true;
+      allow read: if isSignedIn();
       allow create, update: if isSignedIn();
       allow delete: if isUserAdmin();
     }
 
     match /event_comments/{docId} {
-      allow read, list: if true;
+      allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isSignedIn() && (existing().userId == request.auth.uid || isUserAdmin());
     }
@@ -341,7 +344,7 @@ service cloud.firestore {
     }
 
     match /reservations/{resId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn() && isValidReservation(incoming()) && incoming().clientId == request.auth.uid;
       allow update: if isSignedIn() && (
         (existing().clientId == request.auth.uid && incoming().clientId == request.auth.uid && incoming().status == 'annulee')
@@ -356,7 +359,7 @@ service cloud.firestore {
     }
 
     match /entreprises/{entId} {
-      allow read, list: if true;
+      allow read: if true;
       allow create: if isSignedIn() && request.auth.uid == entId && isValidEntreprise(incoming());
       allow update: if isSignedIn() && (
         (request.auth.uid == entId && isValidEntreprise(incoming()))
@@ -367,13 +370,13 @@ service cloud.firestore {
     }
 
     match /establishment_views/{viewId} {
-      allow read, list: if true;
+      allow read: if true;
       allow create: if true;
       allow update, delete: if false;
     }
 
     match /publication_views/{viewId} {
-      allow read, list: if true;
+      allow read: if true;
       allow create: if true;
       allow update, delete: if false;
     }
@@ -404,18 +407,18 @@ service cloud.firestore {
     }
 
     match /staffReviews/{reviewId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
       allow update: if isSignedIn() && (request.auth.uid == resource.data.clientId || (exists(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)) && get(/databases/$(database)/documents/establishments/$(resource.data.establishmentId)).data.ownerId == request.auth.uid));
     }
 
     match /staffAttendances/{attId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create, delete: if isSignedIn();
     }
 
     match /parrainages/{parrId} {
-      allow read, list: if isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn() && isValidParrainage(incoming()) && (incoming().parraineId == request.auth.uid || isUserAdmin());
       allow update: if isSignedIn() && isValidParrainage(incoming()) && (
         (existing().parraineId == request.auth.uid && incoming().parraineId == existing().parraineId && incoming().parrainId == existing().parrainId)
@@ -445,34 +448,42 @@ service cloud.firestore {
     }
 
     match /payments/{payId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn();
       allow update: if isUserAdmin();
       allow delete: if isUserAdmin();
     }
 
     match /invoices/{invId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn();
       allow update, delete: if isUserAdmin();
     }
 
     match /adStatistics/{statId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create, update: if true;
       allow delete: if isUserAdmin();
     }
 
     match /loyalty_cards/{cardId} {
-      allow read, list, create, update, delete: if isSignedIn();
+      allow read: if true;
+      allow write: if isSignedIn();
     }
 
     match /zaka_redemptions/{redemptionId} {
-      allow read, list, create, update, delete: if isSignedIn();
+      allow read: if true;
+      allow write: if isSignedIn();
     }
 
     match /group_outings/{outingId} {
-      allow read, list, create, update, delete: if isSignedIn();
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /friendships/{friendshipId} {
+      allow read: if true;
+      allow write: if isSignedIn();
     }
   }
 }

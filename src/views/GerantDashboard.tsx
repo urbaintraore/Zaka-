@@ -3,7 +3,7 @@ import { RichTextEditor } from '../components/RichTextEditor';
 import { ClientsAndRequests } from '../components/ClientsAndRequests';
 import { GerantAnalytics } from '../components/GerantAnalytics';
 import { useAppStore } from '../store';
-import { LogOut, Plus, Store, Eye, MousePointerClick, X, Megaphone, Calendar, Users, FileText, Image as ImageIcon, MessageSquare, Download, Settings, ChefHat, Scissors, Trash2 } from 'lucide-react';
+import { LogOut, Plus, Store, Eye, MousePointerClick, X, Megaphone, Calendar, Users, FileText, Image as ImageIcon, MessageSquare, Download, Settings, ChefHat, Scissors, Trash2, Star, Activity, ArrowRight, BarChart2, Zap, Rocket } from 'lucide-react';
 import { Category, PubType, getCategoryLabel } from '../types';
 import { compressImage } from '../utils/imageCompressor';
 import { useInstallApp } from '../hooks/useInstallApp';
@@ -11,6 +11,10 @@ import { ReservationsDashboard } from '../components/ReservationsDashboard';
 import { MenuDuJourForm } from '../components/MenuDuJourForm';
 import { SalonManagement } from '../components/SalonManagement';
 import { AffluenceManager } from '../components/AffluenceManager';
+import { EstablishmentPhotoGalleryManager } from '../components/EstablishmentPhotoGalleryManager';
+import { EstablishmentPhotoGallery } from '../components/EstablishmentPhotoGallery';
+import { Sparkles, TrendingUp, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { AdExpressWizard } from '../components/AdExpressWizard';
 
 export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: { onLogout: () => void; onNavigate?: (tab: any) => void; onStartChatWithConv?: (convId: string) => void }) {
   const { 
@@ -39,12 +43,30 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
   const [isAdding, setIsAdding] = useState(false);
   const [reviewReplies, setReviewReplies] = useState<Record<string, string>>({});
 
+  // Main View Section State for Managers
+  const [activeMainTab, setActiveMainTab] = useState<'etablissements' | 'frequentation' | 'reservations' | 'galerie'>('etablissements');
+  const [galleryActiveEstId, setGalleryActiveEstId] = useState<string | null>(null);
+
   // Restaurant Menu & Reservations modal states
   const [showResModal, setShowResModal] = useState(false);
   const [resActiveEstId, setResActiveEstId] = useState<string | null>(null);
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [menuActiveEstId, setMenuActiveEstId] = useState<string | null>(null);
+  const [selectedFrequentationEstId, setSelectedFrequentationEstId] = useState<string>('all');
   const [showGuide, setShowGuide] = useState(() => !localStorage.getItem('zaka_gerant_guide_seen'));
+
+  // ZAKA Ads Express State
+  const [showExpressAdsModal, setShowExpressAdsModal] = useState(false);
+  const [expressPrefillEst, setExpressPrefillEst] = useState<any>(null);
+  const [expressPrefillPub, setExpressPrefillPub] = useState<any>(null);
+  const [expressPrefillType, setExpressPrefillType] = useState<any>('etablissement');
+
+  const openExpressAds = (type: 'etablissement' | 'evenement' | 'promotion' | 'produit' | 'dj' = 'etablissement', est?: any, pub?: any) => {
+    setExpressPrefillType(type);
+    setExpressPrefillEst(est || (myEsts.length > 0 ? myEsts[0] : null));
+    setExpressPrefillPub(pub || null);
+    setShowExpressAdsModal(true);
+  };
 
   const closeGuide = () => {
     localStorage.setItem('zaka_gerant_guide_seen', 'true');
@@ -460,142 +482,339 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
         </button>
       </div>
 
-      <div className="mb-6 flex items-center justify-between">
-        <h3 className="text-lg font-bold text-gray-900">Mes Établissements</h3>
-        <button onClick={() => setIsAdding(true)} className="flex items-center gap-1.5 text-sm font-bold text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-100">
-          <Plus className="w-4 h-4" /> Ajouter
-        </button>
+      {/* ZAKA ADS EXPRESS BOOSTER CARD */}
+      <div className="mb-6 p-5 rounded-3xl bg-gradient-to-br from-orange-600 via-orange-500 to-amber-500 text-white shadow-xl shadow-orange-500/20 border border-orange-400/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative overflow-hidden">
+        <div className="relative z-10 max-w-md">
+          <span className="px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 mb-2">
+            <Zap className="w-3 h-3 fill-white" /> ZAKA ADS EXPRESS • EN 2 MINUTES
+          </span>
+          <h3 className="text-xl font-black tracking-tight leading-tight">
+            🔥 BOOSTEZ VOTRE ÉTABLISSEMENT
+          </h3>
+          <p className="text-xs text-orange-100 mt-1 font-medium leading-relaxed">
+            Vous voulez attirer plus de clients ce week-end ? Une photo + quelques mots = ZAKA AI crée et diffuse votre publicité auprès de milliers de clients.
+          </p>
+        </div>
+
+        <div className="relative z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto shrink-0">
+          <button
+            type="button"
+            onClick={() => openExpressAds('etablissement')}
+            className="px-5 py-3.5 bg-white text-orange-600 hover:bg-orange-50 font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Rocket className="w-4 h-4 text-orange-600" />
+            <span>🚀 BOOSTER MON ÉTABLISSEMENT</span>
+          </button>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-4">
-        {myEsts.map(est => (
-          <div key={est.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400">
-                  <Store className="w-6 h-6" />
+      {/* Manager Specific View Tabs */}
+      <div className="flex bg-white dark:bg-gray-900 rounded-2xl p-1.5 gap-1 border border-gray-200 dark:border-gray-800 shadow-sm mb-6 overflow-x-auto hide-scrollbar">
+        {[
+          { id: 'etablissements', label: '🏢 Établissements', badge: myEsts.length },
+          { id: 'frequentation', label: '⚡ Fréquentation & Stats' },
+          { id: 'reservations', label: '📅 Réservations' },
+          { id: 'galerie', label: '📸 Galeries Photos' },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveMainTab(tab.id as any)}
+            className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap ${
+              activeMainTab === tab.id
+                ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-orange-50 dark:hover:bg-gray-800'
+            }`}
+          >
+            <span>{tab.label}</span>
+            {tab.badge !== undefined && (
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                activeMainTab === tab.id ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'
+              }`}>
+                {tab.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {activeMainTab === 'etablissements' && (
+        <>
+          <div className="mb-6 flex items-center justify-between">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Mes Établissements</h3>
+            <button onClick={() => setIsAdding(true)} className="flex items-center gap-1.5 text-sm font-bold text-orange-600 bg-orange-50 dark:bg-orange-950/40 px-3 py-1.5 rounded-lg hover:bg-orange-100">
+              <Plus className="w-4 h-4" /> Ajouter
+            </button>
+          </div>
+
+      <div className="flex flex-col gap-5">
+        {myEsts.map(est => {
+          const estReviews = reviews.filter(r => r.establishmentId === est.id);
+          const estReservations = reservations ? reservations.filter(r => r.establishmentId === est.id) : [];
+          const avgRating = estReviews.length > 0 
+            ? (estReviews.reduce((sum, r) => sum + r.rating, 0) / estReviews.length).toFixed(1)
+            : null;
+          const photoCount = (est.galleryPhotos || est.photos || []).length;
+          const pubCount = publications.filter(p => p.establishmentId === est.id).length;
+
+          return (
+          <div key={est.id} className="bg-white dark:bg-gray-950 rounded-3xl border border-gray-150 dark:border-gray-900 p-5 shadow-sm space-y-4">
+            {/* Establishment Header */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3.5">
+                <div className="w-14 h-14 bg-orange-50 dark:bg-orange-950/40 rounded-2xl flex items-center justify-center text-orange-600 dark:text-orange-400 overflow-hidden border border-orange-100 dark:border-orange-900/30 shrink-0">
+                  {est.photos && est.photos[0] ? (
+                    <img src={est.photos[0]} alt={est.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Store className="w-7 h-7" />
+                  )}
                 </div>
                 <div>
-                  <h4 className="font-bold text-gray-900">{est.name}</h4>
-                  <p className="text-xs text-gray-500 capitalize">{est.category} • {est.city}</p>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-black text-gray-900 dark:text-white text-lg leading-tight">{est.name}</h4>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-black ${
+                      est.status === 'valide' 
+                        ? 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400' 
+                        : 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400'
+                    }`}>
+                      {est.status === 'valide' ? 'Validé' : 'En attente'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 font-medium capitalize mt-0.5">
+                    {getCategoryLabel(est.category)} • {est.city}{est.neighborhood ? ` (${est.neighborhood})` : ''}
+                  </p>
                 </div>
               </div>
-              <div className={`px-2 py-1 rounded text-[10px] uppercase tracking-wider font-bold ${est.status === 'valide' ? 'bg-green-50 text-green-600' : 'bg-yellow-50 text-yellow-600'}`}>
-                {est.status === 'valide' ? 'Validé' : 'En attente'}
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => openExpressAds('etablissement', est)}
+                  className="text-xs font-black text-white bg-gradient-to-r from-orange-500 to-amber-500 hover:opacity-95 px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 shadow-sm shadow-orange-500/20 cursor-pointer active:scale-95"
+                  title="Booster avec ZAKA Ads Express"
+                >
+                  <Rocket className="w-3.5 h-3.5 fill-white" /> <span className="hidden sm:inline">Booster</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    setEditingEstId(est.id);
+                    setEstName(est.name);
+                    setEstCategory(est.category);
+                    setEstCountry(est.country || 'Burkina Faso');
+                    setEstCity(est.city);
+                    setEstNeighborhood(est.neighborhood);
+                    setEstGeolocation(est.geolocation || '');
+                    setEstDescription(est.description || '');
+                    setEstPhotoUrl(est.photos && est.photos[0] ? est.photos[0] : '');
+                    setEstOpeningHours(est.openingHours || '');
+                    setEstTags(est.tags ? est.tags.join(', ') : '');
+                    setEstMenuPdfUrl(est.menuPdfUrl || '');
+                    setEstMenuImages(est.menuImages || []);
+                    setIsAdding(true);
+                  }}
+                  className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/60 px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Settings className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Modifier</span>
+                </button>
+                <button 
+                  onClick={() => handleDeleteEst(est.id, est.name)}
+                  className="text-xs font-bold text-red-600 hover:text-red-750 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 px-3 py-2 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Supprimer l'établissement"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
+
+            {/* Quick Status KPI Badges */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-gray-50 dark:bg-gray-900/40 p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
+              {/* Affluence status badge */}
+              <button
+                type="button"
+                onClick={() => setActiveMainTab('frequentation')}
+                className="flex items-center gap-2 p-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-150 dark:border-gray-800 text-left hover:border-orange-300 transition-all cursor-pointer group"
+                title="Gérer l'affluence dans l'onglet Fréquentation"
+              >
+                <Activity className="w-4 h-4 text-orange-500 shrink-0 group-hover:scale-110 transition-transform" />
+                <div className="min-w-0">
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Affluence</p>
+                  <p className="text-xs font-black text-gray-800 dark:text-gray-200 truncate">
+                    {est.crowdStatus === 'complet' ? '🔴 Complet' : est.crowdStatus === 'anime' ? '🟠 Animé' : est.crowdStatus === 'calme' ? '🟢 Calme' : '⚪ Normale'}
+                  </p>
+                </div>
+              </button>
+
+              {/* Reviews & Rating Badge */}
+              <div className="flex items-center gap-2 p-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-150 dark:border-gray-800">
+                <Star className="w-4 h-4 text-amber-500 shrink-0 fill-amber-500" />
+                <div className="min-w-0">
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Note Client</p>
+                  <p className="text-xs font-black text-gray-800 dark:text-gray-200 truncate">
+                    {avgRating ? `${avgRating}/5 (${estReviews.length})` : 'Aucun avis'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Reservations Badge */}
+              <button
+                type="button"
+                onClick={() => setActiveMainTab('reservations')}
+                className="flex items-center gap-2 p-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-150 dark:border-gray-800 text-left hover:border-orange-300 transition-all cursor-pointer group"
+                title="Gérer les réservations"
+              >
+                <Calendar className="w-4 h-4 text-blue-500 shrink-0 group-hover:scale-110 transition-transform" />
+                <div className="min-w-0">
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Réservations</p>
+                  <p className="text-xs font-black text-gray-800 dark:text-gray-200 truncate">
+                    {est.reservationsClosed ? '🔴 Fermées' : `🟢 Ouvertes (${estReservations.length})`}
+                  </p>
+                </div>
+              </button>
+
+              {/* Photos Gallery Badge */}
+              <button
+                type="button"
+                onClick={() => setGalleryActiveEstId(est.id)}
+                className="flex items-center gap-2 p-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-150 dark:border-gray-800 text-left hover:border-orange-300 transition-all cursor-pointer group"
+                title="Gérer la galerie photos"
+              >
+                <Sparkles className="w-4 h-4 text-purple-500 shrink-0 group-hover:scale-110 transition-transform" />
+                <div className="min-w-0">
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Galerie</p>
+                  <p className="text-xs font-black text-gray-800 dark:text-gray-200 truncate">
+                    {photoCount} photo{photoCount > 1 ? 's' : ''}
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            {/* Quick Link to Dedicated Stats & Gallery */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setActiveMainTab('frequentation')}
+                className="py-3 px-4 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-md shadow-orange-600/10 flex items-center justify-between cursor-pointer transition-all active:scale-[0.98]"
+              >
+                <span className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  <span>⚡ Fréquentation & Statistiques</span>
+                </span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setGalleryActiveEstId(est.id)}
+                className="py-3 px-4 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 font-black text-xs uppercase tracking-wider rounded-2xl border border-purple-200 dark:border-purple-800/40 flex items-center justify-between cursor-pointer transition-all active:scale-[0.98]"
+              >
+                <span className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <span>📸 Galerie Photos & Ambiance</span>
+                </span>
+                <span className="text-[10px] bg-purple-200 dark:bg-purple-900/60 px-2 py-0.5 rounded-full font-black">
+                  {photoCount}
+                </span>
+              </button>
+            </div>
+
+            {/* Restaurant Menu & Reservations Shortcuts */}
+            {est.category === 'restaurant' && (
+              <div className="bg-orange-50/50 dark:bg-orange-950/20 border border-orange-200/60 dark:border-orange-900/40 rounded-2xl p-4 space-y-3 animate-in fade-in duration-200">
+                <h5 className="text-xs font-black text-orange-800 dark:text-orange-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>🍽️</span> Restaurant - Menu & Réservations
+                </h5>
+                
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResActiveEstId(est.id);
+                      setShowResModal(true);
+                    }}
+                    className="py-2.5 px-3 bg-white dark:bg-gray-900 hover:bg-orange-50 text-orange-700 dark:text-orange-400 font-extrabold text-[11px] uppercase tracking-wider rounded-xl border border-orange-200 dark:border-orange-800 shadow-sm flex items-center justify-between gap-1.5 cursor-pointer transition-all active:scale-[0.98]"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4 text-orange-600" />
+                      <span>Réservations</span>
+                    </span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-black ${
+                      est.reservationsClosed ? 'bg-rose-100 text-rose-700' : 'bg-green-100 text-green-700'
+                    }`}>
+                      {est.reservationsClosed ? '🔴 Fermées' : '🟢 Ouvertes'}
+                    </span>
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuActiveEstId(est.id);
+                      setShowMenuModal(true);
+                    }}
+                    className="py-2.5 px-3 bg-white dark:bg-gray-900 hover:bg-orange-50 text-orange-700 dark:text-orange-400 font-extrabold text-[11px] uppercase tracking-wider rounded-xl border border-orange-200 dark:border-orange-800 shadow-sm flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-[0.98]"
+                  >
+                    <ChefHat className="w-4 h-4 text-orange-600" />
+                    Menu du jour
+                  </button>
+                </div>
+              </div>
+            )}
             
-              <div className="border-t border-gray-100 pt-3 mt-3">
-                <div className="flex items-center justify-between mb-2">
-                  <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Actions rapides</h5>
-                  <div className="flex items-center gap-1.5">
-                    <button 
-                      onClick={() => {
-                        setEditingEstId(est.id);
-                        setEstName(est.name);
-                        setEstCategory(est.category);
-                        setEstCountry(est.country || 'Burkina Faso');
-                        setEstCity(est.city);
-                        setEstNeighborhood(est.neighborhood);
-                        setEstGeolocation(est.geolocation || '');
-                        setEstDescription(est.description || '');
-                        setEstPhotoUrl(est.photos && est.photos[0] ? est.photos[0] : '');
-                        setEstOpeningHours(est.openingHours || '');
-                        setEstTags(est.tags ? est.tags.join(', ') : '');
-                        setEstMenuPdfUrl(est.menuPdfUrl || '');
-                        setEstMenuImages(est.menuImages || []);
-                        setIsAdding(true);
-                      }}
-                      className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                    >
-                      <Settings className="w-3 h-3" /> Modifier les infos
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteEst(est.id, est.name)}
-                      className="text-xs font-bold text-red-600 hover:text-red-750 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                      title="Supprimer l'établissement"
-                    >
-                      <Trash2 className="w-3 h-3" /> Supprimer
-                    </button>
-                  </div>
-                </div>
+            {est.category === 'salon_de_coiffure' && (
+              <SalonManagement establishment={est} />
+            )}
 
-                {/* Affluence Manager */}
-                <div className="mb-4">
-                  <AffluenceManager establishmentId={est.id} />
-                </div>
+            {/* Publications & Communications Section */}
+            <div className="border-t border-gray-150 dark:border-gray-900 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h5 className="text-xs font-black text-gray-500 uppercase tracking-wider">
+                  📢 Communication & Publications ({pubCount})
+                </h5>
+              </div>
 
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  <button onClick={() => { setPubModalEstId(est.id); setPubModalType('promo'); }} className="flex flex-col items-center justify-center p-3 bg-orange-50 text-orange-600 hover:bg-orange-100 font-bold text-xs rounded-xl transition-colors text-center tracking-wide gap-1">
-                    <Megaphone className="w-5 h-5" />
-                    Promo / Bon plan
-                  </button>
-                  <button onClick={() => { setPubModalEstId(est.id); setPubModalType('evenement'); }} className="flex flex-col items-center justify-center p-3 bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold text-xs rounded-xl transition-colors text-center tracking-wide gap-1">
-                    <Calendar className="w-5 h-5" />
-                    Événement
-                  </button>
-                  <button onClick={() => { setPubModalEstId(est.id); setPubModalType('recrutement'); }} className="flex flex-col items-center justify-center p-3 bg-green-50 text-green-600 hover:bg-green-100 font-bold text-xs rounded-xl transition-colors text-center tracking-wide gap-1">
-                    <Users className="w-5 h-5" />
-                    Recrutement
-                  </button>
-                  <button onClick={() => { setPubModalEstId(est.id); setPubModalType('annonce'); }} className="flex flex-col items-center justify-center p-3 bg-purple-50 text-purple-600 hover:bg-purple-100 font-bold text-xs rounded-xl transition-colors text-center tracking-wide gap-1">
-                    <FileText className="w-5 h-5" />
-                    Communiqué
-                  </button>
-                </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                <button onClick={() => { setPubModalEstId(est.id); setPubModalType('promo'); }} className="flex flex-col items-center justify-center p-3 bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 hover:bg-orange-100 font-bold text-xs rounded-2xl transition-colors text-center tracking-wide gap-1 border border-orange-100 dark:border-orange-900/30 cursor-pointer">
+                  <Megaphone className="w-5 h-5" />
+                  Promo / Bon plan
+                </button>
+                <button onClick={() => { setPubModalEstId(est.id); setPubModalType('evenement'); }} className="flex flex-col items-center justify-center p-3 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 font-bold text-xs rounded-2xl transition-colors text-center tracking-wide gap-1 border border-blue-100 dark:border-blue-900/30 cursor-pointer">
+                  <Calendar className="w-5 h-5" />
+                  Événement
+                </button>
+                <button onClick={() => { setPubModalEstId(est.id); setPubModalType('recrutement'); }} className="flex flex-col items-center justify-center p-3 bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 hover:bg-green-100 font-bold text-xs rounded-2xl transition-colors text-center tracking-wide gap-1 border border-green-100 dark:border-green-900/30 cursor-pointer">
+                  <Users className="w-5 h-5" />
+                  Recrutement
+                </button>
+                <button onClick={() => { setPubModalEstId(est.id); setPubModalType('annonce'); }} className="flex flex-col items-center justify-center p-3 bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 font-bold text-xs rounded-2xl transition-colors text-center tracking-wide gap-1 border border-purple-100 dark:border-purple-900/30 cursor-pointer">
+                  <FileText className="w-5 h-5" />
+                  Communiqué
+                </button>
+              </div>
 
-                {est.category === 'restaurant' && (
-                  <div className="bg-orange-50/40 border border-orange-100 rounded-2xl p-4 mb-4 space-y-3 animate-in fade-in duration-200">
-                    <h5 className="text-xs font-black text-orange-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <span>🍽️</span> Restaurant - Menu & Réservations
-                    </h5>
-                    
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setResActiveEstId(est.id);
-                          setShowResModal(true);
-                        }}
-                        className="py-2.5 px-3 bg-white hover:bg-orange-50 text-orange-700 font-extrabold text-[11px] uppercase tracking-wider rounded-xl border border-orange-250 shadow-sm flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-[0.98]"
-                      >
-                        <Calendar className="w-4 h-4 text-orange-600" />
-                        Réservations
-                      </button>
-                      
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMenuActiveEstId(est.id);
-                          setShowMenuModal(true);
-                        }}
-                        className="py-2.5 px-3 bg-white hover:bg-orange-50 text-orange-700 font-extrabold text-[11px] uppercase tracking-wider rounded-xl border border-orange-250 shadow-sm flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-[0.98]"
-                      >
-                        <ChefHat className="w-4 h-4 text-orange-600" />
-                        Menu du jour
-                      </button>
-                    </div>
-                  </div>
-                )}
-                
-                {est.category === 'salon_de_coiffure' && (
-                  <SalonManagement establishment={est} />
-                )}
-                
-                <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Publications récentes</h5>
-                <div className="flex flex-col gap-2">
+              {/* Recent Publications list */}
+              {publications.filter(p => p.establishmentId === est.id).length > 0 && (
+                <div className="flex flex-col gap-2 bg-gray-50 dark:bg-gray-900/30 p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Publications actives</p>
                   {publications.filter(p => p.establishmentId === est.id).map(pub => (
-                    <div key={pub.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg">
-                      <div className="flex-1">
-                        <div className="text-sm font-bold text-gray-900 line-clamp-1">{pub.title}</div>
+                    <div key={pub.id} className="flex items-center justify-between p-2.5 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/60 rounded-xl border border-gray-100 dark:border-gray-800">
+                      <div className="flex-1 min-w-0 pr-2">
+                        <div className="text-xs font-bold text-gray-900 dark:text-white truncate">{pub.title}</div>
                         <div className="text-[10px] font-bold tracking-wider text-orange-500 uppercase">{pub.type.replace('_', ' ')}</div>
                       </div>
-                      <div className="flex items-center gap-2.5 text-xs font-medium text-gray-400">
+                      <div className="flex items-center gap-2 text-xs font-medium text-gray-400 shrink-0">
                         <span className="flex items-center gap-1"><Eye className="w-3.5 h-3.5"/> {pub.views}</span>
                         <span className="flex items-center gap-1"><MousePointerClick className="w-3.5 h-3.5"/> {pub.clicks}</span>
+                        <button
+                          type="button"
+                          onClick={() => openExpressAds(pub.type === 'evenement' ? 'evenement' : 'promotion', est, pub)}
+                          className="px-2 py-1 bg-gradient-to-r from-orange-500 to-amber-500 hover:opacity-95 text-white font-extrabold text-[10px] rounded-lg flex items-center gap-1 cursor-pointer transition-all shadow-xs"
+                          title="Booster cette publication"
+                        >
+                          <Rocket className="w-3 h-3 fill-white" />
+                          <span>Booster</span>
+                        </button>
                         <button 
                           onClick={() => handleDeletePub(pub.id, pub.title)}
-                          className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors cursor-pointer ml-1"
+                          className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer ml-1"
                           title="Supprimer la publication"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -604,169 +823,175 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
 
-                <div className="border-t border-gray-100 pt-3.5 mt-4 flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Discussions Clients</span>
-                  <button 
-                    onClick={() => onNavigate && onNavigate('messages')}
-                    className="flex items-center gap-1.5 text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100/80 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    Ouvrir la messagerie
-                  </button>
-                </div>
-                <div className="mt-4">
-                  <GerantAnalytics establishmentId={est.id} />
-                  <ClientsAndRequests establishmentId={est.id} onNavigate={onNavigate} onStartChatWithConv={onStartChatWithConv} />
+            {/* Clients, Staff & Relationships Management */}
+            <div className="border-t border-gray-150 dark:border-gray-900 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-black text-gray-500 uppercase tracking-wider">Relations Clients & Staff</span>
+                <button 
+                  onClick={() => onNavigate && onNavigate('messages')}
+                  className="flex items-center gap-1.5 text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100/80 dark:bg-orange-950/40 dark:hover:bg-orange-900/60 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  Ouvrir la messagerie
+                </button>
+              </div>
 
-                  {/* Avis et commentaires des clients */}
-                  <div className="mt-6 border-t border-gray-100 dark:border-gray-800 pt-4 animate-in fade-in duration-250">
-                    <div className="flex items-center gap-2 mb-3">
-                      <MessageSquare className="w-4 h-4 text-orange-500" />
-                      <h5 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                        Avis des clients ({reviews.filter(r => r.establishmentId === est.id).length})
-                      </h5>
-                    </div>
-                    <div className="flex flex-col gap-3">
-                      {reviews.filter(r => r.establishmentId === est.id).length === 0 ? (
-                        <p className="text-xs text-gray-400 font-medium italic">Aucun avis laissé pour le moment.</p>
-                      ) : (
-                        reviews.filter(r => r.establishmentId === est.id).map(rev => (
-                          <div key={rev.id} className="p-3.5 bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-800 rounded-xl flex flex-col gap-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-black text-gray-800 dark:text-gray-200">Avis Client</span>
-                                <div className="flex text-yellow-400">
-                                  {[...Array(rev.rating)].map((_, i) => (
-                                    <span key={i} className="text-xs">★</span>
-                                  ))}
-                                </div>
-                              </div>
-                              <span className="text-[9px] text-gray-400 font-bold">
-                                {new Date(rev.date).toLocaleDateString()}
-                              </span>
-                            </div>
-                            <p className="text-xs text-gray-700 dark:text-gray-300 font-medium leading-relaxed italic">"{rev.comment}"</p>
-                            
-                            {/* Render reply if already exists */}
-                            {(rev as any).reply ? (
-                              <div className="bg-orange-50/60 dark:bg-orange-950/20 border-l-2 border-orange-500 p-2.5 rounded-r-lg mt-1 text-xs">
-                                <p className="font-extrabold text-orange-800 dark:text-orange-400 mb-0.5 uppercase tracking-wide text-[10px]">Votre Réponse :</p>
-                                <p className="text-gray-700 dark:text-gray-300 italic font-medium">"{(rev as any).reply}"</p>
-                              </div>
-                            ) : (
-                              /* Type answer input if no reply exists */
-                              <div className="mt-2 flex gap-2">
-                                <input
-                                  type="text"
-                                  placeholder="Répondre à cet avis..."
-                                  value={reviewReplies[rev.id] || ''}
-                                  onChange={e => setReviewReplies(prev => ({ ...prev, [rev.id]: e.target.value }))}
-                                  className="flex-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none placeholder:text-gray-400 dark:text-white font-medium"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    const text = reviewReplies[rev.id];
-                                    if (!text || !text.trim()) return;
-                                    await replyToReview(rev.id, text.trim());
-                                    setReviewReplies(prev => ({ ...prev, [rev.id]: '' }));
-                                  }}
-                                  className="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white font-black text-xs rounded-xl transition-all cursor-pointer"
-                                >
-                                  Répondre
-                                </button>
-                              </div>
-                            )}
+              <ClientsAndRequests establishmentId={est.id} onNavigate={onNavigate} onStartChatWithConv={onStartChatWithConv} />
+            </div>
+
+            {/* Avis et commentaires des clients */}
+            <div className="border-t border-gray-150 dark:border-gray-900 pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <MessageSquare className="w-4 h-4 text-orange-500" />
+                <h5 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                  Avis des clients ({estReviews.length})
+                </h5>
+              </div>
+              <div className="flex flex-col gap-3">
+                {estReviews.length === 0 ? (
+                  <p className="text-xs text-gray-400 font-medium italic">Aucun avis laissé pour le moment.</p>
+                ) : (
+                  estReviews.map(rev => (
+                    <div key={rev.id} className="p-3.5 bg-gray-50 dark:bg-gray-900/40 border border-gray-100 dark:border-gray-800 rounded-2xl flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-gray-800 dark:text-gray-200">Avis Client</span>
+                          <div className="flex text-yellow-400">
+                            {[...Array(rev.rating)].map((_, i) => (
+                              <span key={i} className="text-xs">★</span>
+                            ))}
                           </div>
-                        ))
+                        </div>
+                        <span className="text-[9px] text-gray-400 font-bold">
+                          {new Date(rev.date).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-700 dark:text-gray-300 font-medium leading-relaxed italic">"{rev.comment}"</p>
+                      
+                      {/* Render reply if already exists */}
+                      {(rev as any).reply ? (
+                        <div className="bg-orange-50/60 dark:bg-orange-950/20 border-l-2 border-orange-500 p-2.5 rounded-r-lg mt-1 text-xs">
+                          <p className="font-extrabold text-orange-800 dark:text-orange-400 mb-0.5 uppercase tracking-wide text-[10px]">Votre Réponse :</p>
+                          <p className="text-gray-700 dark:text-gray-300 italic font-medium">"{(rev as any).reply}"</p>
+                        </div>
+                      ) : (
+                        /* Type answer input if no reply exists */
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Répondre à cet avis..."
+                            value={reviewReplies[rev.id] || ''}
+                            onChange={e => setReviewReplies(prev => ({ ...prev, [rev.id]: e.target.value }))}
+                            className="flex-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none placeholder:text-gray-400 dark:text-white font-medium"
+                          />
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const text = reviewReplies[rev.id];
+                              if (!text || !text.trim()) return;
+                              await replyToReview(rev.id, text.trim());
+                              setReviewReplies(prev => ({ ...prev, [rev.id]: '' }));
+                            }}
+                            className="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white font-black text-xs rounded-xl transition-all cursor-pointer"
+                          >
+                            Répondre
+                          </button>
+                        </div>
                       )}
                     </div>
-                  </div>
-                  
-                  {applications.filter(a => a.establishmentId === est.id).length > 0 && (
-                    <div id={`applications-section-${est.id}`} className="mt-6 border-t border-gray-100 pt-4 animate-in fade-in duration-250">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Users className="w-4 h-4 text-orange-500" />
-                        <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Candidatures reçues ({applications.filter(a => a.establishmentId === est.id).length})</h5>
-                      </div>
-                      <div className="flex flex-col gap-3">
-                        {applications.filter(a => a.establishmentId === est.id).map(app => (
-                          <div key={app.id} id={`app-card-${app.id}`} className="p-4 bg-gray-50 border border-gray-100/50 rounded-xl flex flex-col gap-3">
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <div className="font-bold text-gray-900 text-sm">{app.clientName}</div>
-                                <div className="text-[10px] font-bold text-orange-600 uppercase mt-0.5">{app.publicationTitle}</div>
-                              </div>
-                              <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider ${
-                                app.status === 'acceptee'
-                                  ? 'bg-green-100 text-green-700 border border-green-200/50'
-                                  : app.status === 'refusee'
-                                  ? 'bg-red-100 text-red-700 border border-red-200/50'
-                                  : 'bg-yellow-100 text-yellow-700 border border-yellow-200/50'
-                              }`}>
-                                {app.status === 'acceptee' ? 'Acceptée' : app.status === 'refusee' ? 'Refusée' : 'En attente'}
-                              </span>
-                            </div>
-
-                            {app.message && (
-                              <p className="text-xs text-gray-600 bg-white p-3 rounded-lg border border-gray-100/50 italic leading-relaxed">
-                                "{app.message}"
-                              </p>
-                            )}
-
-                            <div className="text-[10px] text-gray-400 font-medium">
-                              Reçue le {new Date(app.createdAt).toLocaleDateString('fr-FR')} à {new Date(app.createdAt).toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})}
-                            </div>
-
-                            <div className="flex gap-2">
-                              {app.status === 'en_attente' && (
-                                <>
-                                  <button
-                                    id={`app-accept-${app.id}`}
-                                    onClick={() => updateApplicationStatus(app.id, 'acceptee')}
-                                    className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg active:scale-95 transition-all cursor-pointer"
-                                  >
-                                    Accepter
-                                  </button>
-                                  <button
-                                    id={`app-reject-${app.id}`}
-                                    onClick={() => updateApplicationStatus(app.id, 'refusee')}
-                                    className="flex-1 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-[10px] uppercase tracking-wider rounded-lg active:scale-95 transition-all cursor-pointer"
-                                  >
-                                    Refuser
-                                  </button>
-                                </>
-                              )}
-                              <button
-                                id={`app-contact-${app.id}`}
-                                onClick={async () => {
-                                  try {
-                                    const convId = await createConversation(app.clientId, est.id, app.clientName, est.name, currentUser!.id);
-                                    if (onStartChatWithConv) {
-                                      onStartChatWithConv(convId);
-                                    } else if (onNavigate) {
-                                      onNavigate('messages');
-                                    }
-                                  } catch (err) {
-                                    console.error("Error creating convo with candidate:", err);
-                                  }
-                                }}
-                                className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-[10px] uppercase tracking-wider rounded-lg active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1"
-                              >
-                                <MessageSquare className="w-3.5 h-3.5" />
-                                Contacter
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  ))
+                )}
               </div>
             </div>
-          ))}
+            
+            {/* Candidatures RH reçues */}
+            {applications.filter(a => a.establishmentId === est.id).length > 0 && (
+              <div id={`applications-section-${est.id}`} className="border-t border-gray-150 dark:border-gray-900 pt-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="w-4 h-4 text-orange-500" />
+                  <h5 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    Candidatures reçues ({applications.filter(a => a.establishmentId === est.id).length})
+                  </h5>
+                </div>
+                <div className="flex flex-col gap-3">
+                  {applications.filter(a => a.establishmentId === est.id).map(app => (
+                    <div key={app.id} id={`app-card-${app.id}`} className="p-4 bg-gray-50 dark:bg-gray-900/40 border border-gray-100/50 dark:border-gray-800 rounded-2xl flex flex-col gap-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="font-bold text-gray-900 dark:text-white text-sm">{app.clientName}</div>
+                          <div className="text-[10px] font-bold text-orange-600 uppercase mt-0.5">{app.publicationTitle}</div>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider ${
+                          app.status === 'acceptee'
+                            ? 'bg-green-100 text-green-700 border border-green-200/50'
+                            : app.status === 'refusee'
+                            ? 'bg-red-100 text-red-700 border border-red-200/50'
+                            : 'bg-yellow-100 text-yellow-700 border border-yellow-200/50'
+                        }`}>
+                          {app.status === 'acceptee' ? 'Acceptée' : app.status === 'refusee' ? 'Refusée' : 'En attente'}
+                        </span>
+                      </div>
+
+                      {app.message && (
+                        <p className="text-xs text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-100/50 dark:border-gray-800 italic leading-relaxed">
+                          "{app.message}"
+                        </p>
+                      )}
+
+                      <div className="text-[10px] text-gray-400 font-medium">
+                        Reçue le {new Date(app.createdAt).toLocaleDateString('fr-FR')} à {new Date(app.createdAt).toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})}
+                      </div>
+
+                      <div className="flex gap-2">
+                        {app.status === 'en_attente' && (
+                          <>
+                            <button
+                              id={`app-accept-${app.id}`}
+                              onClick={() => updateApplicationStatus(app.id, 'acceptee')}
+                              className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white font-bold text-[10px] uppercase tracking-wider rounded-xl active:scale-95 transition-all cursor-pointer"
+                            >
+                              Accepter
+                            </button>
+                            <button
+                              id={`app-reject-${app.id}`}
+                              onClick={() => updateApplicationStatus(app.id, 'refusee')}
+                              className="flex-1 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-[10px] uppercase tracking-wider rounded-xl active:scale-95 transition-all cursor-pointer"
+                            >
+                              Refuser
+                            </button>
+                          </>
+                        )}
+                        <button
+                          id={`app-contact-${app.id}`}
+                          onClick={async () => {
+                            try {
+                              const convId = await createConversation(app.clientId, est.id, app.clientName, est.name, currentUser!.id);
+                              if (onStartChatWithConv) {
+                                onStartChatWithConv(convId);
+                              } else if (onNavigate) {
+                                onNavigate('messages');
+                              }
+                            } catch (err) {
+                              console.error("Error creating convo with candidate:", err);
+                            }
+                          }}
+                          className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-[10px] uppercase tracking-wider rounded-xl active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          Contacter
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
           {myEsts.length === 0 && (
             <div className="text-center p-8 bg-gray-50 rounded-2xl border border-gray-100">
               <Store className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -774,6 +999,192 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
             </div>
           )}
         </div>
+        </>
+      )}
+
+      {/* Fréquentation & Statistiques en Temps Réel */}
+      {activeMainTab === 'frequentation' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="bg-gradient-to-r from-orange-600 to-amber-600 text-white p-5 rounded-3xl shadow-lg flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-black flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" /> Fréquentation & Affluence en Temps Réel
+              </h3>
+              <p className="text-xs text-orange-100 font-medium mt-1">
+                Suivez en direct la fréquentation de vos établissements, visualisez les analyses détaillées et ajustez l'affluence en 1 clic.
+              </p>
+            </div>
+          </div>
+
+          {/* Filter pills if multiple establishments */}
+          {myEsts.length > 1 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+              <button
+                type="button"
+                onClick={() => setSelectedFrequentationEstId('all')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+                  selectedFrequentationEstId === 'all'
+                    ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
+                    : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-800 hover:bg-gray-50'
+                }`}
+              >
+                Tous les établissements ({myEsts.length})
+              </button>
+              {myEsts.map(est => (
+                <button
+                  key={est.id}
+                  type="button"
+                  onClick={() => setSelectedFrequentationEstId(est.id)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    selectedFrequentationEstId === est.id
+                      ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
+                      : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-800 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>{est.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {myEsts
+            .filter(est => selectedFrequentationEstId === 'all' || est.id === selectedFrequentationEstId)
+            .map(est => (
+            <div key={est.id} className="bg-white dark:bg-gray-950 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-5">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-orange-50 dark:bg-orange-950/40 rounded-xl flex items-center justify-center text-orange-600 dark:text-orange-400 font-black">
+                    <Store className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-black text-gray-900 dark:text-white">{est.name}</h4>
+                    <p className="text-xs text-gray-500 capitalize">{getCategoryLabel(est.category)} • {est.city}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResActiveEstId(est.id);
+                    setShowResModal(true);
+                  }}
+                  className="px-3.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  Réservations
+                </button>
+              </div>
+
+              {/* Real-time Affluence Control */}
+              <div>
+                <h5 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
+                  Statut d'Affluence en Direct
+                </h5>
+                <AffluenceManager establishmentId={est.id} />
+              </div>
+
+              {/* Detailed Real-time Analytics */}
+              <div>
+                <h5 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
+                  Statistiques & Performances
+                </h5>
+                <GerantAnalytics establishmentId={est.id} />
+              </div>
+            </div>
+          ))}
+
+          {myEsts.length === 0 && (
+            <div className="text-center p-8 bg-white dark:bg-gray-950 rounded-3xl border border-gray-100 dark:border-gray-800">
+              <Store className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 font-medium">Vous n'avez pas encore d'établissement pour afficher des statistiques.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Réservations en Temps Réel */}
+      {activeMainTab === 'reservations' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="bg-gradient-to-r from-orange-600 to-amber-600 text-white p-5 rounded-3xl shadow-lg flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-black flex items-center gap-2">
+                <Calendar className="w-5 h-5" /> Gestion des Réservations en Temps Réel
+              </h3>
+              <p className="text-xs text-orange-100 font-medium mt-1">
+                Validez instantanément les réservations clients, consultez les motifs et exportez la liste de présence.
+              </p>
+            </div>
+          </div>
+
+          {myEsts.map(est => (
+            <div key={est.id} className="bg-white dark:bg-gray-950 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-base font-black text-gray-900 dark:text-white">{est.name}</h4>
+                  <p className="text-xs text-gray-500">{est.city}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResActiveEstId(est.id);
+                    setShowResModal(true);
+                  }}
+                  className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-black rounded-xl transition-all shadow-md cursor-pointer"
+                >
+                  Ouvrir le Panneau Plein Écran
+                </button>
+              </div>
+
+              {/* Inline Reservations Component */}
+              <ReservationsDashboard 
+                establishmentId={est.id} 
+                onClose={() => setActiveMainTab('etablissements')} 
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Galerie Photos & Ambiance */}
+      {activeMainTab === 'galerie' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="bg-gradient-to-r from-purple-600 via-orange-600 to-amber-600 text-white p-5 rounded-3xl shadow-lg flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-black flex items-center gap-2">
+                <Sparkles className="w-5 h-5" /> Galerie Photos & Ambiance
+              </h3>
+              <p className="text-xs text-purple-100 font-medium mt-1">
+                Mettez en valeur l'ambiance, les espaces VIP, terrasses et soirées de vos lieux auprès des clients.
+              </p>
+            </div>
+          </div>
+
+          {myEsts.map(est => (
+            <div key={est.id} className="bg-white dark:bg-gray-950 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-base font-black text-gray-900 dark:text-white">{est.name}</h4>
+                  <p className="text-xs text-gray-500 font-medium">
+                    {(est.galleryPhotos || est.photos || []).length} photos enregistrées
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setGalleryActiveEstId(est.id)}
+                  className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-sm"
+                >
+                  Ajouter / Gérer les Photos
+                </button>
+              </div>
+
+              {/* Gallery Component */}
+              <EstablishmentPhotoGallery
+                establishment={est}
+                onOpenManager={() => setGalleryActiveEstId(est.id)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
         
         {/* Pub Modal */}
       {pubModalEstId && pubModalType && (
@@ -1036,6 +1447,29 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
             setShowMenuModal(false);
             setMenuActiveEstId(null);
           }}
+        />
+      )}
+
+      {/* Gallery Manager Modal */}
+      {galleryActiveEstId && (
+        <EstablishmentPhotoGalleryManager
+          establishment={myEsts.find(e => e.id === galleryActiveEstId) || myEsts[0]}
+          onClose={() => setGalleryActiveEstId(null)}
+        />
+      )}
+
+      {/* ZAKA Ads Express Modal */}
+      {showExpressAdsModal && (
+        <AdExpressWizard
+          isOpen={showExpressAdsModal}
+          onClose={() => {
+            setShowExpressAdsModal(false);
+            setExpressPrefillEst(null);
+            setExpressPrefillPub(null);
+          }}
+          prefillEstablishment={expressPrefillEst}
+          prefillPublication={expressPrefillPub}
+          prefillType={expressPrefillType}
         />
       )}
     </div>

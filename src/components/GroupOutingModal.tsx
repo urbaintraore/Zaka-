@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
-import { Users, Calendar, Clock, Share2, Check, HelpCircle, XCircle, Plus, Trash2, Send, CheckCircle2, Sparkles, UserPlus, ShieldCheck } from 'lucide-react';
+import { Users, Calendar as CalendarIcon, Clock, Share2, Check, HelpCircle, XCircle, Plus, Trash2, Send, CheckCircle2, Sparkles, UserPlus, ShieldCheck, AlertTriangle, Radio, MapPin } from 'lucide-react';
 import { GroupOuting, User } from '../types';
+import { GroupOutingCalendar } from './GroupOutingCalendar';
+import { GroupOutingLiveLocation } from './GroupOutingLiveLocation';
 
 interface GroupOutingModalProps {
   onClose: () => void;
@@ -19,10 +21,11 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
     respondGroupOuting, 
     deleteGroupOuting, 
     inviteFriendsToGroupOuting,
+    updateGroupOutingLocation,
     addReservation 
   } = useAppStore();
 
-  const [activeTab, setActiveTab] = useState<'mes_sorties' | 'creer'>('mes_sorties');
+  const [activeTab, setActiveTab] = useState<'mes_sorties' | 'calendrier' | 'creer'>('mes_sorties');
   const [selectedOutingId, setSelectedOutingId] = useState<string | null>(null);
 
   // Form states
@@ -37,6 +40,7 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
   const [convertedReservationId, setConvertedReservationId] = useState<string | null>(null);
   const [showInviteMoreFriends, setShowInviteMoreFriends] = useState(false);
   const [moreFriendIds, setMoreFriendIds] = useState<string[]>([]);
+  const [rsvpFilter, setRsvpFilter] = useState<'tous' | 'oui' | 'peut_etre' | 'non'>('tous');
 
   const selectedEst = establishments.find(e => e.id === estId);
 
@@ -57,6 +61,11 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
   // User's group outings (creator or participant)
   const myOutings = currentUser ? groupOutings.filter(g => g.creatorId === currentUser.id || (g.responses && g.responses.some(r => r.userId === currentUser.id))) : [];
   const activeOuting = selectedOutingId ? groupOutings.find(g => g.id === selectedOutingId) : (myOutings[0] || null);
+
+  // Conflict check for date/time creation
+  const existingOutingsOnSelectedDate = date 
+    ? myOutings.filter(g => g.date === date)
+    : [];
 
   const toggleFriendSelection = (friendId: string) => {
     setSelectedFriendIds(prev => 
@@ -147,15 +156,15 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-gray-950 w-full max-w-2xl rounded-3xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white dark:bg-gray-950 w-full max-w-3xl rounded-3xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden flex flex-col max-h-[92vh]">
         
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-900 flex items-center justify-between bg-gradient-to-r from-orange-500 to-amber-500 text-white">
           <div className="flex items-center gap-2.5">
             <Users className="w-6 h-6" />
             <div>
-              <h2 className="text-lg font-black leading-tight">Sorties de Groupe</h2>
-              <p className="text-xs text-orange-100">Organisez vos événements & sondez vos ami(e)s</p>
+              <h2 className="text-lg font-black leading-tight">Sorties de Groupe ZAKA</h2>
+              <p className="text-xs text-orange-100">Calendrier partagé, votes 'Oui/Non/Peut-être' & GPS en direct</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full text-white transition-colors">
@@ -167,7 +176,7 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
         <div className="flex border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/40">
           <button
             onClick={() => setActiveTab('mes_sorties')}
-            className={`flex-1 py-3 px-4 text-xs font-bold text-center border-b-2 transition-all ${
+            className={`flex-1 py-3 px-3 text-xs font-extrabold text-center border-b-2 transition-all ${
               activeTab === 'mes_sorties'
                 ? 'border-orange-500 text-orange-600 dark:text-orange-400 bg-white dark:bg-gray-900'
                 : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800'
@@ -176,8 +185,18 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
             📋 Mes Sorties ({myOutings.length})
           </button>
           <button
+            onClick={() => setActiveTab('calendrier')}
+            className={`flex-1 py-3 px-3 text-xs font-extrabold text-center border-b-2 transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'calendrier'
+                ? 'border-orange-500 text-orange-600 dark:text-orange-400 bg-white dark:bg-gray-900'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800'
+            }`}
+          >
+            <CalendarIcon className="w-4 h-4 text-amber-500" /> Calendrier Partagé
+          </button>
+          <button
             onClick={() => setActiveTab('creer')}
-            className={`flex-1 py-3 px-4 text-xs font-bold text-center border-b-2 transition-all flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-3 px-3 text-xs font-extrabold text-center border-b-2 transition-all flex items-center justify-center gap-1.5 ${
               activeTab === 'creer'
                 ? 'border-orange-500 text-orange-600 dark:text-orange-400 bg-white dark:bg-gray-900'
                 : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800'
@@ -190,7 +209,19 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
         {/* Content Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
           
-          {/* TAB 1: CREATE OUTING */}
+          {/* TAB 1: SHARED CALENDAR */}
+          {activeTab === 'calendrier' && (
+            <GroupOutingCalendar
+              outings={myOutings}
+              currentUser={currentUser}
+              onSelectOuting={(outingId) => {
+                setSelectedOutingId(outingId);
+                setActiveTab('mes_sorties');
+              }}
+            />
+          )}
+
+          {/* TAB 2: CREATE OUTING */}
           {activeTab === 'creer' && (
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
@@ -245,6 +276,21 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
                   </div>
                 </div>
               </div>
+
+              {/* Conflict Warning Alert during creation */}
+              {existingOutingsOnSelectedDate.length > 0 && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 rounded-2xl flex items-start gap-2.5 text-xs">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-extrabold text-rose-800 dark:text-rose-200">
+                      Attention : Conflit d'agenda détecté !
+                    </p>
+                    <p className="text-rose-700 dark:text-rose-300 font-medium">
+                      Vous avez déjà {existingOutingsOnSelectedDate.length} sortie(s) prévue(s) le {date} : "{existingOutingsOnSelectedDate[0].title}" ({existingOutingsOnSelectedDate[0].time}).
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
@@ -317,7 +363,7 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
             </form>
           )}
 
-          {/* TAB 2: MY OUTINGS */}
+          {/* TAB 3: MY OUTINGS */}
           {activeTab === 'mes_sorties' && (
             <div className="space-y-6">
               {myOutings.length === 0 ? (
@@ -348,7 +394,7 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
                         <p className="font-extrabold text-xs text-gray-900 dark:text-white truncate">{g.title}</p>
                         <p className="text-[11px] text-orange-600 dark:text-orange-400 font-semibold">{g.establishmentName}</p>
                         <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
-                          <Calendar className="w-3 h-3" /> {new Date(g.date).toLocaleDateString('fr-FR')} à {g.time}
+                          <CalendarIcon className="w-3 h-3" /> {new Date(g.date).toLocaleDateString('fr-FR')} à {g.time}
                         </p>
                       </button>
                     ))}
@@ -401,50 +447,112 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
                         </button>
                       </div>
 
-                      {/* Response Voting Controls */}
-                      <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 space-y-2">
-                        <p className="text-xs font-bold text-gray-800 dark:text-gray-200">Mon statut pour cette sortie :</p>
-                        <div className="grid grid-cols-3 gap-2">
-                          <button
-                            onClick={() => respondGroupOuting(activeOuting.id, 'je_viens')}
-                            className="py-2 px-1 text-xs font-extrabold rounded-xl border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 border-emerald-300 hover:bg-emerald-100 flex items-center justify-center gap-1"
-                          >
-                            <Check className="w-3.5 h-3.5" /> Je viens
-                          </button>
-                          <button
-                            onClick={() => respondGroupOuting(activeOuting.id, 'peut_etre')}
-                            className="py-2 px-1 text-xs font-extrabold rounded-xl border bg-amber-50 dark:bg-amber-950/40 text-amber-700 border-amber-300 hover:bg-amber-100 flex items-center justify-center gap-1"
-                          >
-                            <HelpCircle className="w-3.5 h-3.5" /> Peut-être
-                          </button>
-                          <button
-                            onClick={() => respondGroupOuting(activeOuting.id, 'je_ne_peux_pas')}
-                            className="py-2 px-1 text-xs font-extrabold rounded-xl border bg-rose-50 dark:bg-rose-950/40 text-rose-700 border-rose-300 hover:bg-rose-100 flex items-center justify-center gap-1"
-                          >
-                            <XCircle className="w-3.5 h-3.5" /> Je ne peux pas
-                          </button>
-                        </div>
-                      </div>
+                      {/* Response Voting Controls & Summary Counter */}
+                      {(() => {
+                        const responses = activeOuting.responses || [];
+                        const comingList = responses.filter(r => r.status === 'je_viens');
+                        const maybeList = responses.filter(r => r.status === 'peut_etre');
+                        const noList = responses.filter(r => r.status === 'je_ne_peux_pas');
 
-                      {/* Guest Responses Table */}
-                      <div className="space-y-2">
+                        const totalCount = responses.length || 1;
+                        const comingPercent = Math.round((comingList.length / totalCount) * 100);
+                        const maybePercent = Math.round((maybeList.length / totalCount) * 100);
+                        const noPercent = Math.round((noList.length / totalCount) * 100);
+
+                        const myCurrentStatus = currentUser 
+                          ? responses.find(r => r.userId === currentUser.id)?.status
+                          : null;
+
+                        return (
+                          <div className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4">
+                            {/* Voting Buttons */}
+                            <div>
+                              <p className="text-xs font-extrabold text-gray-900 dark:text-white mb-2">
+                                Votre réponse à l'invitation (Oui / Non / Peut-être) :
+                              </p>
+                              <div className="grid grid-cols-3 gap-2">
+                                <button
+                                  onClick={() => respondGroupOuting(activeOuting.id, 'je_viens')}
+                                  className={`py-2 px-1 text-xs font-extrabold rounded-xl border transition-all flex items-center justify-center gap-1 ${
+                                    myCurrentStatus === 'je_viens'
+                                      ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm ring-2 ring-emerald-500/30'
+                                      : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                                  }`}
+                                >
+                                  <Check className="w-3.5 h-3.5" /> Oui (Je viens)
+                                </button>
+                                <button
+                                  onClick={() => respondGroupOuting(activeOuting.id, 'peut_etre')}
+                                  className={`py-2 px-1 text-xs font-extrabold rounded-xl border transition-all flex items-center justify-center gap-1 ${
+                                    myCurrentStatus === 'peut_etre'
+                                      ? 'bg-amber-500 text-white border-amber-600 shadow-sm ring-2 ring-amber-500/30'
+                                      : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 border-amber-300 hover:bg-amber-100'
+                                  }`}
+                                >
+                                  <HelpCircle className="w-3.5 h-3.5" /> Peut-être
+                                </button>
+                                <button
+                                  onClick={() => respondGroupOuting(activeOuting.id, 'je_ne_peux_pas')}
+                                  className={`py-2 px-1 text-xs font-extrabold rounded-xl border transition-all flex items-center justify-center gap-1 ${
+                                    myCurrentStatus === 'je_ne_peux_pas'
+                                      ? 'bg-rose-600 text-white border-rose-700 shadow-sm ring-2 ring-rose-500/30'
+                                      : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 border-rose-300 hover:bg-rose-100'
+                                  }`}
+                                >
+                                  <XCircle className="w-3.5 h-3.5" /> Non (Je ne peux pas)
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Live Summary Counter (Récapitulatif) */}
+                            <div className="pt-3 border-t border-gray-100 dark:border-gray-800 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                                  📊 Récapitulatif du sondage ({responses.length} membre(s))
+                                </p>
+                              </div>
+
+                              {/* Progress bar distribution */}
+                              <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                                <div style={{ width: `${comingPercent}%` }} className="bg-emerald-500 h-full transition-all" title={`Oui: ${comingList.length}`} />
+                                <div style={{ width: `${maybePercent}%` }} className="bg-amber-400 h-full transition-all" title={`Peut-être: ${maybeList.length}`} />
+                                <div style={{ width: `${noPercent}%` }} className="bg-rose-500 h-full transition-all" title={`Non: ${noList.length}`} />
+                              </div>
+
+                              {/* Counter Badges */}
+                              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                                <div className="p-2 bg-emerald-50 dark:bg-emerald-950/50 rounded-xl border border-emerald-200 dark:border-emerald-800/60">
+                                  <span className="block font-black text-emerald-700 dark:text-emerald-300 text-sm">{comingList.length}</span>
+                                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400">🟢 Oui ({comingPercent}%)</span>
+                                </div>
+                                <div className="p-2 bg-amber-50 dark:bg-amber-950/50 rounded-xl border border-amber-200 dark:border-amber-800/60">
+                                  <span className="block font-black text-amber-700 dark:text-amber-300 text-sm">{maybeList.length}</span>
+                                  <span className="text-[10px] font-bold text-amber-800 dark:text-amber-400">🟡 Peut-être ({maybePercent}%)</span>
+                                </div>
+                                <div className="p-2 bg-rose-50 dark:bg-rose-950/50 rounded-xl border border-rose-200 dark:border-rose-800/60">
+                                  <span className="block font-black text-rose-700 dark:text-rose-300 text-sm">{noList.length}</span>
+                                  <span className="text-[10px] font-bold text-rose-800 dark:text-rose-400">🔴 Non ({noPercent}%)</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Guest Responses Categorized List */}
+                      <div className="space-y-3 bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800">
                         <div className="flex items-center justify-between">
                           <p className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                            Participants ({(activeOuting.responses || []).length})
+                            Liste des membres invités ({(activeOuting.responses || []).length})
                           </p>
-                          <div className="flex items-center gap-2">
-                            <span className="text-emerald-600 font-extrabold text-[11px]">
-                              🟢 {(activeOuting.responses || []).filter(r => r.status === 'je_viens').length} confirmés
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setShowInviteMoreFriends(!showInviteMoreFriends)}
-                              className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all"
-                            >
-                              <UserPlus className="w-3 h-3" />
-                              Inviter des ami(e)s
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowInviteMoreFriends(!showInviteMoreFriends)}
+                            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-extrabold flex items-center gap-1 transition-all"
+                          >
+                            <UserPlus className="w-3 h-3" />
+                            Inviter d'autres ami(e)s
+                          </button>
                         </div>
 
                         {/* Invite Friends Panel */}
@@ -501,18 +609,27 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
 
                         <div className="space-y-1.5 max-h-40 overflow-y-auto">
                           {(activeOuting.responses || []).map((resp, idx) => (
-                            <div key={idx} className="flex items-center justify-between text-xs p-2 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+                            <div key={idx} className="flex items-center justify-between text-xs p-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
                               <span className="font-semibold text-gray-900 dark:text-white">{resp.userName}</span>
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
                                 resp.status === 'je_viens' ? 'bg-emerald-100 text-emerald-800' :
                                 resp.status === 'peut_etre' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
                               }`}>
-                                {resp.status === 'je_viens' ? 'Je viens 🟢' : resp.status === 'peut_etre' ? 'Peut-être 🟡' : 'Je ne peux pas 🔴'}
+                                {resp.status === 'je_viens' ? 'Oui (Je viens) 🟢' : resp.status === 'peut_etre' ? 'Peut-être 🟡' : 'Non (Je ne peux pas) 🔴'}
                               </span>
                             </div>
                           ))}
                         </div>
                       </div>
+
+                      {/* Real-time Location Sharing GPS Component */}
+                      <GroupOutingLiveLocation
+                        outing={activeOuting}
+                        currentUser={currentUser}
+                        updateGroupOutingLocation={updateGroupOutingLocation}
+                        venueLat={establishments.find(e => e.id === activeOuting.establishmentId)?.lat || 12.3714}
+                        venueLng={establishments.find(e => e.id === activeOuting.establishmentId)?.lng || -1.5197}
+                      />
 
                       {/* Convert to Official Table Reservation */}
                       {currentUser?.id === activeOuting.creatorId && (

@@ -3,7 +3,7 @@ import { db } from '../lib/firebase';
 import { collection, onSnapshot, query, where, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { useAppStore } from '../store';
 import { Publication, Establishment, EventParticipation } from '../types';
-import { Heart, CheckCircle2, MapPin, Eye, Users, Info, QrCode, ShieldAlert, Sparkles, Zap } from 'lucide-react';
+import { Heart, CheckCircle2, MapPin, Eye, Users, Info, Sparkles, Zap } from 'lucide-react';
 
 interface ParticipationProps {
   event: Publication;
@@ -15,8 +15,6 @@ export function ParticipationButtons({ event, establishment }: ParticipationProp
   const [participations, setParticipations] = useState<EventParticipation[]>([]);
   const [myStatus, setMyStatus] = useState<'interested' | 'going' | 'present' | null>(null);
   const [isVisible, setIsVisible] = useState(true);
-  const [simProximity, setSimProximity] = useState(false);
-  const [showQRCode, setShowQRCode] = useState(false);
   const [showParticipantsList, setShowParticipantsList] = useState(false);
 
   // Load participations for this event
@@ -51,8 +49,8 @@ export function ParticipationButtons({ event, establishment }: ParticipationProp
   const goingCount = participations.filter(p => p.status === 'going').length;
   const presentCount = participations.filter(p => p.status === 'present').length;
 
-  // Real-time simulated active viewers/consultants (e.g. random number between 15 and 45 based on clicks or static seed)
-  const viewersCount = (event.views || 0) + 12;
+  // Real active views
+  const viewersCount = event.views || 0;
 
   // Formula for popularity score
   const score = ((event.views || 0) * 1) + 
@@ -94,15 +92,9 @@ export function ParticipationButtons({ event, establishment }: ParticipationProp
       return;
     }
 
-    if (simProximity) {
-      // Bypassed check via simulator toggle
-      submitParticipation('present');
-      return;
-    }
-
     // Geolocation check
     if (!navigator.geolocation) {
-      setGlobalError({ message: "La géolocalisation n'est pas supportée par votre navigateur. Utilisez l'option Simuler ci-dessous.", type: "warning" });
+      setGlobalError({ message: "La géolocalisation n'est pas supportée par votre navigateur.", type: "warning" });
       return;
     }
 
@@ -125,20 +117,20 @@ export function ParticipationButtons({ event, establishment }: ParticipationProp
 
         const distance = calculateDistance(userLat, userLon, estLat, estLon);
 
-        if (distance <= 150) { // Under 150 meters
+        if (distance <= 250) { // Under 250 meters
           submitParticipation('present');
         } else {
           setGlobalError({ 
-            message: `Vous êtes trop éloigné de l'établissement (${Math.round(distance)}m). Pour vous enregistrer à distance, scannez le QR Code ou simulez la proximité GPS !`, 
+            message: `Vous êtes trop éloigné de l'établissement (${Math.round(distance)}m) pour valider votre présence.`, 
             type: "warning" 
           });
         }
       },
       (error) => {
         console.error("Geolocation error:", error);
-        setGlobalError({ message: "Impossible d'accéder à votre GPS. Activez l'option Simuler la proximité ou scannez le QR Code !", type: "warning" });
+        setGlobalError({ message: "Impossible d'accéder à votre position GPS. Veuillez autoriser la localisation.", type: "warning" });
       },
-      { enableHighAccuracy: true, timeout: 5000 }
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   };
 
@@ -165,7 +157,7 @@ export function ParticipationButtons({ event, establishment }: ParticipationProp
       eventId: event.id,
       userId: currentUser.id,
       userName: currentUser.name || 'Anonyme',
-      userPhoto: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150`, // Mock default avatar
+      userPhoto: currentUser.avatar || '',
       status,
       timestamp: new Date().toISOString(),
       isVisible
@@ -297,65 +289,6 @@ export function ParticipationButtons({ event, establishment }: ParticipationProp
             <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500"></div>
           </label>
         </div>
-      </div>
-
-      {/* Simulator helper triggers for present verification */}
-      <div className="border-t border-gray-100 dark:border-gray-900/60 pt-3 mt-1 flex flex-col gap-2 bg-gray-50 dark:bg-gray-900/30 p-3 rounded-2xl">
-        <div className="text-[10px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-          <ShieldAlert className="w-3.5 h-3.5 text-orange-500" />
-          <span>Vérification de présence (GPS / QR / Beacon)</span>
-        </div>
-
-        <div className="flex gap-2 mt-1">
-          <button
-            onClick={() => {
-              setSimProximity(prev => !prev);
-              import('../utils/haptics').then(m => m.triggerHapticFeedback(30));
-            }}
-            className={`flex-1 text-[10px] font-black py-1.5 px-2 rounded-lg transition-all cursor-pointer border ${
-              simProximity 
-                ? 'bg-orange-100 border-orange-300 text-orange-800' 
-                : 'bg-white border-gray-200 text-gray-500'
-            }`}
-          >
-            🛰️ {simProximity ? "Simulateur Proximité Activé" : "Simuler proximité GPS"}
-          </button>
-
-          <button
-            onClick={() => setShowQRCode(prev => !prev)}
-            className="flex-1 text-[10px] font-black py-1.5 px-2 bg-white border border-gray-200 text-gray-500 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-1 cursor-pointer"
-          >
-            <QrCode className="w-3 h-3" />
-            <span>QR Code Entrée</span>
-          </button>
-        </div>
-
-        {/* QR Code Simulation Popup */}
-        {showQRCode && (
-          <div className="bg-white dark:bg-gray-950 p-4 border border-gray-100 dark:border-gray-900 rounded-xl mt-2 flex flex-col items-center gap-3">
-            <p className="text-[10px] text-gray-400 font-bold text-center leading-relaxed">Scannez ce QR Code affiché à l'entrée du club pour valider votre présence d'un coup de fil.</p>
-            <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-orange-500 p-2 relative">
-              {/* Fake QR code SVG placeholder */}
-              <div className="grid grid-cols-4 gap-1 w-full h-full opacity-80">
-                {[...Array(16)].map((_, i) => (
-                  <div key={i} className={`rounded-sm ${i % 3 === 0 || i % 7 === 0 ? 'bg-gray-900' : 'bg-transparent'}`} />
-                ))}
-              </div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    submitParticipation('present');
-                    setShowQRCode(false);
-                  }}
-                  className="bg-orange-600 text-white text-[9px] font-black px-2 py-1 rounded shadow-md uppercase tracking-wider"
-                >
-                  Scanner QR
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Participants List */}
