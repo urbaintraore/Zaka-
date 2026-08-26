@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
-import { X, Calendar, Clock, Users, MessageSquare, Check, Ban, AlertCircle, Download } from 'lucide-react';
+import { X, Calendar, Clock, Users, MessageSquare, Check, Ban, AlertCircle, Download, ShoppingBag, Banknote } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 
 interface ReservationsDashboardProps {
@@ -9,7 +9,8 @@ interface ReservationsDashboardProps {
 }
 
 export function ReservationsDashboard({ establishmentId, onClose }: ReservationsDashboardProps) {
-  const { reservations, updateReservationStatus, updateEstablishment, establishments } = useAppStore();
+  const { reservations, updateReservationStatus, takeawayOrders, updateTakeawayOrderStatus, updateEstablishment, establishments } = useAppStore();
+  const [activeMainTab, setActiveMainTab] = useState<'reservations' | 'takeaway'>('reservations');
   const [filterStatus, setFilterStatus] = useState<string>('tous');
   const [filterDate, setFilterDate] = useState<string>('');
   
@@ -17,6 +18,7 @@ export function ReservationsDashboard({ establishmentId, onClose }: Reservations
   const [rejectMessage, setRejectMessage] = useState<string>('');
 
   const est = establishments.find(e => e.id === establishmentId);
+  const isRestaurant = est?.category === 'restaurant' || est?.category === 'restaurants' || est?.category === 'glacier_pizzeria';
 
   const [isSavingStatus, setIsSavingStatus] = useState(false);
   const [showReasonInput, setShowReasonInput] = useState(false);
@@ -31,6 +33,14 @@ export function ReservationsDashboard({ establishmentId, onClose }: Reservations
   });
 
   const filteredReservations = sortedReservations.filter(res => {
+    const matchStatus = filterStatus === 'tous' || res.status === filterStatus;
+    const matchDate = !filterDate || res.date === filterDate;
+    return matchStatus && matchDate;
+  });
+
+  const establishmentTakeaway = takeawayOrders ? takeawayOrders.filter(o => o.establishmentId === establishmentId) : [];
+  const sortedTakeaways = [...establishmentTakeaway].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const filteredTakeaways = sortedTakeaways.filter(res => {
     const matchStatus = filterStatus === 'tous' || res.status === filterStatus;
     const matchDate = !filterDate || res.date === filterDate;
     return matchStatus && matchDate;
@@ -208,9 +218,9 @@ export function ReservationsDashboard({ establishmentId, onClose }: Reservations
     >
       <div className="bg-white dark:bg-gray-950 w-full max-w-2xl rounded-3xl shadow-2xl border border-gray-150 dark:border-gray-900 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-900 flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/20">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-900 flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/20 shrink-0">
           <div>
-            <h2 className="text-lg font-black text-gray-900 dark:text-white">Réservations de tables</h2>
+            <h2 className="text-lg font-black text-gray-900 dark:text-white">Réservations & Commandes</h2>
             <p className="text-xs text-orange-600 dark:text-orange-400 font-bold">{est?.name || 'Restaurant'}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -232,7 +242,32 @@ export function ReservationsDashboard({ establishmentId, onClose }: Reservations
           </div>
         </div>
 
-        {/* Manager Toggle Control Bar for Closing / Reopening Reservations */}
+        {isRestaurant && (
+          <div className="flex px-6 pt-4 border-b border-gray-100 dark:border-gray-900 shrink-0">
+            <div className="flex bg-gray-200 dark:bg-gray-800 rounded-xl p-1 w-full max-w-sm mb-4">
+              <button
+                onClick={() => { setActiveMainTab('reservations'); setFilterStatus('tous'); }}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                  activeMainTab === 'reservations' ? 'bg-white dark:bg-gray-900 text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Réservations
+              </button>
+              <button
+                onClick={() => { setActiveMainTab('takeaway'); setFilterStatus('tous'); }}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                  activeMainTab === 'takeaway' ? 'bg-white dark:bg-gray-900 text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Commandes à emporter
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeMainTab === 'reservations' ? (
+          <>
+            {/* Manager Toggle Control Bar for Closing / Reopening Reservations */}
         <div className={`p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
           est?.reservationsClosed
             ? 'bg-rose-50/90 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/60'
@@ -501,6 +536,142 @@ export function ReservationsDashboard({ establishmentId, onClose }: Reservations
             </div>
           )}
         </div>
+        </>
+        ) : (
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="p-4 border-b border-gray-100 dark:border-gray-900 bg-gray-50/30 dark:bg-gray-900/10 shrink-0 overflow-x-auto hide-scrollbar">
+              <div className="flex gap-2 min-w-max">
+                <button 
+                  onClick={() => setFilterStatus('tous')}
+                  className={`px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all border ${
+                    filterStatus === 'tous'
+                      ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-transparent shadow-md'
+                      : 'bg-white dark:bg-gray-900 text-gray-600 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  Toutes ({sortedTakeaways.length})
+                </button>
+                <button 
+                  onClick={() => setFilterStatus('recue')}
+                  className={`px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all border ${
+                    filterStatus === 'recue'
+                      ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 border-amber-200'
+                      : 'bg-white dark:bg-gray-900 text-gray-600 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  Reçues ({sortedTakeaways.filter(r => r.status === 'recue').length})
+                </button>
+                <button 
+                  onClick={() => setFilterStatus('en_preparation')}
+                  className={`px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all border ${
+                    filterStatus === 'en_preparation'
+                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 border-blue-200'
+                      : 'bg-white dark:bg-gray-900 text-gray-600 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  En préparation ({sortedTakeaways.filter(r => r.status === 'en_preparation').length})
+                </button>
+                <button 
+                  onClick={() => setFilterStatus('prete')}
+                  className={`px-4 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition-all border ${
+                    filterStatus === 'prete'
+                      ? 'bg-green-50 dark:bg-green-900/20 text-green-700 border-green-200'
+                      : 'bg-white dark:bg-gray-900 text-gray-600 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  Prêtes ({sortedTakeaways.filter(r => r.status === 'prete').length})
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              {filteredTakeaways.length === 0 ? (
+                <div className="text-center py-12 bg-gray-50 dark:bg-gray-900/30 border border-gray-150 dark:border-gray-900 rounded-2xl">
+                  <ShoppingBag className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500 dark:text-gray-400 font-bold">Aucune commande trouvée.</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {filteredTakeaways.map(order => (
+                    <div key={order.id} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <h4 className="font-black text-gray-900 dark:text-white text-sm">{order.clientName}</h4>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 font-bold mt-0.5">{order.clientPhone || 'Pas de numéro'}</p>
+                            <p className="text-xs text-orange-600 dark:text-orange-400 font-bold mt-1">
+                              Retrait prévu : {order.pickupTime}
+                            </p>
+                            <p className="text-xs text-emerald-600 font-bold mt-1 flex items-center gap-1">
+                              <Banknote className="w-3.5 h-3.5" /> 
+                              Paiement: {order.paymentMethod === 'sur_place' ? 'Sur place' : order.paymentMethod}
+                            </p>
+                          </div>
+                          <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border ${
+                            order.status === 'recue' ? 'bg-amber-100 text-amber-800 border-amber-200' :
+                            order.status === 'en_preparation' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                            order.status === 'prete' ? 'bg-green-100 text-green-800 border-green-200' :
+                            order.status === 'terminee' ? 'bg-gray-100 text-gray-800 border-gray-200' :
+                            'bg-rose-100 text-rose-800 border-rose-200'
+                          }`}>
+                            {order.status.replace('_', ' ')}
+                          </span>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 mb-3 space-y-1">
+                          {order.items.map((item, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-xs">
+                              <span className="font-semibold text-gray-700 dark:text-gray-300">{item.quantity}x {item.name}</span>
+                              <span className="text-gray-500 font-medium">{item.price * item.quantity} FCFA</span>
+                            </div>
+                          ))}
+                          <div className="border-t border-gray-200 dark:border-gray-700 mt-2 pt-2 flex items-center justify-between text-sm font-black">
+                            <span className="text-gray-900 dark:text-white">Total</span>
+                            <span className="text-orange-600 dark:text-orange-400">{order.totalAmount} FCFA</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex sm:flex-col gap-2 shrink-0 self-end sm:self-start">
+                        {order.status === 'recue' && (
+                          <button
+                            onClick={() => updateTakeawayOrderStatus(order.id, 'en_preparation')}
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-xl text-xs transition-colors flex justify-center items-center gap-1.5 w-full"
+                          >
+                            <Clock className="w-3.5 h-3.5" /> Commencer
+                          </button>
+                        )}
+                        {order.status === 'en_preparation' && (
+                          <button
+                            onClick={() => updateTakeawayOrderStatus(order.id, 'prete')}
+                            className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-xl text-xs transition-colors flex justify-center items-center gap-1.5 w-full"
+                          >
+                            <Check className="w-3.5 h-3.5" /> Prête
+                          </button>
+                        )}
+                        {order.status === 'prete' && (
+                          <button
+                            onClick={() => updateTakeawayOrderStatus(order.id, 'terminee')}
+                            className="bg-gray-900 hover:bg-black text-white font-bold py-2 px-4 rounded-xl text-xs transition-colors flex justify-center items-center gap-1.5 w-full"
+                          >
+                            Retirée
+                          </button>
+                        )}
+                        {order.status !== 'terminee' && order.status !== 'annulee' && (
+                           <button
+                             onClick={() => updateTakeawayOrderStatus(order.id, 'annulee')}
+                             className="bg-red-50 hover:bg-red-100 text-red-600 font-bold py-2 px-4 rounded-xl text-xs transition-colors w-full"
+                           >
+                             Annuler
+                           </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

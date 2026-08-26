@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
 import { Role, Category, CATEGORIES_LIST, getCategoryLabel } from '../types';
-import { LogOut, User, Check, X, MessageSquare, Store, Sparkles, Calendar, Download, Star, Megaphone } from 'lucide-react';
+import { LogOut, User, Check, X, MessageSquare, Store, Sparkles, Calendar, Download, Star, Megaphone, ShoppingBag } from 'lucide-react';
 import { GerantDashboard } from './GerantDashboard';
 import { AdminDashboard } from './AdminDashboard';
 import { EntrepriseDashboard } from './EntrepriseDashboard';
@@ -33,6 +33,8 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
     serviceRequests,
     reservations,
     updateReservationStatus,
+    takeawayOrders,
+    updateTakeawayOrderStatus,
     updateRelationshipRequest,
     createConversation,
     theme,
@@ -45,6 +47,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [subView, setSubView] = useState<'dashboard' | 'profile'>('dashboard');
   const [resActiveTab, setResActiveTab] = useState<'current' | 'history'>('current');
+  const [ordersActiveTab, setOrdersActiveTab] = useState<'current' | 'history'>('current');
   const [showAdsDashboard, setShowAdsDashboard] = useState(false);
   const [showExpressAdsModal, setShowExpressAdsModal] = useState(false);
 
@@ -478,6 +481,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
     const requestsSent = clientRequests.filter(r => r.type === 'client_join' && r.initiatorId === currentUser.id);
     const myServiceRequests = serviceRequests.filter(r => r.clientId === currentUser.id);
     const myReservations = reservations ? reservations.filter(r => r.clientId === currentUser.id) : [];
+    const myTakeawayOrders = takeawayOrders ? takeawayOrders.filter(r => r.clientId === currentUser.id) : [];
 
     const canCancelReservation = (resDate: string, resTime: string) => {
       try {
@@ -1128,6 +1132,111 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                           className="self-end text-[10px] font-black text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-350 hover:underline uppercase tracking-wide py-1 cursor-pointer"
                         >
                           Annuler la réservation
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* Mes commandes à emporter */}
+        <div className="bg-white dark:bg-gray-950 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-900">
+          <h3 className="text-sm font-black text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+            <ShoppingBag className="w-4 h-4 text-orange-500" />
+            Mes commandes à emporter
+          </h3>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold mb-4">Suivez le statut de vos commandes en temps réel.</p>
+
+          {myTakeawayOrders && myTakeawayOrders.length > 0 && (
+            <div className="flex bg-gray-50 dark:bg-gray-900 p-1 rounded-xl border border-gray-150 dark:border-gray-800 mb-4">
+              <button
+                type="button"
+                onClick={() => setOrdersActiveTab('current')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  ordersActiveTab === 'current'
+                    ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                En cours ({myTakeawayOrders.filter(o => o.status !== 'terminee' && o.status !== 'annulee').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrdersActiveTab('history')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  ordersActiveTab === 'history'
+                    ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                Historique ({myTakeawayOrders.filter(o => o.status === 'terminee' || o.status === 'annulee').length})
+              </button>
+            </div>
+          )}
+
+          {(() => {
+            const displayedOrders = myTakeawayOrders.filter(o => {
+              const isHistory = o.status === 'terminee' || o.status === 'annulee';
+              return ordersActiveTab === 'history' ? isHistory : !isHistory;
+            });
+
+            if (displayedOrders.length === 0) {
+              return (
+                <p className="text-xs text-gray-400 font-bold py-3 text-center bg-gray-50 dark:bg-gray-900/40 rounded-2xl">
+                  {ordersActiveTab === 'history' 
+                    ? "Aucune commande dans l'historique." 
+                    : "Aucune commande en cours."}
+                </p>
+              );
+            }
+
+            return (
+              <div className="space-y-3">
+                {displayedOrders.map(order => {
+                  const getStatusInfo = (status: string) => {
+                    switch(status) {
+                      case 'recue': return { label: 'Reçue', color: 'bg-amber-100 text-amber-700 border-amber-200' };
+                      case 'en_preparation': return { label: 'En préparation', color: 'bg-blue-100 text-blue-700 border-blue-200' };
+                      case 'prete': return { label: 'Prête !', color: 'bg-green-100 text-green-700 border-green-200' };
+                      case 'terminee': return { label: 'Terminée', color: 'bg-gray-100 text-gray-700 border-gray-200' };
+                      case 'annulee': return { label: 'Annulée', color: 'bg-rose-100 text-rose-700 border-rose-200' };
+                      default: return { label: status, color: 'bg-gray-100 text-gray-700 border-gray-200' };
+                    }
+                  };
+                  const statusInfo = getStatusInfo(order.status);
+                  
+                  return (
+                    <div key={order.id} className="bg-gray-50 dark:bg-gray-900/40 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-black text-gray-900 dark:text-white text-sm">{order.establishmentName}</span>
+                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${statusInfo.color}`}>
+                            {statusInfo.label}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 font-medium flex items-center gap-1.5 mb-2">
+                          <Calendar className="w-3.5 h-3.5" />
+                          Retrait prévu à {order.pickupTime} - {new Date(order.createdAt).toLocaleDateString()}
+                        </p>
+                        <div className="space-y-1">
+                          {order.items.map((item, idx) => (
+                            <p key={idx} className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                              {item.quantity}x {item.name}
+                            </p>
+                          ))}
+                        </div>
+                        <p className="mt-2 text-sm font-black text-orange-600 dark:text-orange-400">Total : {order.totalAmount} FCFA</p>
+                      </div>
+                      
+                      {ordersActiveTab === 'current' && order.status === 'prete' && (
+                        <button
+                          onClick={() => updateTakeawayOrderStatus(order.id, 'terminee')}
+                          className="bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold px-4 py-2 rounded-xl text-xs hover:scale-105 active:scale-95 transition-all shadow-md self-start"
+                        >
+                          Confirmer la réception
                         </button>
                       )}
                     </div>

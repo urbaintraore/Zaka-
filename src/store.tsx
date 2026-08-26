@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting, Friendship, AdOrganization, AdAuditLog, AdRateConfig, AdSupportTicket, AdCreative } from './types';
+import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting, Friendship, AdOrganization, AdAuditLog, AdRateConfig, AdSupportTicket, AdCreative, TakeawayOrder } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
 import { 
@@ -44,6 +44,7 @@ interface AppState {
   adRates: AdRateConfig[];
   adSupportTickets: AdSupportTicket[];
   adCreatives: AdCreative[];
+  takeawayOrders: TakeawayOrder[];
   loyaltyCards: LoyaltyCard[];
   zakaRedemptions: ZakaRedemption[];
   groupOutings: GroupOuting[];
@@ -101,6 +102,8 @@ interface AppContextType extends AppState {
   replyToReview: (reviewId: string, reply: string) => Promise<void>;
   addReservation: (res: Omit<Reservation, 'id' | 'status' | 'createdAt'>) => Promise<void>;
   updateReservationStatus: (id: string, status: 'en_attente' | 'confirmee' | 'refusee' | 'annulee', managerMessage?: string) => Promise<void>;
+  addTakeawayOrder: (order: Omit<TakeawayOrder, 'id' | 'status' | 'createdAt' | 'date'>) => Promise<void>;
+  updateTakeawayOrderStatus: (id: string, status: TakeawayOrder['status']) => Promise<void>;
   addMenuDuJour: (menu: Omit<MenuDuJour, 'id' | 'publishedAt'>) => Promise<void>;
   updateHairSalonData: (id: string, data: HairSalonData) => Promise<void>;
   trackEstablishmentView: (establishmentId: string) => Promise<void>;
@@ -254,6 +257,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     adRates: [],
     adSupportTickets: [],
     adCreatives: [],
+    takeawayOrders: [],
     loyaltyCards: [],
     zakaRedemptions: [],
     groupOutings: [],
@@ -440,19 +444,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let unsubscribeDoc: (() => void) | undefined;
-
-    const unsubscribeAuth = onAuthStateChanged(auth, 
-      (firebaseUser) => {
-        if (firebaseUser) {
-          console.log("[onAuthStateChanged] Succès de la détection de l'utilisateur :", {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            isAnonymous: firebaseUser.isAnonymous,
-            emailVerified: firebaseUser.emailVerified
-          });
-          if (unsubscribeDoc) unsubscribeDoc();
-          unsubscribeDoc = onSnapshot(doc(db, 'users', firebaseUser.uid), async (docSnap) => {
-            if (docSnap.exists()) {
+    let unsubscribeAuth: (() => void) | undefined;
+    
+    console.log("[Store] Initialisation du listener d'authentification (onAuthStateChanged)...");
+    
+    try {
+      unsubscribeAuth = onAuthStateChanged(auth, 
+        (firebaseUser) => {
+          if (firebaseUser) {
+            console.log("[onAuthStateChanged] Succès de la détection de l'utilisateur :", {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              isAnonymous: firebaseUser.isAnonymous,
+              emailVerified: firebaseUser.emailVerified
+            });
+            if (unsubscribeDoc) unsubscribeDoc();
+            
+            try {
+              unsubscribeDoc = onSnapshot(doc(db, 'users', firebaseUser.uid), async (docSnap) => {
+                if (docSnap.exists()) {
               const userData = docSnap.data() as Partial<Omit<User, 'id'>>;
               
               let role = userData.role;
@@ -527,6 +537,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
             setState(s => ({ ...s, currentUser: null, loading: false }));
           });
+          } catch (snapshotError) {
+            console.error("[Store] Erreur critique lors de l'initialisation de onSnapshot :", snapshotError);
+            setState(s => ({ ...s, loading: false }));
+          }
         } else {
           console.log("[onAuthStateChanged] Aucun utilisateur n'est connecté.");
           if (unsubscribeDoc) unsubscribeDoc();
@@ -549,8 +563,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     );
 
+    } catch (authError) {
+      console.error("[Store] Exception interceptée lors de l'initialisation de Firebase (onAuthStateChanged):", authError);
+      setState(s => ({ ...s, loading: false }));
+    }
+
     return () => {
-      unsubscribeAuth();
+      if (unsubscribeAuth) unsubscribeAuth();
       if (unsubscribeDoc) unsubscribeDoc();
     };
   }, []);
@@ -680,7 +699,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.currentUser) {
       // Clear authenticated state data when user logs out
-      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {}, carnetEntrees: [], parrainages: [], adPayments: [], adInvoices: [], adDailyStats: [], adOrganizations: [], adAuditLogs: [], adRates: [], adSupportTickets: [], adCreatives: [], loyaltyCards: [], zakaRedemptions: [], groupOutings: [], friendships: [] }));
+      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {}, carnetEntrees: [], parrainages: [], adPayments: [], adInvoices: [], adDailyStats: [], adOrganizations: [], adAuditLogs: [], adRates: [], adSupportTickets: [], adCreatives: [], takeawayOrders: [], loyaltyCards: [], zakaRedemptions: [], groupOutings: [], friendships: [] }));
       return;
     }
 
@@ -848,6 +867,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error("Erreur reservations:", error);
     });
 
+    // Listen to takeaway orders
+    const toQuery = query(collection(db, 'takeawayOrders'));
+    const unsubscribeTO = onSnapshot(toQuery, (snapshot) => {
+      const toList: TakeawayOrder[] = [];
+      snapshot.forEach(doc => toList.push({ id: doc.id, ...doc.data() } as TakeawayOrder));
+      setState(s => ({ ...s, takeawayOrders: toList }));
+    }, (error) => {
+      console.error("Erreur takeawayOrders:", error);
+    });
+
     // Listen to favorites
     const unsubscribeFav = onSnapshot(doc(db, 'favorites', state.currentUser.id), (docSnap) => {
       if (docSnap.exists()) {
@@ -932,6 +961,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unsubscribeAttendance();
       unsubscribeSer();
       unsubscribeRes();
+      unsubscribeTO();
       unsubscribeFav();
       unsubscribeCarnet();
       unsubscribeParrainages();
@@ -2013,6 +2043,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const addTakeawayOrder = async (order: Omit<TakeawayOrder, 'id' | 'status' | 'createdAt' | 'date'>) => {
+    try {
+      const now = new Date().toISOString();
+      await addDoc(collection(db, 'takeawayOrders'), {
+        ...order,
+        status: 'recue',
+        date: now.split('T')[0],
+        createdAt: now
+      });
+    } catch (error) {
+      console.error("Erreur addTakeawayOrder:", error);
+      throw error;
+    }
+  };
+
+  const updateTakeawayOrderStatus = async (id: string, status: TakeawayOrder['status']) => {
+    try {
+      const orderRef = doc(db, 'takeawayOrders', id);
+      const orderDoc = await getDoc(orderRef);
+      const data = orderDoc.data() as TakeawayOrder;
+      
+      await updateDoc(orderRef, { status });
+
+      if (status === 'prete' && data.clientId && data.establishmentId) {
+        // Increment loyalty card if enabled
+        const estDoc = await getDoc(doc(db, 'establishments', data.establishmentId));
+        const estData = estDoc.data() as Establishment;
+        if (estData?.loyaltyEnabled) {
+          const cardId = `${data.clientId}_${data.establishmentId}`;
+          const cardRef = doc(db, 'loyaltyCards', cardId);
+          const cardDoc = await getDoc(cardRef);
+          if (cardDoc.exists()) {
+            const cardData = cardDoc.data() as LoyaltyCard;
+            await updateDoc(cardRef, {
+              visitCount: cardData.visitCount + 1,
+              lastVisitDate: new Date().toISOString()
+            });
+          } else {
+            await setDoc(cardRef, {
+              clientId: data.clientId,
+              clientName: data.clientName,
+              establishmentId: data.establishmentId,
+              visitCount: 1,
+              rewardUnlocked: false,
+              lastVisitDate: new Date().toISOString()
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Erreur updateTakeawayOrderStatus:", error);
+      throw error;
+    }
+  };
+
   const addMenuDuJour = async (menu: Omit<MenuDuJour, 'id' | 'publishedAt'>) => {
     try {
       const now = new Date().toISOString();
@@ -2899,6 +2984,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       replyToReview,
       addReservation,
       updateReservationStatus,
+      addTakeawayOrder,
+      updateTakeawayOrderStatus,
       addMenuDuJour,
       updateHairSalonData,
       trackEstablishmentView,

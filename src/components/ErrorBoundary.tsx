@@ -24,7 +24,17 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("ErrorBoundary caught:", error, errorInfo);
+    console.error("[ErrorBoundary] Une erreur a été attrapée !");
+    console.error("[ErrorBoundary] Error object:", error);
+    console.error("[ErrorBoundary] Component stack trace:", errorInfo.componentStack);
+    
+    // Tentative de log d'un état ou d'une trace personnalisée
+    try {
+      console.error("[ErrorBoundary] LocalStorage state overview:", {
+        theme: localStorage.getItem('app-theme'),
+        hasFirebaseToken: !!Object.keys(localStorage).find(k => k.includes('firebase:authUser'))
+      });
+    } catch(e) {}
   }
 
   handleReset = () => {

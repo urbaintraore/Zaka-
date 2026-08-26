@@ -4,7 +4,7 @@ import { ClientsAndRequests } from '../components/ClientsAndRequests';
 import { GerantAnalytics } from '../components/GerantAnalytics';
 import { useAppStore } from '../store';
 import { LogOut, Plus, Store, Eye, MousePointerClick, X, Megaphone, Calendar, Users, FileText, Image as ImageIcon, MessageSquare, Download, Settings, ChefHat, Scissors, Trash2, Star, Activity, ArrowRight, BarChart2, Zap, Rocket } from 'lucide-react';
-import { Category, PubType, getCategoryLabel } from '../types';
+import { Category, PubType, getCategoryLabel, CATEGORIES_LIST } from '../types';
 import { compressImage } from '../utils/imageCompressor';
 import { useInstallApp } from '../hooks/useInstallApp';
 import { ReservationsDashboard } from '../components/ReservationsDashboard';
@@ -311,13 +311,16 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
 
           <div className="flex flex-col gap-1">
             <label className="text-xs font-bold text-gray-500 ml-1">Type d'établissement</label>
-            <input 
-              type="text" 
-              disabled 
-              value={getCategoryLabel(estCategory)} 
-              className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-xl border border-gray-200 font-bold cursor-not-allowed capitalize" 
-            />
-            <span className="text-[11px] text-gray-400 ml-1">Type défini lors de la création de votre compte.</span>
+            <select 
+              required
+              value={estCategory} 
+              onChange={e => setEstCategory(e.target.value as Category)} 
+              className="w-full px-4 py-3 bg-gray-50 text-gray-900 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium"
+            >
+              {CATEGORIES_LIST.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.label}</option>
+              ))}
+            </select>
           </div>
 
           <div className="flex flex-col gap-1">

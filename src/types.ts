@@ -400,11 +400,30 @@ export interface Review {
   clientId: string;
   clientName?: string;
   establishmentId: string;
-  rating: number;
+  rating: number; // Keep for backward compatibility or global
+  ratingPlats?: number; // Qualité des plats
+  ratingService?: number; // Qualité du service
   comment: string;
   date: string;
   photos?: string[];
 }
+
+export interface TakeawayOrder {
+  id: string;
+  clientId: string;
+  clientName: string;
+  clientPhone?: string;
+  establishmentId: string;
+  establishmentName: string;
+  items: { name: string; quantity: number; price: number }[];
+  totalAmount: number;
+  pickupTime: string;
+  paymentMethod: 'sur_place' | 'orange_money' | 'moov_money';
+  status: 'recue' | 'en_preparation' | 'prete' | 'terminee' | 'annulee';
+  date: string;
+  createdAt: string;
+}
+
 
 export interface CarnetEntry {
   id: string;

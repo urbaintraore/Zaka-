@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, Calendar, Clock, Share2, Compass, FileText, MapPin, Save, Disc, Video, Users } from 'lucide-react';
+import { X, Calendar, Clock, Share2, Compass, FileText, MapPin, Save, Disc, Video, Users, ShoppingBag } from 'lucide-react';
 import { Establishment, getCategoryLabel } from '../types';
 import { ReservationModal } from './ReservationModal';
+import { TakeawayOrderModal } from './TakeawayOrderModal';
 import { AvisUtilisateurs } from './AvisUtilisateurs';
 import { ReservationsDashboard } from './ReservationsDashboard';
 import { LiveDAmbiance } from './LiveDAmbiance';
@@ -37,6 +38,7 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
     createStaffReview
   } = useAppStore();
   const [showReservation, setShowReservation] = useState(false);
+  const [showTakeaway, setShowTakeaway] = useState(false);
   const [showReservationsDashboard, setShowReservationsDashboard] = useState(false);
   const [isEditingGeo, setIsEditingGeo] = useState(false);
   const [geoInput, setGeoInput] = useState(establishment.geolocation || '');
@@ -125,11 +127,27 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
     ? (establishment.geolocation.startsWith('http') ? establishment.geolocation : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(establishment.geolocation)}`) 
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(establishment.name + ' ' + (establishment.neighborhood || ''))}`;
 
+  const latestMenu = menusDuJour
+    ? menusDuJour
+        .filter(m => m.establishmentId === establishment.id)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+    : null;
+
   if (showReservationsDashboard) {
     return (
       <ReservationsDashboard
         establishmentId={establishment.id}
         onClose={() => setShowReservationsDashboard(false)}
+      />
+    );
+  }
+
+  if (showTakeaway) {
+    return (
+      <TakeawayOrderModal
+        establishment={establishment}
+        menuDuJour={latestMenu}
+        onClose={() => setShowTakeaway(false)}
       />
     );
   }
@@ -150,12 +168,6 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
   const allPhotos = establishment.photos.length > 0 
     ? establishment.photos 
     : ['https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800'];
-
-  const latestMenu = menusDuJour
-    ? menusDuJour
-        .filter(m => m.establishmentId === establishment.id)
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
-    : null;
 
   const getMenuAgeText = (menuDateStr: string) => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -666,34 +678,44 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
             </div>
           )}
           
-          <div className="sticky bottom-0 pt-4 bg-white dark:bg-gray-950 flex gap-3 z-10">
-            {mapsUrl && (
-              <a 
-                href={mapsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 border-2 border-orange-200 dark:border-orange-900/60 text-orange-600 dark:text-orange-400 font-bold px-5 py-4 rounded-2xl hover:bg-orange-50 dark:hover:bg-orange-950/20 active:scale-[0.98] transition-all cursor-pointer"
-                id={`itinerary-btn-${establishment.id}`}
-              >
-                <Compass className="w-5 h-5" />
-                <span>Itinéraire</span>
-              </a>
-            )}
-            <button 
-              onClick={() => setShowReservation(true)}
-              className={`flex-1 flex items-center justify-center gap-2 font-bold py-4 rounded-2xl active:scale-[0.98] transition-all shadow-lg cursor-pointer ${
-                establishment.reservationsClosed
-                  ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20'
-                  : 'bg-orange-600 hover:bg-orange-700 text-white shadow-orange-600/20'
-              }`}
-            >
-              <Calendar className="w-5 h-5" />
-              {establishment.reservationsClosed ? (
-                <span>🔴 Réservations fermées</span>
-              ) : (
-                <span>{establishment.category === 'restaurant' ? 'Réserver une table' : 'Faire une réservation'}</span>
+          <div className="sticky bottom-0 pt-4 bg-white dark:bg-gray-950 flex flex-col sm:flex-row gap-3 z-10">
+            <div className="flex gap-3 w-full">
+              {mapsUrl && (
+                <a 
+                  href={mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 border-2 border-orange-200 dark:border-orange-900/60 text-orange-600 dark:text-orange-400 font-bold px-5 py-4 rounded-2xl hover:bg-orange-50 dark:hover:bg-orange-950/20 active:scale-[0.98] transition-all cursor-pointer"
+                  id={`itinerary-btn-${establishment.id}`}
+                >
+                  <Compass className="w-5 h-5" />
+                </a>
               )}
-            </button>
+              {(establishment.category === 'restaurant' || establishment.category === 'restaurants' || establishment.category === 'glacier_pizzeria') && (
+                <button 
+                  onClick={() => setShowTakeaway(true)}
+                  className="flex-1 flex items-center justify-center gap-2 font-bold py-4 rounded-2xl active:scale-[0.98] transition-all shadow-lg cursor-pointer bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20"
+                >
+                  <ShoppingBag className="w-5 h-5" />
+                  <span>Commander</span>
+                </button>
+              )}
+              <button 
+                onClick={() => setShowReservation(true)}
+                className={`flex-1 flex items-center justify-center gap-2 font-bold py-4 rounded-2xl active:scale-[0.98] transition-all shadow-lg cursor-pointer ${
+                  establishment.reservationsClosed
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20'
+                    : 'bg-orange-600 hover:bg-orange-700 text-white shadow-orange-600/20'
+                }`}
+              >
+                <Calendar className="w-5 h-5" />
+                {establishment.reservationsClosed ? (
+                  <span>🔴 Réservations fermées</span>
+                ) : (
+                  <span>{establishment.category === 'restaurant' ? 'Réserver' : 'Réservation'}</span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
