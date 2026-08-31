@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, X, ShieldAlert } from 'lucide-react';
+import { AlertCircle, X, ShieldAlert, CheckCircle2, Info } from 'lucide-react';
 import { useAppStore } from '../store';
 
 export function Toast() {
@@ -16,7 +16,7 @@ export function Toast() {
     const entryTimer = setTimeout(() => setIsVisible(true), 50);
 
     // Give longer read times for security issues
-    const displayDuration = globalError.code === 'auth/too-many-requests' ? 12000 : 7000;
+    const displayDuration = globalError.code === 'auth/too-many-requests' ? 12000 : 5000;
 
     const exitTimer = setTimeout(() => {
       setIsVisible(false);
@@ -36,6 +36,8 @@ export function Toast() {
 
   const isTooManyRequests = globalError.code === 'auth/too-many-requests';
   const isUnauthorizedDomain = globalError.code === 'auth/unauthorized-domain';
+  const isSuccess = globalError.type === 'info' && globalError.code === 'supabase/connected';
+  const isInfo = globalError.type === 'info' && !isSuccess;
 
   const handleClose = () => {
     setIsVisible(false);
@@ -51,7 +53,15 @@ export function Toast() {
       }`}
     >
       <div className="flex-shrink-0 mt-0.5">
-        {isTooManyRequests ? (
+        {isSuccess ? (
+          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+        ) : isInfo ? (
+          <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+            <Info className="w-5 h-5" />
+          </div>
+        ) : isTooManyRequests ? (
           <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
             <ShieldAlert className="w-5 h-5" />
           </div>
@@ -65,10 +75,14 @@ export function Toast() {
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
           <h4 className="font-bold text-sm text-gray-900">
-            {isTooManyRequests 
+            {isSuccess
+              ? "Supabase Connecté"
+              : isTooManyRequests 
               ? "Sécurité d'authentification" 
               : isUnauthorizedDomain 
               ? "Domaine non autorisé" 
+              : isInfo
+              ? "Information"
               : "Alerte de connexion"
             }
           </h4>

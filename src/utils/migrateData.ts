@@ -18,6 +18,85 @@ export interface FullMigrationReport {
 }
 
 /**
+ * Migration dedicated specifically to User Profiles (from Firestore 'users' collection to Supabase 'profiles' / 'users' table).
+ * Preserves the exact user ID (UUID / Firebase UID) across all relations.
+ */
+export async function migrateUsersToProfiles(targetTable = 'profiles'): Promise<MigrationSummary> {
+  const summary: MigrationSummary = {
+    collection: 'users',
+    total: 0,
+    migrated: 0,
+    failed: 0,
+    errors: [],
+  };
+
+  if (!isSupabaseConfigured) {
+    const err = 'Supabase non configuré. Assurez-vous que SUPABASE_URL / VITE_SUPABASE_URL et SUPABASE_ANON_KEY sont définis.';
+    summary.errors.push(err);
+    console.error(`❌ [Migration Users -> ${targetTable}] ${err}`);
+    return summary;
+  }
+
+  try {
+    console.log(`[Migration Users -> ${targetTable}] 1. Extraction des profils utilisateurs depuis Firestore...`);
+    const usersSnap = await getDocs(collection(db, 'users'));
+    summary.total = usersSnap.size;
+
+    const userRows: any[] = [];
+    usersSnap.forEach((docSnap) => {
+      const data = docSnap.data();
+      const preservedId = docSnap.id; // PRESERVE EXACT ORIGINAL UUID / ID
+
+      userRows.push({
+        id: preservedId,
+        email: data.email || null,
+        phone: data.phone || null,
+        name: data.name || '',
+        role: data.role || 'client',
+        country: data.country || 'Burkina Faso',
+        city: data.city || 'Ouagadougou',
+        avatar: data.avatar || null,
+        category: data.category || null,
+        code_parrainage: data.code_parrainage || null,
+        parrainId: data.parrainId || null,
+        zakaPoints: data.zakaPoints || 0,
+        points: data.points || 0,
+        isVerified: Boolean(data.isVerified),
+        createdAt: data.createdAt || new Date().toISOString(),
+        updatedAt: data.updatedAt || new Date().toISOString(),
+      });
+    });
+
+    console.log(`[Migration Users -> ${targetTable}] 2. Insertion de ${userRows.length} profils avec conservation stricte des UUIDs...`);
+
+    const batchSize = 50;
+    for (let i = 0; i < userRows.length; i += batchSize) {
+      const chunk = userRows.slice(i, i + batchSize);
+      
+      // Upsert into target table ('profiles')
+      const { error } = await supabase.from(targetTable).upsert(chunk, { onConflict: 'id' });
+
+      if (error) {
+        summary.failed += chunk.length;
+        const msg = `Batch ${i + 1}-${i + chunk.length}: ${error.message}`;
+        summary.errors.push(msg);
+        console.error(`❌ [Migration Users -> ${targetTable}] Échec: ${msg}`);
+      } else {
+        summary.migrated += chunk.length;
+        console.log(`✅ [Migration Users -> ${targetTable}] Batch ${i + 1} à ${i + chunk.length} synchronisé avec succès.`);
+        chunk.forEach(u => console.log(`  👤 Profil migré dans '${targetTable}': [UUID: ${u.id}] ${u.name || u.email || 'Anonyme'} (${u.role})`));
+      }
+    }
+  } catch (err: any) {
+    const msg = `Erreur lors de la lecture Firestore: ${err?.message || err}`;
+    summary.errors.push(msg);
+    console.error(`❌ [Migration Users -> ${targetTable}] ${msg}`);
+  }
+
+  return summary;
+}
+
+/**
  * Fetches all documents from a Firestore collection and upserts them into a Supabase table.
  */
 export async function migrateCollection(
@@ -52,17 +131,21 @@ export async function migrateCollection(
     });
 
     if (rows.length > 0) {
-      // Upsert in batches of 100
       const batchSize = 100;
+      console.log(`[Migration] Début de l'upsert pour ${rows.length} enregistrements dans '${supabaseTable}'...`);
       for (let i = 0; i < rows.length; i += batchSize) {
         const chunk = rows.slice(i, i + batchSize);
         const { error } = await supabase.from(supabaseTable).upsert(chunk, { onConflict: 'id' });
         if (error) {
           summary.failed += chunk.length;
-          summary.errors.push(`Batch ${i}-${i + chunk.length}: ${error.message}`);
+          const errMsg = `Échec batch ${i + 1}-${i + chunk.length}: ${error.message}`;
+          summary.errors.push(errMsg);
+          console.error(`❌ [Migration ${supabaseTable}] ${errMsg}`);
         } else {
           summary.migrated += chunk.length;
+          console.log(`✅ [Migration ${supabaseTable}] Batch ${i + 1} à ${i + chunk.length} upserté avec succès.`);
         }
+        chunk.forEach(row => console.log(`  📄 [${supabaseTable}] ID: ${row.id} - ${row.name || row.title || row.type || 'OK'}`));
       }
     }
   } catch (err: any) {
@@ -70,6 +153,45 @@ export async function migrateCollection(
   }
 
   return summary;
+}
+
+/**
+ * Runs migration specifically for Users and Establishments with detailed per-document logs.
+ */
+export async function migrateUsersAndEstablishments(): Promise<{ users: MigrationSummary; establishments: MigrationSummary }> {
+  console.log("🚀 [Migration] Démarrage de la migration Users & Establishments...");
+  
+  const usersSummary = await migrateUsersToProfiles('users');
+
+  const establishmentsSummary = await migrateCollection('establishments', 'establishments', (d, id) => ({
+    id,
+    ownerId: d.ownerId,
+    name: d.name || 'Établissement',
+    category: d.category || 'maquis',
+    country: d.country || 'Burkina Faso',
+    city: d.city || 'Ouagadougou',
+    neighborhood: d.neighborhood || '',
+    address: d.address || '',
+    phone: d.phone || '',
+    description: d.description || '',
+    photos: d.photos || [],
+    tags: d.tags || [],
+    geolocation: d.geolocation || '',
+    openingHours: d.openingHours || '',
+    menuPdfUrl: d.menuPdfUrl || null,
+    menuImages: d.menuImages || [],
+    status: d.status || 'valide',
+    averageRating: d.averageRating || 0,
+    hairSalonData: d.hairSalonData || null,
+    createdAt: d.createdAt || new Date().toISOString(),
+  }));
+
+  console.log("📊 [Migration Résumé]", {
+    users: `${usersSummary.migrated}/${usersSummary.total} migrés, ${usersSummary.failed} échecs`,
+    establishments: `${establishmentsSummary.migrated}/${establishmentsSummary.total} migrés, ${establishmentsSummary.failed} échecs`
+  });
+
+  return { users: usersSummary, establishments: establishmentsSummary };
 }
 
 /**
@@ -83,24 +205,8 @@ export async function runFullDataMigration(): Promise<FullMigrationReport> {
     summaries: [],
   };
 
-  // 1. Users
-  report.summaries.push(await migrateCollection('users', 'users', (d, id) => ({
-    id,
-    email: d.email || null,
-    phone: d.phone || null,
-    name: d.name || '',
-    role: d.role || 'client',
-    country: d.country || 'Burkina Faso',
-    city: d.city || 'Ouagadougou',
-    avatar: d.avatar || null,
-    category: d.category || null,
-    code_parrainage: d.code_parrainage || null,
-    parrainId: d.parrainId || null,
-    zakaPoints: d.zakaPoints || 0,
-    points: d.points || 0,
-    isVerified: Boolean(d.isVerified),
-    createdAt: d.createdAt || new Date().toISOString(),
-  })));
+  // 1. Users / Profiles
+  report.summaries.push(await migrateUsersToProfiles('users'));
 
   // 2. Establishments
   report.summaries.push(await migrateCollection('establishments', 'establishments', (d, id) => ({
