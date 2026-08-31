@@ -287,9 +287,56 @@
         "pointsUsed": { "type": "number" }
       },
       "required": ["userId", "establishmentId", "pointsUsed"]
+    },
+    "StockItem": {
+      "title": "StockItem",
+      "description": "An item in the drink stock of an establishment",
+      "type": "object",
+      "properties": {
+        "establishmentId": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "quantity": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["establishmentId", "name", "price", "quantity"]
+    },
+    "SaleRecord": {
+      "title": "SaleRecord",
+      "description": "A sale transaction record recorded by a cashier",
+      "type": "object",
+      "properties": {
+        "establishmentId": { "type": "string" },
+        "cashierId": { "type": "string" },
+        "cashierName": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "stockId": { "type": "string" },
+              "name": { "type": "string" },
+              "quantity": { "type": "number" },
+              "unitPrice": { "type": "number" }
+            },
+            "required": ["stockId", "name", "quantity", "unitPrice"]
+          }
+        },
+        "totalAmount": { "type": "number" },
+        "date": { "type": "string" }
+      },
+      "required": ["establishmentId", "cashierId", "items", "totalAmount", "date"]
     }
   },
   "firestore": {
+    "stocks": {
+      "schema": { "$ref": "#/entities/StockItem" },
+      "description": "Stocks collection"
+    },
+    "ventes": {
+      "schema": { "$ref": "#/entities/SaleRecord" },
+      "description": "Ventes collection"
+    },
     "users": {
       "schema": { "$ref": "#/entities/User" },
       "description": "Users collection"

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting, Friendship, AdOrganization, AdAuditLog, AdRateConfig, AdSupportTicket, AdCreative, TakeawayOrder } from './types';
+import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting, Friendship, AdOrganization, AdAuditLog, AdRateConfig, AdSupportTicket, AdCreative, TakeawayOrder, StockItem, SaleRecord } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
 import { supabase, isSupabaseConfigured } from './lib/supabaseClient';
@@ -13,7 +13,7 @@ import {
   RecaptchaVerifier,
   ConfirmationResult
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, collection, onSnapshot, query, addDoc, updateDoc, where, deleteDoc, getDocs } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, onSnapshot, query, addDoc, updateDoc, where, deleteDoc, getDocs, runTransaction } from 'firebase/firestore';
 
 interface AppState {
   currentUser: User | null;
@@ -49,6 +49,8 @@ interface AppState {
   loyaltyCards: LoyaltyCard[];
   zakaRedemptions: ZakaRedemption[];
   groupOutings: GroupOuting[];
+  stocks: StockItem[];
+  ventes: SaleRecord[];
   loading: boolean;
   globalError: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null;
   theme: 'light' | 'dark';
@@ -97,6 +99,10 @@ interface AppContextType extends AppState {
   updateServiceRequest: (id: string, status: 'validee' | 'refusee', message?: string) => Promise<void>;
   createConversation: (clientId: string, establishmentId: string, clientName: string, establishmentName: string, ownerId: string) => Promise<string>;
   toggleDJStatus: (requestId: string, isDJ: boolean) => Promise<void>;
+  toggleCaissierStatus: (requestId: string, isCaissier: boolean) => Promise<void>;
+  addStockItem: (item: Omit<StockItem, 'id' | 'createdAt'>) => Promise<void>;
+  updateStockItem: (id: string, updates: Partial<Omit<StockItem, 'id' | 'establishmentId'>>) => Promise<void>;
+  recordSale: (sale: Omit<SaleRecord, 'id' | 'date'>) => Promise<void>;
   addApplication: (app: Omit<Application, 'id' | 'status' | 'date'>) => Promise<void>;
   updateApplicationStatus: (id: string, status: 'acceptee' | 'refusee') => Promise<void>;
   addReview: (review: Omit<Review, 'id' | 'date'>) => Promise<void>;
@@ -262,6 +268,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loyaltyCards: [],
     zakaRedemptions: [],
     groupOutings: [],
+    stocks: [],
+    ventes: [],
     loading: false,
     globalError: null,
     theme: getInitialTheme()
@@ -754,7 +762,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.currentUser) {
       // Clear authenticated state data when user logs out
-      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {}, carnetEntrees: [], parrainages: [], adPayments: [], adInvoices: [], adDailyStats: [], adOrganizations: [], adAuditLogs: [], adRates: [], adSupportTickets: [], adCreatives: [], takeawayOrders: [], loyaltyCards: [], zakaRedemptions: [], groupOutings: [], friendships: [] }));
+      setState(s => ({ ...s, users: [], relationshipRequests: [], serviceRequests: [], reservations: [], favorites: {}, carnetEntrees: [], parrainages: [], adPayments: [], adInvoices: [], adDailyStats: [], adOrganizations: [], adAuditLogs: [], adRates: [], adSupportTickets: [], adCreatives: [], takeawayOrders: [], loyaltyCards: [], zakaRedemptions: [], groupOutings: [], friendships: [], stocks: [], ventes: [] }));
       return;
     }
 
@@ -1006,6 +1014,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error("Erreur listening to group_outings:", error);
     });
 
+    // Listen to stocks
+    const stocksQuery = query(collection(db, 'stocks'));
+    const unsubscribeStocks = onSnapshot(stocksQuery, (snapshot) => {
+      const sList: StockItem[] = [];
+      snapshot.forEach(docSnap => sList.push({ id: docSnap.id, ...docSnap.data() } as StockItem));
+      setState(s => ({ ...s, stocks: sList }));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'stocks');
+    });
+
+    // Listen to ventes
+    const ventesQuery = query(collection(db, 'ventes'));
+    const unsubscribeVentes = onSnapshot(ventesQuery, (snapshot) => {
+      const vList: SaleRecord[] = [];
+      snapshot.forEach(docSnap => vList.push({ id: docSnap.id, ...docSnap.data() } as SaleRecord));
+      setState(s => ({ ...s, ventes: vList }));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'ventes');
+    });
+
     return () => {
       unsubscribePayments();
       unsubscribeInvoices();
@@ -1024,6 +1052,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unsubscribeZakaRed();
       unsubscribeGroupOutings();
       unsubscribeFriendships();
+      unsubscribeStocks();
+      unsubscribeVentes();
     };
   }, [state.currentUser?.id]);
 
@@ -1887,6 +1917,71 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
       console.error("Erreur toggleDJStatus:", error);
       throw error;
+    }
+  };
+
+  const toggleCaissierStatus = async (requestId: string, isCaissier: boolean) => {
+    try {
+      await updateDoc(doc(db, 'relationshipRequests', requestId), { isCaissier });
+    } catch (error: any) {
+      console.error("Erreur toggleCaissierStatus:", error);
+      throw error;
+    }
+  };
+
+  const addStockItem = async (item: Omit<StockItem, 'id' | 'createdAt'>) => {
+    try {
+      await addDoc(collection(db, 'stocks'), {
+        ...item,
+        createdAt: new Date().toISOString()
+      });
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.CREATE, 'stocks');
+    }
+  };
+
+  const updateStockItem = async (id: string, updates: Partial<Omit<StockItem, 'id' | 'establishmentId'>>) => {
+    try {
+      await updateDoc(doc(db, 'stocks', id), updates);
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.UPDATE, `stocks/${id}`);
+    }
+  };
+
+  const recordSale = async (sale: Omit<SaleRecord, 'id' | 'date'>) => {
+    try {
+      await runTransaction(db, async (transaction) => {
+        const stockItemsToUpdate = [];
+        
+        for (const item of sale.items) {
+          const stockRef = doc(db, 'stocks', item.stockId);
+          const stockSnap = await transaction.get(stockRef);
+          if (!stockSnap.exists()) {
+            throw new Error(`La boisson "${item.name}" n'existe plus dans le stock.`);
+          }
+          const currentQty = stockSnap.data().quantity || 0;
+          if (currentQty < item.quantity) {
+            throw new Error(`Stock insuffisant pour "${item.name}". Disponible: ${currentQty}, Demandé: ${item.quantity}`);
+          }
+          stockItemsToUpdate.push({
+            ref: stockRef,
+            newQty: currentQty - item.quantity
+          });
+        }
+        
+        for (const update of stockItemsToUpdate) {
+          transaction.update(update.ref, { quantity: update.newQty });
+        }
+        
+        const saleRef = doc(collection(db, 'ventes'));
+        transaction.set(saleRef, {
+          ...sale,
+          id: saleRef.id,
+          date: new Date().toISOString()
+        });
+      });
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.WRITE, 'ventes');
     }
   };
 
@@ -3033,6 +3128,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateServiceRequest,
       createConversation,
       toggleDJStatus,
+      toggleCaissierStatus,
+      addStockItem,
+      updateStockItem,
+      recordSale,
       addApplication,
       updateApplicationStatus,
       addReview,

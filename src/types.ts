@@ -457,6 +457,7 @@ export interface RelationshipRequest {
   status: 'en_attente' | 'acceptee' | 'refusee';
   date: string;
   isDJ?: boolean; // Keep for backward compatibility
+  isCaissier?: boolean; // Cashier role flag
   requestedRole?: 'client' | 'dj' | 'serveur' | 'caissier' | 'menage' | 'vigile';
   identityPhotoUrl?: string;
 }
@@ -658,6 +659,32 @@ export interface Friendship {
   requesterId: string;
   status: 'pending' | 'accepted' | 'declined';
   createdAt: string;
+}
+
+export interface StockItem {
+  id: string;
+  establishmentId: string;
+  name: string;
+  price: number;
+  quantity: number;
+  createdAt: string;
+}
+
+export interface SaleItem {
+  stockId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface SaleRecord {
+  id: string;
+  establishmentId: string;
+  cashierId: string;
+  cashierName?: string;
+  items: SaleItem[];
+  totalAmount: number;
+  date: string;
 }
 
 

@@ -226,6 +226,23 @@ service cloud.firestore {
         && (data.get('unlockedAt', '') is string && data.get('unlockedAt', '').size() <= 50);
     }
 
+    function isValidStockItem(data) {
+      return data.keys().hasAll(['establishmentId', 'name', 'price', 'quantity'])
+        && data.establishmentId is string && data.establishmentId.size() > 0 && data.establishmentId.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && data.price is number && data.price >= 0
+        && data.quantity is number && data.quantity >= 0;
+    }
+
+    function isValidSaleRecord(data) {
+      return data.keys().hasAll(['establishmentId', 'cashierId', 'items', 'totalAmount', 'date'])
+        && data.establishmentId is string && data.establishmentId.size() > 0 && data.establishmentId.size() <= 128
+        && data.cashierId is string && data.cashierId.size() > 0 && data.cashierId.size() <= 128
+        && data.items is list
+        && data.totalAmount is number && data.totalAmount >= 0
+        && data.date is string && data.date.size() > 0 && data.date.size() <= 50;
+    }
+
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming()) && incoming().role != 'admin';
@@ -515,6 +532,18 @@ service cloud.firestore {
     match /takeawayOrders/{orderId} {
       allow read: if true;
       allow write: if isSignedIn();
+    }
+
+    match /stocks/{stockId} {
+      allow read: if true;
+      allow create, update: if isSignedIn() && isValidStockItem(incoming());
+      allow delete: if isSignedIn();
+    }
+
+    match /ventes/{venteId} {
+      allow read: if true;
+      allow create, update: if isSignedIn() && isValidSaleRecord(incoming());
+      allow delete: if isSignedIn();
     }
   }
 }

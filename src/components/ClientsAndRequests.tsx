@@ -12,6 +12,7 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
     createRelationshipRequest,
     createConversation, 
     toggleDJStatus,
+    toggleCaissierStatus,
     staffReviews,
     updateStaffReviewStatus,
     staffAttendances,
@@ -66,6 +67,7 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
       clientId: memberId,
       user: memberUser,
       isDJ: r.isDJ || r.requestedRole === 'dj' || false,
+      isCaissier: r.isCaissier || r.requestedRole === 'caissier' || false,
       requestedRole: r.requestedRole || 'client'
     };
   });
@@ -484,6 +486,40 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
                     >
                       Promouvoir en DJ
                     </button>
+                  )}
+
+                  {(est?.category === 'maquis' || est?.category === 'boite_de_nuit') && (
+                    member.isCaissier ? (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await toggleCaissierStatus(member.requestId, false);
+                            setSuccessMsg(`Le statut Caissier a été retiré pour ${member.user?.name || 'le client'}.`);
+                          } catch (err) {
+                            setErrorMsg("Erreur lors du retrait du statut Caissier.");
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-[10px] rounded-lg transition-colors cursor-pointer"
+                      >
+                        Retirer le statut Caissier
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await toggleCaissierStatus(member.requestId, true);
+                            setSuccessMsg(`${member.user?.name || 'Le client'} a été promu Caissier de l'établissement !`);
+                          } catch (err) {
+                            setErrorMsg("Erreur lors de la promotion en Caissier.");
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 font-bold text-[10px] rounded-lg transition-colors cursor-pointer"
+                      >
+                        Promouvoir en Caissier
+                      </button>
+                    )
                   )}
                 </div>
               </div>

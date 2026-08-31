@@ -8,6 +8,7 @@ import { ReservationsDashboard } from './ReservationsDashboard';
 import { LiveDAmbiance } from './LiveDAmbiance';
 import { AffluenceTracker } from './AffluenceTracker';
 import { PlaylistDJ } from './PlaylistDJ';
+import { CashierDashboard } from './CashierDashboard';
 import { TableauDeBordRH } from './TableauDeBordRH';
 import { AdPlacementBanner } from './AdPlacementBanner';
 import { CrowdStatusBadge } from './CrowdStatusBadge';
@@ -44,13 +45,22 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
   const [geoInput, setGeoInput] = useState(establishment.geolocation || '');
   const [isSavingGeo, setIsSavingGeo] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
-  const [activeSubTab, setActiveSubTab] = useState<'info' | 'galerie' | 'live' | 'affluence' | 'dj' | 'equipe' | 'rh'>('info');
+  const [activeSubTab, setActiveSubTab] = useState<'info' | 'galerie' | 'live' | 'affluence' | 'dj' | 'equipe' | 'rh' | 'stocks_ventes'>('info');
   const [showGalleryManager, setShowGalleryManager] = useState(false);
   const [justVisited, setJustVisited] = useState(false);
   const [ratingStaffId, setRatingStaffId] = useState<string | null>(null);
   const [staffRatingVal, setStaffRatingVal] = useState(5);
   const [staffComment, setStaffComment] = useState('');
   const [reviewSuccessMsg, setReviewSuccessMsg] = useState<string | null>(null);
+
+  const isOwner = currentUser && establishment.ownerId === currentUser.id;
+  
+  const isCaissier = currentUser && relationshipRequests.some(r => 
+    r.establishmentId === establishment.id && 
+    (r.initiatorId === currentUser.id || r.targetId === currentUser.id) &&
+    r.status === 'acceptee' &&
+    r.isCaissier
+  );
 
   const visitCount = carnetEntrees 
     ? carnetEntrees.filter(e => e.establishmentId === establishment.id && e.type === 'visite').length
@@ -361,8 +371,8 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
           )}
 
           {/* Sub Tab Navigation */}
-          <div className="flex bg-gray-100 dark:bg-gray-900 rounded-2xl p-1 gap-1 border border-gray-150 dark:border-gray-800 flex-shrink-0 overflow-x-auto hide-scrollbar">
-            {[
+          {(() => {
+            const tabs = [
               { id: 'info', label: 'ℹ️ Infos' },
               { id: 'galerie', label: '📸 Galerie' },
               { id: 'live', label: '📺 Live' },
@@ -370,20 +380,28 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
               { id: 'dj', label: '🎵 Playlist DJ' },
               { id: 'equipe', label: '👥 Personnel' },
               { id: 'rh', label: '💼 Tableau RH' }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveSubTab(tab.id as any)}
-                className={`flex-1 min-w-[70px] py-2 text-[10px] font-black uppercase rounded-xl transition-all cursor-pointer text-center ${
-                  activeSubTab === tab.id
-                    ? 'bg-orange-600 text-white shadow-sm font-extrabold'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+            ];
+            if ((isOwner || isCaissier) && (establishment.category === 'maquis' || establishment.category === 'boite_de_nuit')) {
+              tabs.push({ id: 'stocks_ventes', label: '🛒 Stocks & Caisse' });
+            }
+            return (
+              <div className="flex bg-gray-100 dark:bg-gray-900 rounded-2xl p-1 gap-1 border border-gray-150 dark:border-gray-800 flex-shrink-0 overflow-x-auto hide-scrollbar">
+                {tabs.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveSubTab(tab.id as any)}
+                    className={`flex-1 min-w-[70px] py-2 text-[10px] font-black uppercase rounded-xl transition-all cursor-pointer text-center ${
+                      activeSubTab === tab.id
+                        ? 'bg-orange-600 text-white shadow-sm font-extrabold'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
 
           {activeSubTab === 'info' ? (
             <>
@@ -537,6 +555,8 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
             <AffluenceTracker establishmentId={establishment.id} />
           ) : activeSubTab === 'dj' ? (
             <PlaylistDJ establishmentId={establishment.id} />
+          ) : activeSubTab === 'stocks_ventes' ? (
+            <CashierDashboard establishmentId={establishment.id} />
           ) : activeSubTab === 'rh' ? (
             <TableauDeBordRH establishmentId={establishment.id} establishmentName={establishment.name} />
           ) : (
