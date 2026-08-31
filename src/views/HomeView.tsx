@@ -189,8 +189,11 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
         
         // Always run the fresh real-time recalculation in the background
         await runRecalculate();
-      } catch (err) {
-        console.error("Erreur lors du chargement des classements:", err);
+      } catch (err: any) {
+        // If offline or network unavailable, silently fallback to direct recalculation
+        if (err?.code !== 'unavailable' && !err?.message?.includes('offline')) {
+          console.warn("Chargement initial des classements depuis le cache local (mode réseau réduit/hors-ligne).");
+        }
         await runRecalculate();
       } finally {
         if (active) setIsRankingsLoading(false);
@@ -213,8 +216,8 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           estViewsSnap.forEach(d => {
             rawEstViews.push(d.data());
           });
-        } catch (e) {
-          console.error("Erreur query establishment_views:", e);
+        } catch {
+          // Fallback gracefully if offline or query fails
         }
 
         let rawPubViews: any[] = [];
@@ -224,8 +227,8 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           pubViewsSnap.forEach(d => {
             rawPubViews.push(d.data());
           });
-        } catch (e) {
-          console.error("Erreur query publication_views:", e);
+        } catch {
+          // Fallback gracefully if offline or query fails
         }
 
         let rawParticipations: any[] = [];
@@ -235,8 +238,8 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           participationsSnap.forEach(d => {
             rawParticipations.push(d.data());
           });
-        } catch (e) {
-          console.error("Erreur query event_participations:", e);
+        } catch {
+          // Fallback gracefully if offline or query fails
         }
 
         // --- CALCULATE ESTABLISHMENT VIEWS RANKING (Top des plus vus) ---
@@ -341,13 +344,19 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           updatedAt: nowStr
         };
 
-        await setDoc(doc(db, 'rankings', 'cache'), newRankings);
+        try {
+          await setDoc(doc(db, 'rankings', 'cache'), newRankings);
+        } catch {
+          // Silent when offline or local cache
+        }
         
         if (active) {
           setRankings(newRankings);
         }
-      } catch (err) {
-        console.error("Erreur lors de la réévaluation des classements:", err);
+      } catch (err: any) {
+        if (err?.code !== 'unavailable' && !err?.message?.includes('offline')) {
+          console.warn("Réévaluation locale des classements terminée.");
+        }
       } finally {
         if (active) {
           setIsRecalculating(false);

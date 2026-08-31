@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting, Friendship, AdOrganization, AdAuditLog, AdRateConfig, AdSupportTicket, AdCreative, TakeawayOrder } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { auth, db } from './lib/firebase';
+import { supabase, isSupabaseConfigured } from './lib/supabaseClient';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -445,9 +446,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let unsubscribeDoc: (() => void) | undefined;
     let unsubscribeAuth: (() => void) | undefined;
+    let unsubscribeSupabase: (() => void) | undefined;
     
-    console.log("[Store] Initialisation du listener d'authentification (onAuthStateChanged)...");
+    console.log("[Store] Initialisation du listener d'authentification (Supabase & Firebase)...");
     
+    // 1. SUPABASE AUTH LISTENER (PRIMARY IF CONFIGURED)
+    if (isSupabaseConfigured) {
+      try {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+          if (session?.user) {
+            console.log("[Supabase Auth] Utilisateur détecté :", session.user.id, session.user.email);
+            try {
+              const { data: profile, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', session.user.id)
+                .maybeSingle();
+
+              if (profile && !error) {
+                console.log("[Supabase Auth] Profil utilisateur hydraté depuis Supabase :", profile.name, "Rôle:", profile.role);
+                setState(s => ({
+                  ...s,
+                  currentUser: profile as User,
+                  loading: false
+                }));
+              } else {
+                // Self-healing: create profile record in Supabase
+                const newProfile: Partial<User> = {
+                  id: session.user.id,
+                  email: session.user.email || '',
+                  name: session.user.user_metadata?.name || (session.user.email ? session.user.email.split('@')[0] : 'Utilisateur'),
+                  role: (session.user.user_metadata?.role as Role) || 'client',
+                  country: 'Burkina Faso',
+                  city: 'Ouagadougou'
+                };
+                await supabase.from('users').upsert(newProfile, { onConflict: 'id' });
+                setState(s => ({
+                  ...s,
+                  currentUser: newProfile as User,
+                  loading: false
+                }));
+              }
+            } catch (err) {
+              console.error("[Supabase Auth] Erreur récupération profil :", err);
+              setState(s => ({ ...s, loading: false }));
+            }
+          } else if (!auth.currentUser) {
+            setState(s => ({ ...s, currentUser: null, loading: false }));
+          }
+        });
+        unsubscribeSupabase = () => subscription.unsubscribe();
+      } catch (sbErr) {
+        console.warn("[Supabase Auth] Listener init notice:", sbErr);
+      }
+    }
+
+    // 2. FIREBASE AUTH LISTENER (FALLBACK & SEAMLESS TRANSITION)
     try {
       unsubscribeAuth = onAuthStateChanged(auth, 
         (firebaseUser) => {
@@ -541,7 +595,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             console.error("[Store] Erreur critique lors de l'initialisation de onSnapshot :", snapshotError);
             setState(s => ({ ...s, loading: false }));
           }
-        } else {
+        } else if (!isSupabaseConfigured) {
           console.log("[onAuthStateChanged] Aucun utilisateur n'est connecté.");
           if (unsubscribeDoc) unsubscribeDoc();
           setState(s => ({ ...s, currentUser: null, loading: false }));
@@ -569,6 +623,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     return () => {
+      if (unsubscribeSupabase) unsubscribeSupabase();
       if (unsubscribeAuth) unsubscribeAuth();
       if (unsubscribeDoc) unsubscribeDoc();
     };

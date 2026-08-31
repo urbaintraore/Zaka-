@@ -1,6 +1,12 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
-import { initializeFirestore, Firestore, memoryLocalCache } from "firebase/firestore";
+import { 
+  initializeFirestore, 
+  Firestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager, 
+  memoryLocalCache 
+} from "firebase/firestore";
 import firebaseConfig from "../../firebase-applet-config.json";
 
 console.log("[Firebase Initialization]", {
@@ -25,12 +31,21 @@ setPersistence(auth, browserLocalPersistence)
 let firestoreDb: Firestore;
 try {
   firestoreDb = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
-    localCache: memoryLocalCache()
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    }),
+    experimentalAutoDetectLongPolling: true
   }, firebaseConfig.firestoreDatabaseId);
 } catch (e) {
-  console.warn("[Firebase Firestore] Fallback initializing Firestore:", e);
-  firestoreDb = initializeFirestore(app, {}, firebaseConfig.firestoreDatabaseId);
+  try {
+    firestoreDb = initializeFirestore(app, {
+      localCache: memoryLocalCache(),
+      experimentalForceLongPolling: true
+    }, firebaseConfig.firestoreDatabaseId);
+  } catch (err2) {
+    console.warn("[Firebase Firestore] Fallback initializing Firestore:", err2);
+    firestoreDb = initializeFirestore(app, {}, firebaseConfig.firestoreDatabaseId);
+  }
 }
 
 export const db = firestoreDb;

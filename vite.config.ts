@@ -121,12 +121,12 @@ export default defineConfig(() => {
               }
             },
             {
-              urlPattern: /^https:\/\/firebasestorage\.googleapis\.com\/.*/i,
+              urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/object\/public\/.*/i,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'zaka-firebase-storage-assets',
+                cacheName: 'zaka-supabase-storage-assets',
                 expiration: {
-                  maxEntries: 250,
+                  maxEntries: 300,
                   maxAgeSeconds: 60 * 60 * 24 * 45 // 45 days
                 },
                 cacheableResponse: {
