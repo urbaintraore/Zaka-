@@ -1619,7 +1619,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               photos: registrationData.estData.photos || [],
               tags: registrationData.estData.tags || [],
               geolocation: registrationData.estData.geolocation || '',
-              status: 'en_attente',
+              status: 'valide',
               averageRating: 0
             };
             if (registrationData.role === 'salon_coiffure' || registrationData.estData.category === 'salon_de_coiffure') {
@@ -1641,7 +1641,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               logo: registrationData.entrepriseData.logo || '',
               description: registrationData.entrepriseData.description || '',
               philosophy: registrationData.entrepriseData.philosophy || '',
-              status: 'en_attente',
+              status: 'valide',
               createdAt: new Date().toISOString(),
               followers: []
             });
@@ -1810,7 +1810,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             photos: estData.photos || [],
             tags: estData.tags || [],
             geolocation: estData.geolocation || '',
-            status: 'en_attente',
+            status: 'valide',
             averageRating: 0
           };
           if (userData.role === 'salon_coiffure' || estData.category === 'salon_de_coiffure') {
@@ -1832,7 +1832,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             logo: entrepriseData.logo || '',
             description: entrepriseData.description || '',
             philosophy: entrepriseData.philosophy || '',
-            status: 'en_attente'
+            status: 'valide'
           });
           if (entError) console.warn("Could not insert entreprise in Supabase:", entError);
         } catch (error) {
@@ -1891,7 +1891,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       await addDoc(collection(db, 'establishments'), {
         ...est,
-        status: 'en_attente',
+        status: 'valide',
         averageRating: 0
       });
     } catch (error) {

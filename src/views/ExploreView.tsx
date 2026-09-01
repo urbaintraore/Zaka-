@@ -116,7 +116,8 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
   };
 
   const filtered = establishments.filter(est => {
-    if (est.status !== 'valide') return false;
+    const isOwner = currentUser && est.ownerId === currentUser.id;
+    if (est.status !== 'valide' && !isOwner) return false;
     if (category !== 'all' && est.category !== category) return false;
     if (search) {
       const searchLower = search.toLowerCase();
@@ -306,8 +307,15 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
               >
                 <div className="h-40 bg-gray-200 relative">
                   <img src={est.photos[0] || 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800'} alt={est.name} className="w-full h-full object-cover" />
-                  <div className="absolute top-3 right-3 bg-white/90 backdrop-blur px-2.5 py-1 rounded-lg text-sm font-bold text-gray-900 flex items-center gap-1 shadow-sm">
-                    <span className="text-yellow-500">★</span> {est.averageRating.toFixed(1)}
+                  <div className="absolute top-3 right-3 flex flex-col items-end gap-2">
+                    <div className="bg-white/90 backdrop-blur px-2.5 py-1 rounded-lg text-sm font-bold text-gray-900 flex items-center gap-1 shadow-sm">
+                      <span className="text-yellow-500">★</span> {est.averageRating.toFixed(1)}
+                    </div>
+                    {est.status === 'en_attente' && (
+                      <div className="bg-orange-500 text-white text-[10px] font-black px-2 py-1 rounded-lg shadow-sm animate-pulse">
+                        EN ATTENTE
+                      </div>
+                    )}
                   </div>
                   <div className="absolute top-3 left-3 flex gap-2">
                     {currentUser && (
