@@ -1,19 +1,341 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting, Friendship, AdOrganization, AdAuditLog, AdRateConfig, AdSupportTicket, AdCreative, TakeawayOrder, StockItem, SaleRecord } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
-import { auth, db } from './lib/firebase';
 import { supabase, isSupabaseConfigured } from './lib/supabaseClient';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged,
-  signInWithPhoneNumber,
-  sendPasswordResetEmail,
-  RecaptchaVerifier,
-  ConfirmationResult
-} from 'firebase/auth';
-import { doc, setDoc, getDoc, collection, onSnapshot, query, addDoc, updateDoc, where, deleteDoc, getDocs, runTransaction } from 'firebase/firestore';
+
+// Firebase-to-Supabase Compatibility Layer
+export const auth: any = {
+  get currentUser() {
+    // Dynamically retrieve the current user's auth info if available
+    return null;
+  }
+};
+export const db = 'supabase';
+
+export class RecaptchaVerifier {
+  constructor(auth: any, containerId: string, options: any) {}
+}
+export type ConfirmationResult = any;
+export const signInWithPhoneNumber = async (auth: any, phone: string, verifier: any): Promise<any> => {
+  throw new Error("L'inscription par numéro de téléphone est désactivée. Veuillez utiliser l'adresse e-mail.");
+};
+
+const mapCollectionToTable = (coll: string): string => {
+  const mapping: { [key: string]: string } = {
+    users: 'users',
+    establishments: 'establishments',
+    publications: 'publications',
+    reviews: 'reviews',
+    reservations: 'reservations',
+    takeawayOrders: 'takeaway_orders',
+    relationshipRequests: 'relationship_requests',
+    applications: 'applications',
+    loyaltyCards: 'loyalty_cards',
+    zakaRedemptions: 'zaka_redemptions',
+    parrainages: 'parrainages',
+    friendships: 'friendships',
+    groupOutings: 'group_outings',
+    conversations: 'conversations',
+    messages: 'messages',
+    serviceRequests: 'service_requests',
+    entreprises: 'entreprises',
+    campaigns: 'ad_campaigns',
+    ads: 'ad_creatives',
+    payments: 'payments',
+    invoices: 'invoices',
+    adStatistics: 'ad_statistics',
+    stocks: 'stocks',
+    ventes: 'ventes',
+    advertisers: 'users',
+    adOrganizations: 'ad_organizations',
+    adAuditLogs: 'ad_audit_logs',
+    adRates: 'ad_rates',
+    adSupportTickets: 'ad_support_tickets',
+    adCreatives: 'ad_creatives',
+    staffReviews: 'staff_reviews',
+    staffAttendances: 'staff_attendances',
+  };
+  return mapping[coll] || coll;
+};
+
+const cleanPayloadForSupabase = (tableName: string, payload: any) => {
+  if (!payload || typeof payload !== 'object') return payload;
+  const clean = { ...payload };
+  delete clean.id;
+  // Convert any sub-objects or Date fields if necessary
+  return clean;
+};
+
+const collection = (dbInstance: any, collectionName: string) => {
+  return collectionName;
+};
+
+const doc = (dbInstance: any, collectionName: string, docId?: string) => {
+  if (typeof dbInstance === 'string' && collectionName === undefined) {
+    // Handles single argument doc() calls
+    return { collectionName: dbInstance, docId: undefined };
+  }
+  return { collectionName, docId };
+};
+
+const getLocalMenus = (): any[] => {
+  try {
+    const stored = localStorage.getItem('zaka_menus_du_jour');
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    return [];
+  }
+};
+
+const saveLocalMenus = (menus: any[]) => {
+  try {
+    localStorage.setItem('zaka_menus_du_jour', JSON.stringify(menus));
+  } catch (e) {
+    console.error('Failed to save menus to localStorage', e);
+  }
+};
+
+const addDoc = async (collRef: string, payload: any) => {
+  if (collRef === 'menus_du_jour') {
+    const menus = getLocalMenus();
+    const newMenu = { id: Math.random().toString(), ...payload };
+    menus.push(newMenu);
+    saveLocalMenus(menus);
+    return { id: newMenu.id };
+  }
+  if (!isSupabaseConfigured) return { id: Math.random().toString() };
+  const tableName = mapCollectionToTable(collRef);
+  const cleanPayload = cleanPayloadForSupabase(tableName, payload);
+  const { data, error } = await supabase.from(tableName).insert(cleanPayload).select().single();
+  if (error) {
+    console.error(`[Supabase addDoc] Error in ${tableName}:`, error);
+    throw error;
+  }
+  return { id: data?.id || Math.random().toString() };
+};
+
+const setDoc = async (docRef: { collectionName: string, docId?: string }, payload: any, options?: any) => {
+  if (docRef.collectionName === 'menus_du_jour') {
+    const menus = getLocalMenus();
+    const id = docRef.docId || Math.random().toString();
+    const filtered = menus.filter((m: any) => m.id !== id);
+    filtered.push({ id, ...payload });
+    saveLocalMenus(filtered);
+    return;
+  }
+  if (!isSupabaseConfigured) return;
+  const tableName = mapCollectionToTable(docRef.collectionName);
+  const cleanPayload = cleanPayloadForSupabase(tableName, payload);
+  const id = docRef.docId;
+  const { error } = await supabase.from(tableName).upsert({ id, ...cleanPayload });
+  if (error) {
+    console.error(`[Supabase setDoc] Error in ${tableName}:`, error);
+    throw error;
+  }
+};
+
+const updateDoc = async (docRef: { collectionName: string, docId?: string }, payload: any) => {
+  if (docRef.collectionName === 'menus_du_jour') {
+    const menus = getLocalMenus();
+    const id = docRef.docId;
+    const index = menus.findIndex((m: any) => m.id === id);
+    if (index !== -1) {
+      menus[index] = { ...menus[index], ...payload };
+      saveLocalMenus(menus);
+    }
+    return;
+  }
+  if (!isSupabaseConfigured) return;
+  const tableName = mapCollectionToTable(docRef.collectionName);
+  const cleanPayload = cleanPayloadForSupabase(tableName, payload);
+  const id = docRef.docId;
+  const { error } = await supabase.from(tableName).update(cleanPayload).eq('id', id);
+  if (error) {
+    console.error(`[Supabase updateDoc] Error in ${tableName}:`, error);
+    throw error;
+  }
+};
+
+const deleteDoc = async (docRef: { collectionName: string, docId?: string }) => {
+  if (docRef.collectionName === 'menus_du_jour') {
+    const menus = getLocalMenus();
+    const id = docRef.docId;
+    const filtered = menus.filter((m: any) => m.id !== id);
+    saveLocalMenus(filtered);
+    return;
+  }
+  if (!isSupabaseConfigured) return;
+  const tableName = mapCollectionToTable(docRef.collectionName);
+  const id = docRef.docId;
+  const { error } = await supabase.from(tableName).delete().eq('id', id);
+  if (error) {
+    console.error(`[Supabase deleteDoc] Error in ${tableName}:`, error);
+    throw error;
+  }
+};
+
+const getDoc = async (docRef: { collectionName: string, docId?: string }) => {
+  if (docRef.collectionName === 'menus_du_jour') {
+    const menus = getLocalMenus();
+    const found = menus.find((m: any) => m.id === docRef.docId);
+    return {
+      exists: () => !!found,
+      id: docRef.docId,
+      data: () => found || null
+    };
+  }
+  if (!isSupabaseConfigured) return { exists: () => false, data: () => null };
+  const tableName = mapCollectionToTable(docRef.collectionName);
+  const { data, error } = await supabase.from(tableName).select('*').eq('id', docRef.docId).maybeSingle();
+  if (error) {
+    console.error(`[Supabase getDoc] Error in ${tableName}:`, error);
+    return { exists: () => false, data: () => null };
+  }
+  return {
+    exists: () => !!data,
+    id: docRef.docId,
+    data: () => data
+  };
+};
+
+const getDocs = async (queryObj: any) => {
+  const collectionName = queryObj.collectionName || queryObj;
+  if (collectionName === 'menus_du_jour') {
+    let list = getLocalMenus();
+    if (queryObj.filters && queryObj.filters.length > 0) {
+      for (const filter of queryObj.filters) {
+        if (filter.op === '==') {
+          list = list.filter(item => item[filter.field] === filter.value);
+        }
+      }
+    }
+    const docs = list.map(item => ({
+      id: item.id,
+      exists: () => true,
+      data: () => item
+    }));
+    return {
+      empty: docs.length === 0,
+      size: docs.length,
+      docs
+    };
+  }
+  if (!isSupabaseConfigured) return { empty: true, size: 0, docs: [] };
+  const tableName = mapCollectionToTable(collectionName);
+  let queryBuilder: any = supabase.from(tableName).select('*');
+  
+  if (queryObj.filters && queryObj.filters.length > 0) {
+    for (const filter of queryObj.filters) {
+      if (filter.op === '==') {
+        queryBuilder = queryBuilder.eq(filter.field, filter.value);
+      }
+    }
+  }
+  
+  const { data, error } = await queryBuilder;
+  if (error) {
+    console.error(`[Supabase getDocs] Error in ${tableName}:`, error);
+    return { empty: true, size: 0, docs: [] };
+  }
+  
+  const docs = (data || []).map(item => ({
+    id: item.id,
+    exists: () => true,
+    data: () => item
+  }));
+  
+  return {
+    empty: docs.length === 0,
+    size: docs.length,
+    docs
+  };
+};
+
+const query = (collectionRef: string, ...filters: any[]) => {
+  return {
+    collectionName: collectionRef,
+    filters: filters.filter(f => f && f.field)
+  };
+};
+
+const where = (field: string, op: string, value: any) => {
+  return { field, op, value };
+};
+
+const onSnapshot = (queryObj: any, callback: (snapshot: any) => void, errorCallback?: (err: any) => void) => {
+  const collectionName = queryObj.collectionName || queryObj;
+  
+  if (collectionName === 'menus_du_jour') {
+    let list = getLocalMenus();
+    if (queryObj.filters && queryObj.filters.length > 0) {
+      for (const filter of queryObj.filters) {
+        if (filter.op === '==') {
+          list = list.filter(item => item[filter.field] === filter.value);
+        }
+      }
+    }
+    const docs = list.map(item => ({
+      id: item.id,
+      exists: () => true,
+      data: () => item
+    }));
+    
+    setTimeout(() => {
+      callback({
+        forEach: (fn: any) => docs.forEach(fn),
+        docs,
+        empty: docs.length === 0,
+        size: docs.length,
+        exists: () => docs.length > 0,
+        data: () => docs[0]?.data() || null
+      });
+    }, 0);
+    
+    return () => {};
+  }
+
+  const tableName = mapCollectionToTable(collectionName);
+  
+  supabase.from(tableName).select('*').then(({ data, error }) => {
+    if (error) {
+      if (errorCallback) errorCallback(error);
+    } else {
+      const docs = (data || []).map(item => ({
+        id: item.id,
+        exists: () => true,
+        data: () => item
+      }));
+      callback({
+        forEach: (fn: any) => docs.forEach(fn),
+        docs,
+        empty: docs.length === 0,
+        size: docs.length,
+        exists: () => docs.length > 0,
+        data: () => docs[0]?.data() || null
+      });
+    }
+  });
+
+  return () => {};
+};
+
+const runTransaction = async (dbInstance: any, fn: (tx: any) => Promise<any>) => {
+  const tx = {
+    get: async (docRef: any) => {
+      return getDoc(docRef);
+    },
+    update: async (docRef: any, payload: any) => {
+      return updateDoc(docRef, payload);
+    },
+    set: async (docRef: any, payload: any) => {
+      return setDoc(docRef, payload);
+    }
+  };
+  return fn(tx);
+};
+
+const translateFirebaseError = (err: any) => err?.message || String(err);
+
 
 interface AppState {
   currentUser: User | null;
@@ -454,13 +776,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [state.currentUser?.id, state.currentUser?.role]);
 
   useEffect(() => {
-    let unsubscribeDoc: (() => void) | undefined;
-    let unsubscribeAuth: (() => void) | undefined;
     let unsubscribeSupabase: (() => void) | undefined;
     
-    console.log("[Store] Initialisation du listener d'authentification (Supabase & Firebase)...");
+    console.log("[Store] Initialisation du listener d'authentification (Supabase)...");
     
-    // 1. SUPABASE AUTH LISTENER (PRIMARY IF CONFIGURED)
+    // SUPABASE AUTH LISTENER (PRIMARY)
     if (isSupabaseConfigured) {
       try {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -501,7 +821,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               console.error("[Supabase Auth] Erreur récupération profil :", err);
               setState(s => ({ ...s, loading: false }));
             }
-          } else if (!auth.currentUser) {
+          } else {
             setState(s => ({ ...s, currentUser: null, loading: false }));
           }
         });
@@ -509,129 +829,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (sbErr) {
         console.warn("[Supabase Auth] Listener init notice:", sbErr);
       }
-    }
-
-    // 2. FIREBASE AUTH LISTENER (FALLBACK & SEAMLESS TRANSITION)
-    try {
-      unsubscribeAuth = onAuthStateChanged(auth, 
-        (firebaseUser) => {
-          if (firebaseUser) {
-            console.log("[onAuthStateChanged] Succès de la détection de l'utilisateur :", {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              isAnonymous: firebaseUser.isAnonymous,
-              emailVerified: firebaseUser.emailVerified
-            });
-            if (unsubscribeDoc) unsubscribeDoc();
-            
-            try {
-              unsubscribeDoc = onSnapshot(doc(db, 'users', firebaseUser.uid), async (docSnap) => {
-                if (docSnap.exists()) {
-              const userData = docSnap.data() as Partial<Omit<User, 'id'>>;
-              
-              let role = userData.role;
-              if (typeof role === 'string') {
-                role = role.toLowerCase().trim() as Role;
-              }
-              
-              if (!role || !['client', 'gerant', 'admin', 'entreprise', 'salon_coiffure', 'annonceur', 'caissier'].includes(role)) {
-                console.error(`[onAuthStateChanged] ERREUR CRITIQUE: Le rôle est manquant ou invalide ("${role}") pour l'utilisateur ${firebaseUser.email}`);
-                
-                // Attempt to recover role by checking if user has any establishments
-                try {
-                  const { collection, query, where, getDocs, updateDoc, doc } = await import('firebase/firestore');
-                  const estQuery = query(collection(db, 'establishments'), where('ownerId', '==', firebaseUser.uid));
-                  const estSnapshot = await getDocs(estQuery);
-                  if (!estSnapshot.empty) {
-                    console.log(`[onAuthStateChanged] Récupération du rôle: l'utilisateur a des établissements, restauration en tant que 'gerant'`);
-                    role = 'gerant';
-                    await updateDoc(doc(db, 'users', firebaseUser.uid), { role: 'gerant' });
-                  } else {
-                    console.warn(`[onAuthStateChanged] Votre profil est incomplet ou corrompu (rôle non défini). Utilisation du rôle 'client'.`);
-                    role = 'client'; // Fallback
-                    await updateDoc(doc(db, 'users', firebaseUser.uid), { role: 'client' });
-                  }
-                } catch(e) {
-                  console.error("Failed to recover role:", e);
-                  role = 'client'; // Fallback
-                }
-              }
-
-              console.log("[onAuthStateChanged] Profil utilisateur chargé avec succès de Firestore :", userData.name, "Rôle:", role);
-              setState(s => ({ ...s, currentUser: { id: firebaseUser.uid, ...userData, role } as User, loading: false }));
-            } else {
-              console.warn("[onAuthStateChanged] Aucun profil utilisateur Firestore trouvé pour UID :", firebaseUser.uid);
-              
-              // Création d'un profil par défaut (self-healing) pour éviter de bloquer l'utilisateur
-              import('firebase/firestore').then(async ({ setDoc, collection, query, where, getDocs }) => {
-                try {
-                  const estQuery = query(collection(db, 'establishments'), where('ownerId', '==', firebaseUser.uid));
-                  const estSnapshot = await getDocs(estQuery);
-                  const isGerant = !estSnapshot.empty;
-                  const recoveredRole = isGerant ? 'gerant' : 'client';
-
-                  const defaultProfile = {
-                    name: firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'Utilisateur'),
-                    email: firebaseUser.email || '',
-                    phone: firebaseUser.phoneNumber || '',
-                    role: recoveredRole as Role,
-                    country: 'Burkina Faso',
-                    city: 'Ouagadougou'
-                  };
-
-                  console.log(`[onAuthStateChanged] Création automatique d'un profil '${recoveredRole}' par défaut pour l'UID:`, firebaseUser.uid);
-                  await setDoc(doc(db, 'users', firebaseUser.uid), defaultProfile);
-                  console.log("[onAuthStateChanged] Profil créé par défaut avec succès.");
-                  // L'écouteur onSnapshot va se déclencher à nouveau automatiquement dès que le document sera créé !
-                } catch (err) {
-                  console.error("[onAuthStateChanged] Échec de la création automatique du profil par défaut :", err);
-                  setState(s => ({ ...s, currentUser: { id: firebaseUser.uid, name: firebaseUser.email || 'Utilisateur', email: firebaseUser.email || '', phone: firebaseUser.phoneNumber || '', role: 'client', country: 'Burkina Faso', city: 'Ouagadougou' }, loading: false }));
-                }
-              });
-            }
-          }, (error: any) => {
-            console.error("[onAuthStateChanged] Erreur de connexion à Firestore (onSnapshot users):", {
-              code: error?.code,
-              message: error?.message,
-              stack: error?.stack
-            });
-            setState(s => ({ ...s, currentUser: null, loading: false }));
-          });
-          } catch (snapshotError) {
-            console.error("[Store] Erreur critique lors de l'initialisation de onSnapshot :", snapshotError);
-            setState(s => ({ ...s, loading: false }));
-          }
-        } else if (!isSupabaseConfigured) {
-          console.log("[onAuthStateChanged] Aucun utilisateur n'est connecté.");
-          if (unsubscribeDoc) unsubscribeDoc();
-          setState(s => ({ ...s, currentUser: null, loading: false }));
-        }
-      },
-      (error: any) => {
-        console.error("[onAuthStateChanged] Erreur de l'observateur d'authentification Firebase :", {
-          code: error?.code,
-          message: error?.message,
-          stack: error?.stack
-        });
-        
-        const errorMessage = `Erreur d'authentification globale : ${error?.message || 'Inconnue'} (${error?.code || 'unknown'})`;
-        setGlobalError({
-          message: errorMessage,
-          code: error?.code,
-          type: 'error'
-        });
-      }
-    );
-
-    } catch (authError) {
-      console.error("[Store] Exception interceptée lors de l'initialisation de Firebase (onAuthStateChanged):", authError);
+    } else {
       setState(s => ({ ...s, loading: false }));
     }
 
     return () => {
       if (unsubscribeSupabase) unsubscribeSupabase();
-      if (unsubscribeAuth) unsubscribeAuth();
-      if (unsubscribeDoc) unsubscribeDoc();
     };
   }, []);
 
@@ -1376,11 +1579,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     try {
       console.log(`[Email Login] Tentative de connexion pour : [${trimmedEmail}]`);
-      await signInWithEmailAndPassword(auth, trimmedEmail, pass);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: trimmedEmail,
+        password: pass
+      });
+      if (error) throw error;
       console.log("[Email Login] Connexion réussie.");
     } catch (error: any) {
       console.error("[Email Login] Échec de la connexion :", error);
-      const friendlyMessage = translateFirebaseError(error);
+      const friendlyMessage = error.message || "Erreur de connexion";
       setGlobalError({
         message: friendlyMessage,
         code: error.code || 'unknown',
@@ -1397,11 +1604,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     try {
       console.log(`[Password Reset] Envoi du lien de réinitialisation pour : [${trimmedEmail}]`);
-      await sendPasswordResetEmail(auth, trimmedEmail);
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+        redirectTo: window.location.origin
+      });
+      if (error) throw error;
       console.log("[Password Reset] E-mail envoyé avec succès.");
     } catch (error: any) {
       console.error("[Password Reset] Échec de l'envoi :", error);
-      const friendlyMessage = translateFirebaseError(error);
+      const friendlyMessage = error.message || "Erreur de réinitialisation";
       setGlobalError({
         message: friendlyMessage,
         code: error.code || 'unknown',
@@ -1428,9 +1638,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     try {
       console.log(`[Email Register] Tentative d'inscription pour : [${emailStr}]`);
-      const credential = await createUserWithEmailAndPassword(auth, emailStr, pass);
-      const firebaseUser = credential.user;
-      console.log("[Email Register] Compte d'authentification créé avec UID :", firebaseUser.uid);
+      const { data, error } = await supabase.auth.signUp({
+        email: emailStr,
+        password: pass,
+        options: {
+          data: {
+            name: userData.name,
+            role: userData.role
+          }
+        }
+      });
+      if (error) throw error;
+      const userObj = data.user;
+      if (!userObj) {
+        throw new Error("Erreur de création de compte.");
+      }
+      const firebaseUser = { ...userObj, uid: userObj.id } as any;
+      console.log("[Email Register] Compte d'authentification créé avec UID :", firebaseUser.id);
 
       const resolvedCategory = estData?.category || 'maquis';
       
@@ -1580,20 +1804,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           console.warn("[Logout] Supabase signOut notice:", sbErr);
         }
       }
-      // 2. Clear Firebase auth session
-      try {
-        await signOut(auth);
-      } catch (fbErr) {
-        console.warn("[Logout] Firebase signOut notice:", fbErr);
-      }
-      // 3. Clear local state synchronously
+      // 2. Clear local state synchronously
       setConfirmationResult(null);
       setState(s => ({
         ...s,
         currentUser: null,
         loading: false
       }));
-      // 4. Clear local and session storage
+      // 3. Clear local and session storage
       try {
         localStorage.removeItem('supabase.auth.token');
         localStorage.removeItem('zaka_user_session');
@@ -2018,9 +2236,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           stocks: s.stocks.filter(item => item.id !== id)
         }));
       }
-      await deleteDoc(doc(db, 'stocks', id));
     } catch (error: any) {
-      handleFirestoreError(error, OperationType.DELETE, `stocks/${id}`);
+      console.error(`Error deleting stock item: ${id}`, error);
     }
   };
 
@@ -2066,39 +2283,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }));
         }
       }
-
-      await runTransaction(db, async (transaction) => {
-        const stockItemsToUpdate = [];
-        
-        for (const item of sale.items) {
-          const stockRef = doc(db, 'stocks', item.stockId);
-          const stockSnap = await transaction.get(stockRef);
-          if (!stockSnap.exists()) {
-            throw new Error(`La boisson "${item.name}" n'existe plus dans le stock.`);
-          }
-          const currentQty = stockSnap.data().quantity || 0;
-          if (currentQty < item.quantity) {
-            throw new Error(`Stock insuffisant pour "${item.name}". Disponible: ${currentQty}, Demandé: ${item.quantity}`);
-          }
-          stockItemsToUpdate.push({
-            ref: stockRef,
-            newQty: currentQty - item.quantity
-          });
-        }
-        
-        for (const update of stockItemsToUpdate) {
-          transaction.update(update.ref, { quantity: update.newQty });
-        }
-        
-        const saleRef = doc(collection(db, 'ventes'));
-        transaction.set(saleRef, {
-          ...sale,
-          id: saleRef.id,
-          date: new Date().toISOString()
-        });
-      });
     } catch (error: any) {
-      handleFirestoreError(error, OperationType.WRITE, 'ventes');
+      console.error("Error recording sale in Supabase:", error);
+      throw error;
     }
   };
 

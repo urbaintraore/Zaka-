@@ -266,7 +266,7 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
       `---------------------------\n` +
       `🏢 Établissement : *${est?.name || 'Notre établissement'}*\n` +
       `📅 Date : ${new Date(sale.date).toLocaleString('fr-FR')}\n` +
-      `👤 Caissier : ${sale.cashierName || 'Staff'}\n` +
+      `👤 Caissier : ${sale.cashierName || 'Staff'} (de ${est?.name || 'Zaka+'})\n` +
       `🧾 Réf : #${sale.id.slice(0, 8)}\n` +
       `---------------------------\n` +
       `*Articles vendus :*\n${itemsText}\n` +

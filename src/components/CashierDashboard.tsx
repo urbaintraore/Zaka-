@@ -220,7 +220,7 @@ export function CashierDashboard({ establishmentId: propEstId, onLogout }: Cashi
       `---------------------------\n` +
       `🏢 Établissement : *${currentEst?.name || 'Notre établissement'}*\n` +
       `📅 Date : ${new Date(sale.date).toLocaleString('fr-FR')}\n` +
-      `👤 Caissier : ${sale.cashierName || 'Staff'}\n` +
+      `👤 Caissier : ${sale.cashierName || 'Staff'} (de ${currentEst?.name || 'Zaka+'})\n` +
       `🧾 Réf : #${sale.id.slice(0, 8)}\n` +
       `---------------------------\n` +
       `*Articles vendus :*\n${itemsText}\n` +
@@ -243,10 +243,10 @@ export function CashierDashboard({ establishmentId: propEstId, onLogout }: Cashi
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base sm:text-lg font-black text-gray-950 dark:text-white">
-                  Espace Caisse & Stocks
+                  Espace Caisse & Stocks {currentEst ? `— ${currentEst.name}` : ''}
                 </h2>
                 <span className="px-2.5 py-0.5 bg-orange-100 text-orange-800 dark:bg-orange-950/50 dark:text-orange-300 rounded-full text-[10px] font-black uppercase">
-                  {isOwner ? "Supervision Gérant" : "Caissier Dédié"}
+                  {isOwner ? "Supervision Gérant" : `Caissier Dédié • ${currentEst?.name || 'Zaka+'}`}
                 </span>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -572,7 +572,7 @@ export function CashierDashboard({ establishmentId: propEstId, onLogout }: Cashi
                         </div>
                         <div className="flex justify-between">
                           <span>Caissier :</span>
-                          <span>{viewingReceiptSale.cashierName || 'Staff'}</span>
+                          <span>{viewingReceiptSale.cashierName || 'Staff'} (de {currentEst?.name || 'Zaka+'})</span>
                         </div>
                       </div>
 

@@ -236,7 +236,7 @@ export async function generateReceiptBlob(
 
   ctx.fillText(`Serveur(se) : ${serverName}`, padding, currentY);
   ctx.textAlign = 'right';
-  ctx.fillText(`Caissier: ${sale.cashierName || 'Caisse'}`, width - padding, currentY);
+  ctx.fillText(`Caissier: ${sale.cashierName || 'Caisse'} (${estName})`, width - padding, currentY);
   ctx.textAlign = 'left';
   currentY += 24;
 
