@@ -330,6 +330,24 @@ CREATE TABLE IF NOT EXISTS public.entreprises (
     "createdAt" TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
+CREATE TABLE IF NOT EXISTS public.ad_organizations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    logo TEXT,
+    type TEXT NOT NULL,
+    sector TEXT NOT NULL,
+    country TEXT DEFAULT 'Burkina Faso',
+    city TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    email TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'en_attente',
+    "ownerId" UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    members JSONB DEFAULT '[]'::jsonb,
+    "clientIds" UUID[] DEFAULT '{}',
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
 CREATE TABLE IF NOT EXISTS public.ad_campaigns (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     "advertiserId" UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -340,22 +358,64 @@ CREATE TABLE IF NOT EXISTS public.ad_campaigns (
     "startDate" TEXT NOT NULL,
     "endDate" TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'draft',
+    targeting JSONB DEFAULT '{}'::jsonb,
     "createdAt" TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
 CREATE TABLE IF NOT EXISTS public.ad_creatives (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "campaignId" UUID NOT NULL REFERENCES public.ad_campaigns(id) ON DELETE CASCADE,
+    "campaignId" UUID REFERENCES public.ad_campaigns(id) ON DELETE CASCADE,
     "advertiserId" UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    "organizationId" UUID REFERENCES public.ad_organizations(id) ON DELETE SET NULL,
     title TEXT NOT NULL,
-    headline TEXT NOT NULL,
+    headline TEXT,
     description TEXT,
     "mediaUrl" TEXT,
     "targetUrl" TEXT,
     "ctaText" TEXT NOT NULL DEFAULT 'En savoir plus',
     status TEXT NOT NULL DEFAULT 'pending',
     "createdAt" TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE TABLE IF NOT EXISTS public.ad_audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "userId" UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    "userName" TEXT NOT NULL,
+    action TEXT NOT NULL,
+    "resourceType" TEXT NOT NULL,
+    "resourceId" TEXT NOT NULL,
+    details TEXT,
+    "previousValue" TEXT,
+    "newValue" TEXT,
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE TABLE IF NOT EXISTS public.ad_rates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    placement TEXT NOT NULL,
+    "placementLabel" TEXT NOT NULL,
+    "cpmPrice" NUMERIC(10, 2) NOT NULL DEFAULT 0.0,
+    "cpcPrice" NUMERIC(10, 2) NOT NULL DEFAULT 0.0,
+    "dailyPrice" NUMERIC(10, 2) NOT NULL DEFAULT 0.0,
+    "minBudget" NUMERIC(10, 2) NOT NULL DEFAULT 0.0,
+    "maxBudget" NUMERIC(10, 2),
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE TABLE IF NOT EXISTS public.ad_support_tickets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "advertiserId" UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    "advertiserName" TEXT NOT NULL,
+    "campaignId" UUID REFERENCES public.ad_campaigns(id) ON DELETE SET NULL,
+    subject TEXT NOT NULL,
+    category TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ouvert',
+    priority TEXT NOT NULL DEFAULT 'moyenne',
+    messages JSONB DEFAULT '[]'::jsonb,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
 CREATE TABLE IF NOT EXISTS public.payments (
@@ -385,12 +445,41 @@ CREATE TABLE IF NOT EXISTS public.ad_statistics (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     "campaignId" UUID NOT NULL REFERENCES public.ad_campaigns(id) ON DELETE CASCADE,
     "creativeId" UUID REFERENCES public.ad_creatives(id) ON DELETE SET NULL,
+    "advertiserId" UUID REFERENCES public.users(id) ON DELETE CASCADE,
     date DATE NOT NULL,
     impressions INTEGER NOT NULL DEFAULT 0,
     clicks INTEGER NOT NULL DEFAULT 0,
+    views INTEGER NOT NULL DEFAULT 0,
     conversions INTEGER NOT NULL DEFAULT 0,
     spent NUMERIC(10, 2) NOT NULL DEFAULT 0.0,
     UNIQUE("campaignId", "creativeId", date)
+);
+
+CREATE TABLE IF NOT EXISTS public.staff_reviews (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "establishmentId" UUID NOT NULL REFERENCES public.establishments(id) ON DELETE CASCADE,
+    "staffId" UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    "clientId" UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    "clientName" TEXT NOT NULL,
+    rating INTEGER NOT NULL,
+    comment TEXT,
+    status TEXT NOT NULL DEFAULT 'en_attente',
+    "managerNote" TEXT,
+    "bonusOrSanction" JSONB,
+    date TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE TABLE IF NOT EXISTS public.staff_attendances (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "establishmentId" UUID NOT NULL REFERENCES public.establishments(id) ON DELETE CASCADE,
+    "staffId" UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    period TEXT NOT NULL,
+    "lateMinutes" INTEGER DEFAULT 0,
+    "earlyDepartureMinutes" INTEGER DEFAULT 0,
+    justification TEXT,
+    "justificationPhotoUrl" TEXT,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
 -- =============================================================================
@@ -398,11 +487,13 @@ CREATE TABLE IF NOT EXISTS public.ad_statistics (
 -- =============================================================================
 
 ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "isCaissier" BOOLEAN DEFAULT false;
+ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "isServeur" BOOLEAN DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS public.stocks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     "establishmentId" UUID NOT NULL REFERENCES public.establishments(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
+    category TEXT DEFAULT 'boisson',
     price NUMERIC(10, 2) NOT NULL DEFAULT 0.0,
     quantity INTEGER NOT NULL DEFAULT 0,
     stock_faible BOOLEAN NOT NULL DEFAULT false,

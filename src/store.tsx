@@ -62,6 +62,34 @@ const cleanPayloadForSupabase = (tableName: string, payload: any) => {
   if (!payload || typeof payload !== 'object') return payload;
   const clean = { ...payload };
   delete clean.id;
+  
+  if (tableName === 'establishments') {
+    Object.keys(clean).forEach(k => {
+      if (clean[k] === undefined || clean[k] === null) {
+        delete clean[k];
+      }
+    });
+    // Let's ensure default JSONB is handled cleanly if it's missing or empty, although our DB has defaults.
+    // We also make sure camelCase maps properly to quoted camelCase in DB.
+  }
+  
+  if (tableName === 'entreprises') {
+     Object.keys(clean).forEach(k => {
+      if (clean[k] === undefined) {
+        delete clean[k];
+      }
+    });
+  }
+  
+  Object.keys(clean).forEach(k => {
+     if (clean[k] === undefined || clean[k] === null || clean[k] === '') {
+       // Optional: We can delete empty strings for numbers but keeping it simple
+       if (clean[k] === undefined) {
+         delete clean[k];
+       }
+     }
+  });
+  
   // Convert any sub-objects or Date fields if necessary
   return clean;
 };
@@ -108,7 +136,8 @@ const addDoc = async (collRef: string, payload: any) => {
   const cleanPayload = cleanPayloadForSupabase(tableName, payload);
   const { data, error } = await supabase.from(tableName).insert(cleanPayload).select().single();
   if (error) {
-    console.error(`[Supabase addDoc] Error in ${tableName}:`, error);
+    console.error(`[Supabase addDoc] Error in ${tableName} payload:`, cleanPayload, error);
+    console.error(`[Supabase addDoc] Error details:`, error.message, error.details, error.hint);
     throw error;
   }
   return { id: data?.id || Math.random().toString() };
@@ -295,6 +324,20 @@ const onSnapshot = (queryObj: any, callback: (snapshot: any) => void, errorCallb
   }
 
   const tableName = mapCollectionToTable(collectionName);
+  
+  if (!isSupabaseConfigured) {
+    setTimeout(() => {
+      callback({
+        forEach: (fn: any) => [],
+        docs: [],
+        empty: true,
+        size: 0,
+        exists: () => false,
+        data: () => null
+      });
+    }, 0);
+    return () => {};
+  }
   
   supabase.from(tableName).select('*').then(({ data, error }) => {
     if (error) {
@@ -514,8 +557,12 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errorMessage = error instanceof Error 
+    ? error.message 
+    : (typeof error === 'object' && error !== null ? JSON.stringify(error) : String(error));
+    
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errorMessage,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -1849,6 +1896,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
     } catch (error) {
       console.error("Erreur ajout etablissement:", error);
+      throw error;
     }
   };
 

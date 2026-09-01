@@ -241,6 +241,7 @@ export interface AdDailyStat {
   clicks: number;
   views: number;
   conversions: number;
+  spent: number;
 }
 
 export interface Coiffeur {

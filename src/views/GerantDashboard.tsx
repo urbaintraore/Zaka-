@@ -171,16 +171,16 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
       category: estCategory,
       country: estCountry,
       city: estCity,
-      neighborhood: estNeighborhood,
+      neighborhood: estNeighborhood || '',
       address: '', // default
       phone: currentUser.phone || currentUser.email || '',
-      description: estDescription,
+      description: estDescription || '',
       photos,
       tags,
-      geolocation: estGeolocation,
-      openingHours: estOpeningHours,
-      menuPdfUrl: estMenuPdfUrl,
-      menuImages: estMenuImages
+      geolocation: estGeolocation || '',
+      openingHours: estOpeningHours || '',
+      menuPdfUrl: estMenuPdfUrl || '',
+      menuImages: estMenuImages || []
     };
 
     try {
@@ -189,14 +189,15 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
       } else {
         await addEstablishment(estData);
       }
-    } catch (err) {
+      setIsAdding(false);
+      setEditingEstId(null);
+      // Reset form
+      setEstName('');
+    } catch (err: any) {
       console.error("Error saving establishment:", err);
+      alert("Erreur lors de l'enregistrement: " + (err.message || 'Erreur inconnue'));
+      // on ne ferme pas le formulaire pour laisser l'utilisateur réessayer
     }
-    
-    setIsAdding(false);
-    setEditingEstId(null);
-    // Reset form
-    setEstName('');
     setEstCategory('maquis');
     setEstCountry(currentUser?.country || 'Burkina Faso');
     setEstCity(currentUser?.city || '');
