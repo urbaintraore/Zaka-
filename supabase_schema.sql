@@ -415,8 +415,31 @@ CREATE TABLE IF NOT EXISTS public.ventes (
     "establishmentId" UUID NOT NULL REFERENCES public.establishments(id) ON DELETE CASCADE,
     "cashierId" UUID REFERENCES public.users(id) ON DELETE SET NULL,
     "cashierName" TEXT NOT NULL DEFAULT 'Caissier',
+    "serverName" TEXT,
+    "tableNote" TEXT,
+    "clientType" TEXT DEFAULT 'Ordinaire',
     items JSONB NOT NULL DEFAULT '[]'::jsonb,
+    "subtotalBoissons" NUMERIC(10, 2),
+    "subtotalCuisine" NUMERIC(10, 2),
+    "totalAchat" NUMERIC(10, 2),
+    "discountAmount" NUMERIC(10, 2) DEFAULT 0.0,
     "totalAmount" NUMERIC(10, 2) NOT NULL DEFAULT 0.0,
+    "paidAmount" NUMERIC(10, 2),
+    "changeAmount" NUMERIC(10, 2),
+    "avoirAmount" NUMERIC(10, 2),
+    "mobileMoneyCode" TEXT,
     date TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
+
+ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "serverName" TEXT;
+ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "tableNote" TEXT;
+ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "clientType" TEXT DEFAULT 'Ordinaire';
+ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "subtotalBoissons" NUMERIC(10, 2);
+ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "subtotalCuisine" NUMERIC(10, 2);
+ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "totalAchat" NUMERIC(10, 2);
+ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "discountAmount" NUMERIC(10, 2) DEFAULT 0.0;
+ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "paidAmount" NUMERIC(10, 2);
+ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "changeAmount" NUMERIC(10, 2);
+ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "avoirAmount" NUMERIC(10, 2);
+ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "mobileMoneyCode" TEXT;
 

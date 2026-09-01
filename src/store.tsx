@@ -2043,8 +2043,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
           establishmentId: sale.establishmentId,
           cashierId: sale.cashierId,
           cashierName: sale.cashierName || 'Caissier',
+          serverName: sale.serverName || null,
+          tableNote: sale.tableNote || null,
+          clientType: sale.clientType || 'Ordinaire',
           items: sale.items,
+          subtotalBoissons: sale.subtotalBoissons || null,
+          subtotalCuisine: sale.subtotalCuisine || null,
+          totalAchat: sale.totalAchat || null,
+          discountAmount: sale.discountAmount || 0,
           totalAmount: sale.totalAmount,
+          paidAmount: sale.paidAmount || null,
+          changeAmount: sale.changeAmount || null,
+          avoirAmount: sale.avoirAmount || null,
+          mobileMoneyCode: sale.mobileMoneyCode || null,
           date: new Date().toISOString()
         }]).select().single();
 
