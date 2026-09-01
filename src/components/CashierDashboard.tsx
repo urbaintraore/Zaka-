@@ -5,7 +5,7 @@ import {
   ShoppingBag, Package, History, User, Share2, DollarSign, Calendar,
   Filter, ArrowUpDown, ChevronDown, CheckCircle, Printer, X, Eye, TrendingUp,
   Layers, Plus, Minus, Search, AlertTriangle, Download, Image as ImageIcon,
-  Edit2, Trash2, RefreshCw, Store, Check, Sparkles, Utensils, GlassWater, Flame
+  Edit2, Trash2, RefreshCw, Store, Check, Sparkles, Utensils, GlassWater, Flame, LogOut
 } from 'lucide-react';
 import { PointOfSaleView } from './PointOfSaleView';
 import { StockManagerView } from './StockManagerView';
@@ -30,7 +30,8 @@ export function CashierDashboard({ establishmentId: propEstId, onLogout }: Cashi
     addStockItem, 
     updateStockItem, 
     deleteStockItem,
-    recordSale 
+    recordSale,
+    logout 
   } = useAppStore();
 
   // Find establishments where user is an accredited cashier
@@ -246,23 +247,40 @@ export function CashierDashboard({ establishmentId: propEstId, onLogout }: Cashi
             </div>
           </div>
 
-          {/* Establishment Switcher (if multiple or selector needed) */}
-          {assignedEstablishments.length > 1 && (
-            <div className="flex items-center gap-2">
-              <Store className="w-4 h-4 text-orange-600 shrink-0" />
-              <select
-                value={selectedEstId}
-                onChange={e => setSelectedEstId(e.target.value)}
-                className="bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-xs font-bold text-gray-900 dark:text-white rounded-xl px-3 py-2 outline-none cursor-pointer"
-              >
-                {assignedEstablishments.map(est => (
-                  <option key={est.id} value={est.id}>
-                    {est.name} ({est.city})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Right Action Bar: Establishment Switcher & Logout */}
+          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap justify-end">
+            {assignedEstablishments.length > 1 && (
+              <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-950 p-1 rounded-xl border border-gray-200 dark:border-gray-800">
+                <Store className="w-4 h-4 text-orange-600 ml-2 shrink-0" />
+                <select
+                  value={selectedEstId}
+                  onChange={e => setSelectedEstId(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-gray-900 dark:text-white rounded-lg px-2 py-1.5 outline-none cursor-pointer"
+                >
+                  {assignedEstablishments.map(est => (
+                    <option key={est.id} value={est.id}>
+                      {est.name} ({est.city})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <button
+              onClick={async () => {
+                if (onLogout) {
+                  onLogout();
+                } else {
+                  await logout();
+                }
+              }}
+              className="px-3.5 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer border border-red-200/60 dark:border-red-900/60"
+              title="Déconnexion du poste de caisse"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Déconnexion</span>
+            </button>
+          </div>
         </div>
       </div>
 

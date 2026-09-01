@@ -533,7 +533,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 role = role.toLowerCase().trim() as Role;
               }
               
-              if (!role || !['client', 'gerant', 'admin', 'entreprise', 'salon_coiffure', 'annonceur'].includes(role)) {
+              if (!role || !['client', 'gerant', 'admin', 'entreprise', 'salon_coiffure', 'annonceur', 'caissier'].includes(role)) {
                 console.error(`[onAuthStateChanged] ERREUR CRITIQUE: Le rôle est manquant ou invalide ("${role}") pour l'utilisateur ${firebaseUser.email}`);
                 
                 // Attempt to recover role by checking if user has any establishments
@@ -1571,18 +1571,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       console.log("[Logout] Tentative de déconnexion...");
-      await signOut(auth);
+      // 1. Clear Supabase auth session if initialized
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.auth.signOut();
+        } catch (sbErr) {
+          console.warn("[Logout] Supabase signOut notice:", sbErr);
+        }
+      }
+      // 2. Clear Firebase auth session
+      try {
+        await signOut(auth);
+      } catch (fbErr) {
+        console.warn("[Logout] Firebase signOut notice:", fbErr);
+      }
+      // 3. Clear local state synchronously
       setConfirmationResult(null);
+      setState(s => ({
+        ...s,
+        currentUser: null,
+        loading: false
+      }));
+      // 4. Clear local and session storage
+      try {
+        localStorage.removeItem('supabase.auth.token');
+        localStorage.removeItem('zaka_user_session');
+        sessionStorage.clear();
+      } catch (e) {
+        // ignore
+      }
       console.log("[Logout] Déconnecté avec succès.");
     } catch (error: any) {
       console.error("[Logout] Erreur lors de la déconnexion :", error);
-      const friendlyMessage = translateFirebaseError(error);
-      setGlobalError({
-        message: friendlyMessage,
-        code: error.code || 'unknown',
-        type: 'error'
-      });
-      throw new Error(friendlyMessage);
+      // Force local logout regardless of network or SDK errors
+      setConfirmationResult(null);
+      setState(s => ({ ...s, currentUser: null, loading: false }));
     }
   };
 

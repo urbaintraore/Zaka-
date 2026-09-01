@@ -204,28 +204,206 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
 
   if (currentUser) {
     const cashierRequests = relationshipRequests.filter(
-      r => (r.initiatorId === currentUser.id || r.targetId === currentUser.id) &&
+      r => (r.initiatorId === currentUser.id || r.targetId === currentUser.id || (r as any).userId === currentUser.id) &&
       r.status === 'acceptee' &&
       (r.isCaissier === true || r.requestedRole === 'caissier')
     );
     const assignedCashierEsts = establishments.filter(e => cashierRequests.some(r => r.establishmentId === e.id));
     const isAssignedCashier = cashierRequests.length > 0;
+    const isCashierUser = (currentUser.role as any) === 'caissier' || isAssignedCashier || (currentUser as any).isCaissier === true;
 
-    if (showCashierTerminal) {
+    // 1. DEDICATED CASHIER EXPERIENCE (PRIORITIZED OVER ADS/CLIENT VIEWS)
+    // Cashiers must NEVER access ZAKA Ads or advertisement creation
+    if (isCashierUser) {
       return (
-        <div className="pb-24 max-w-5xl mx-auto p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setShowCashierTerminal(false)}
-              className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-bold text-xs hover:bg-gray-200 cursor-pointer"
-            >
-              ← Retour au Profil
-            </button>
-            <span className="text-xs font-black text-orange-600 dark:text-orange-400">
-              🛒 Poste de Caisse Actif
-            </span>
+        <div className="pb-24">
+          {/* Sub Navigation for Cashier: POS & Stocks / Profile */}
+          <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 sticky top-0 z-40 shadow-xs">
+            <div className="max-w-md mx-auto px-4 flex">
+              <button 
+                onClick={() => {
+                  setSubView('dashboard');
+                  setIsEditingProfile(false);
+                }}
+                className={`flex-1 py-4 text-center font-black text-xs sm:text-sm border-b-2 transition-all cursor-pointer ${
+                  subView === 'dashboard' 
+                    ? 'border-orange-600 text-orange-600 dark:text-orange-400' 
+                    : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                }`}
+              >
+                🛒 Espace Caisse & Stocks (POS)
+              </button>
+              <button 
+                onClick={() => {
+                  setSubView('profile');
+                  setEditName(currentUser.name || '');
+                  setEditCity(currentUser.city || '');
+                  setEditCountry(currentUser.country || '');
+                  setEditEmail(currentUser.email || '');
+                  setEditPhone(currentUser.phone || '');
+                  setEditError('');
+                  setIsEditingProfile(false);
+                }}
+                className={`flex-1 py-4 text-center font-bold text-xs sm:text-sm border-b-2 transition-all cursor-pointer ${
+                  subView === 'profile' 
+                    ? 'border-orange-600 text-orange-600 dark:text-orange-400' 
+                    : 'border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                }`}
+              >
+                Mon Profil Caissier
+              </button>
+            </div>
           </div>
-          <CaissierView onLogout={logout} />
+
+          <div className="pt-3 px-2 sm:px-4">
+            {subView === 'dashboard' ? (
+              <CaissierView onLogout={logout} />
+            ) : (
+              <div className="p-2 sm:p-4 max-w-lg mx-auto flex flex-col gap-6">
+                {/* Cashier Profile Card */}
+                <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 sm:p-8 shadow-xs border border-gray-100 dark:border-gray-800 flex flex-col">
+                  {!isEditingProfile ? (
+                    <div className="flex flex-col items-center text-center">
+                      <div className="w-20 h-20 bg-orange-100 dark:bg-orange-950/50 rounded-full flex items-center justify-center mb-4 text-orange-600 dark:text-orange-400 shadow-inner">
+                        <User className="w-10 h-10" />
+                      </div>
+                      <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">{currentUser.name}</h2>
+                      <p className="text-gray-500 dark:text-gray-400 text-sm font-medium mt-0.5">{currentUser.email || currentUser.phone}</p>
+                      <p className="text-gray-400 text-xs mt-1">{currentUser.city}, {currentUser.country}</p>
+                      
+                      <div className="mt-4 px-3.5 py-1.5 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-900/50 text-orange-800 dark:text-orange-300 rounded-full text-xs font-black uppercase tracking-wider">
+                        🛒 Compte Caissier {assignedCashierEsts.length > 0 ? `• ${assignedCashierEsts.map(e => e.name).join(', ')}` : ''}
+                      </div>
+
+                      <div className="mt-7 w-full flex flex-col gap-3">
+                        <button 
+                          onClick={() => setSubView('dashboard')}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 text-white font-black rounded-xl hover:bg-orange-700 transition-colors cursor-pointer shadow-md shadow-orange-600/15"
+                        >
+                          <ShoppingBag className="w-5 h-5" />
+                          <span>Accéder à la Caisse (POS)</span>
+                        </button>
+                        <button 
+                          onClick={startEditing} 
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-bold rounded-xl hover:bg-gray-200 dark:hover:bg-gray-750 transition-colors cursor-pointer"
+                        >
+                          Modifier mes coordonnées
+                        </button>
+                        <button 
+                          onClick={toggleTheme} 
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold rounded-xl hover:bg-gray-200 dark:hover:bg-gray-750 transition-colors cursor-pointer"
+                        >
+                          {theme === 'dark' ? '☀️ Mode Clair' : '🌙 Mode Sombre'}
+                        </button>
+                        <button 
+                          onClick={async () => { await logout(); }} 
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 font-bold rounded-xl transition-colors cursor-pointer border border-red-200/60 dark:border-red-900/60"
+                        >
+                          <LogOut className="w-5 h-5" />
+                          <span>Se Déconnecter</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSaveProfile} className="flex flex-col gap-4">
+                      <h3 className="text-lg font-black text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-800 pb-3 text-center">Modifier mon profil</h3>
+                      
+                      {editError && (
+                        <div className="p-3 bg-red-50 text-red-600 text-sm rounded-xl font-medium border border-red-100">
+                          {editError}
+                        </div>
+                      )}
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-gray-500 ml-1">Nom complet</label>
+                        <input 
+                          type="text" 
+                          required 
+                          value={editName} 
+                          onChange={e => setEditName(e.target.value)} 
+                          className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-950 rounded-xl border border-gray-200 dark:border-gray-800 focus:bg-white focus:border-orange-500 outline-none font-medium transition-all" 
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs font-bold text-gray-500 ml-1">Ville</label>
+                          <input 
+                            type="text" 
+                            required 
+                            value={editCity} 
+                            onChange={e => setEditCity(e.target.value)} 
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-950 rounded-xl border border-gray-200 dark:border-gray-800 focus:bg-white focus:border-orange-500 outline-none font-medium transition-all" 
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs font-bold text-gray-500 ml-1">Pays</label>
+                          <input 
+                            type="text" 
+                            required 
+                            value={editCountry} 
+                            onChange={e => setEditCountry(e.target.value)} 
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-950 rounded-xl border border-gray-200 dark:border-gray-800 focus:bg-white focus:border-orange-500 outline-none font-medium transition-all" 
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-gray-500 ml-1">Adresse E-mail</label>
+                        <input 
+                          type="email" 
+                          value={editEmail} 
+                          onChange={e => setEditEmail(e.target.value)} 
+                          className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-950 rounded-xl border border-gray-200 dark:border-gray-800 focus:bg-white focus:border-orange-500 outline-none font-medium transition-all" 
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-gray-500 ml-1">N° de Téléphone</label>
+                        <input 
+                          type="tel" 
+                          value={editPhone} 
+                          onChange={e => setEditPhone(e.target.value)} 
+                          className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-950 rounded-xl border border-gray-200 dark:border-gray-800 focus:bg-white focus:border-orange-500 outline-none font-medium transition-all" 
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-bold text-gray-400 ml-1">Rôle (Non modifiable)</label>
+                        <input 
+                          type="text" 
+                          disabled 
+                          value="Caissier" 
+                          className="w-full px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-400 rounded-xl border border-gray-200 dark:border-gray-700 outline-none font-bold cursor-not-allowed select-none" 
+                        />
+                      </div>
+
+                      <div className="flex gap-3 mt-4">
+                        <button 
+                          type="button" 
+                          onClick={() => setIsEditingProfile(false)} 
+                          disabled={isSavingProfile}
+                          className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          Annuler
+                        </button>
+                        <button 
+                          type="submit" 
+                          disabled={isSavingProfile}
+                          className="flex-1 py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {isSavingProfile && (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          )}
+                          Enregistrer
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       );
     }
@@ -256,7 +434,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
         </div>
       );
     }
-    if (currentUser.role === 'admin' || currentUser.role === 'gerant' || currentUser.role === 'salon_coiffure' || currentUser.role === 'caissier') {
+    if (currentUser.role === 'admin' || currentUser.role === 'gerant' || currentUser.role === 'salon_coiffure') {
       return (
         <div className="pb-24">
           {/* Sub Navigation for Dashboard/Profile */}
@@ -269,7 +447,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 }}
                 className={`flex-1 py-4 text-center font-bold text-sm border-b-2 transition-all ${subView === 'dashboard' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
               >
-                {currentUser.role === 'salon_coiffure' ? 'Espace Salon' : currentUser.role === 'gerant' ? 'Espace Gérant' : currentUser.role === 'caissier' ? '🛒 Espace Caisse (POS)' : 'Administration'}
+                {currentUser.role === 'salon_coiffure' ? 'Espace Salon' : currentUser.role === 'gerant' ? 'Espace Gérant' : 'Administration'}
               </button>
               <button 
                 onClick={() => {
@@ -293,8 +471,6 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
             {subView === 'dashboard' ? (
               currentUser.role === 'admin' ? (
                 <AdminDashboard onLogout={logout} />
-              ) : currentUser.role === 'caissier' ? (
-                <CaissierView onLogout={logout} />
               ) : (
                 <GerantDashboard onLogout={logout} onNavigate={onNavigate} onStartChatWithConv={onStartChatWithConv} />
               )
@@ -311,7 +487,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                       <p className="text-gray-500 font-medium">{currentUser.email || currentUser.phone}</p>
                       <p className="text-gray-400 text-sm mt-1">{currentUser.city}, {currentUser.country}</p>
                       <div className="mt-4 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold uppercase tracking-wider">
-                        Compte {currentUser.role === 'gerant' ? 'Gérant' : currentUser.role === 'caissier' ? 'Caissier' : currentUser.role === 'salon_coiffure' ? 'Salon de Coiffure' : 'Administrateur'}
+                        Compte {currentUser.role === 'gerant' ? 'Gérant' : currentUser.role === 'salon_coiffure' ? 'Salon de Coiffure' : 'Administrateur'}
                       </div>
 
                       <div className="mt-8 w-full flex flex-col gap-3">
@@ -769,7 +945,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 <input 
                   type="text" 
                   disabled 
-                  value={(currentUser.role as any) === 'gerant' ? 'Gérant' : (currentUser.role as any) === 'admin' ? 'Administrateur' : 'Client'} 
+                  value={(currentUser.role as any) === 'gerant' ? 'Gérant' : (currentUser.role as any) === 'caissier' ? 'Caissier' : (currentUser.role as any) === 'admin' ? 'Administrateur' : 'Client'} 
                   className="w-full px-4 py-3 bg-gray-100 text-gray-400 rounded-xl border border-gray-200 outline-none font-medium cursor-not-allowed select-none" 
                 />
               </div>
