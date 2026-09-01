@@ -582,7 +582,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 const DEFAULT_ESTABLISHMENTS: Establishment[] = [];
-
+const DEFAULT_ENTREPRISES: Entreprise[] = [];
 const DEFAULT_PUBLICATIONS: Publication[] = [];
 
 const DEFAULT_CAMPAIGNS: Campaign[] = [];
@@ -944,7 +944,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Combine with defaults to ensure the database is never empty
       const mergedEsts = [...ests];
       DEFAULT_ESTABLISHMENTS.forEach(defEst => {
-        if (!mergedEsts.some(e => e.id === defEst.id || e.name.toLowerCase() === defEst.name.toLowerCase())) {
+        if (!mergedEsts.some(e => e.id === defEst.id)) {
           mergedEsts.push(defEst);
         }
       });
@@ -965,7 +965,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Combine with defaults to ensure the database is never empty
       const mergedPubs = [...pubs];
       DEFAULT_PUBLICATIONS.forEach(defPub => {
-        if (!mergedPubs.some(p => p.id === defPub.id || p.title.toLowerCase() === defPub.title.toLowerCase())) {
+        if (!mergedPubs.some(p => p.id === defPub.id)) {
           mergedPubs.push(defPub);
         }
       });
@@ -1002,7 +1002,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const unsubscribeEnt = onSnapshot(entQuery, (snapshot) => {
       const ents: Entreprise[] = [];
       snapshot.forEach(docSnap => ents.push({ id: docSnap.id, ...docSnap.data() } as Entreprise));
-      setState(s => ({ ...s, entreprises: ents }));
+      
+      const mergedEnts = [...ents];
+      DEFAULT_ENTREPRISES.forEach(defE => {
+        if (!mergedEnts.some(e => e.id === defE.id)) {
+          mergedEnts.push(defE);
+        }
+      });
+      
+      setState(s => ({ ...s, entreprises: mergedEnts }));
     }, (error) => {
       console.error("Erreur listening to entreprises:", error);
     });

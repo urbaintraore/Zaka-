@@ -67,7 +67,7 @@ export interface AdOrganization {
   city: string;
   phone: string;
   email: string;
-  status: 'valide' | 'en_attente' | 'suspendu';
+  status: 'valide' | 'en_attente' | 'suspendu' | 'refusee';
   ownerId: string;
   members: AdOrganizationMember[];
   clientIds?: string[]; // If agency: IDs of client organizations or advertisers managed
@@ -259,7 +259,7 @@ export interface Entreprise {
   logo: string;
   description: string;
   philosophy: string;
-  status: 'en_attente' | 'valide' | 'suspendu';
+  status: 'en_attente' | 'valide' | 'suspendu' | 'refusee';
   createdAt: string;
   followers?: string[]; // list of clientIds who follow
 }
@@ -352,7 +352,7 @@ export interface Establishment {
   photos: string[];
   galleryPhotos?: GalleryPhoto[];
   tags: string[];
-  status: 'en_attente' | 'valide' | 'suspendu';
+  status: 'en_attente' | 'valide' | 'suspendu' | 'refusee';
   averageRating: number;
   geolocation?: string;
   lat?: number;

@@ -61,7 +61,7 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   const [formTags, setFormTags] = useState('');
   const [formPhotos, setFormPhotos] = useState<string[]>([]);
   const [photoInput, setPhotoInput] = useState('');
-  const [formStatus, setFormStatus] = useState<'en_attente' | 'valide' | 'suspendu'>('en_attente');
+  const [formStatus, setFormStatus] = useState<'en_attente' | 'valide' | 'suspendu' | 'refusee'>('en_attente');
 
   const pendingEsts = establishments.filter(e => e.status === 'en_attente');
   const pendingEnts = (entreprises || []).filter(e => e.status === 'en_attente');

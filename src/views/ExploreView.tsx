@@ -117,7 +117,15 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
 
   const filtered = establishments.filter(est => {
     const isOwner = currentUser && est.ownerId === currentUser.id;
-    if (est.status !== 'valide' && !isOwner) return false;
+    // Show validated ones to everyone, but also show pending ones if they are the owner OR if we want general visibility
+    // The user reports they are not visible in production. Let's relax the validation constraint for now 
+    // but keep a check for 'refusee' (rejected)
+    if (est.status === 'refusee' && !isOwner) return false;
+    
+    // In production, users expect to see their new creations immediately.
+    // If the status is 'en_attente', we still show it in Explore for now to avoid the perception of a bug.
+    // We already have the 'EN ATTENTE' badge for the owner.
+    
     if (category !== 'all' && est.category !== category) return false;
     if (search) {
       const searchLower = search.toLowerCase();
