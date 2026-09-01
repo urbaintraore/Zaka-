@@ -37,14 +37,22 @@ export function CashierDashboard({ establishmentId: propEstId, onLogout }: Cashi
   // Find establishments where user is an accredited cashier
   const cashierRequests = useMemo(() => {
     if (!currentUser) return [];
-    return relationshipRequests.filter(r => 
-      (r.initiatorId === currentUser.id || r.targetId === currentUser.id) &&
-      r.status === 'acceptee' &&
-      (r.isCaissier === true || r.requestedRole === 'caissier')
-    );
+    const isOwnerOrGerant = currentUser.role === 'gerant' || currentUser.role === 'admin' || currentUser.role === 'salon_coiffure';
+    if (isOwnerOrGerant) return [];
+    return relationshipRequests.filter(r => {
+      if (r.status !== 'acceptee') return false;
+      if (!r.isCaissier && r.requestedRole !== 'caissier') return false;
+      const targetUserId = r.type === 'gerant_invite' ? r.targetId : r.initiatorId;
+      return targetUserId === currentUser.id || (r as any).userId === currentUser.id;
+    });
   }, [relationshipRequests, currentUser]);
 
   const assignedEstablishments = useMemo(() => {
+    const isOwnerOrGerant = currentUser && (currentUser.role === 'gerant' || currentUser.role === 'admin' || currentUser.role === 'salon_coiffure');
+    if (isOwnerOrGerant) {
+      const myEsts = establishments.filter(e => e.ownerId === currentUser.id);
+      if (myEsts.length > 0) return myEsts;
+    }
     const ids = cashierRequests.map(r => r.establishmentId);
     let list = establishments.filter(e => ids.includes(e.id));
     if (list.length === 0 && propEstId) {
@@ -56,7 +64,7 @@ export function CashierDashboard({ establishmentId: propEstId, onLogout }: Cashi
       list = establishments;
     }
     return list;
-  }, [cashierRequests, establishments, propEstId]);
+  }, [cashierRequests, establishments, propEstId, currentUser]);
 
   // Selected establishment
   const [selectedEstId, setSelectedEstId] = useState<string>(() => {

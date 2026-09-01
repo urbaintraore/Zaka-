@@ -460,6 +460,7 @@ export interface RelationshipRequest {
   date: string;
   isDJ?: boolean; // Keep for backward compatibility
   isCaissier?: boolean; // Cashier role flag
+  isServeur?: boolean; // Waiter/Waitress role flag
   requestedRole?: 'client' | 'dj' | 'serveur' | 'caissier' | 'menage' | 'vigile';
   identityPhotoUrl?: string;
 }

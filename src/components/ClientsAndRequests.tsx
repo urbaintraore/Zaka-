@@ -13,6 +13,7 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
     createConversation, 
     toggleDJStatus,
     toggleCaissierStatus,
+    toggleServeurStatus,
     staffReviews,
     updateStaffReviewStatus,
     staffAttendances,
@@ -25,6 +26,7 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
   } = useAppStore();
 
   const [selectedClientId, setSelectedClientId] = useState('');
+  const [selectedRole, setSelectedRole] = useState<'client' | 'serveur' | 'caissier' | 'dj'>('client');
   const [managerMessage, setManagerMessage] = useState<Record<string, string>>({});
   const [reviewAmounts, setReviewAmounts] = useState<Record<string, string>>({});
   const [reviewBonusTypes, setReviewBonusTypes] = useState<Record<string, 'bonus' | 'sanction'>>({});
@@ -57,7 +59,7 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
     r => r.establishmentId === establishmentId && r.status === 'acceptee'
   );
 
-  const staffMembers = acceptedRequests.filter(r => r.isDJ || (r.requestedRole && r.requestedRole !== 'client'));
+  const staffMembers = acceptedRequests.filter(r => r.isDJ || r.isCaissier || (r as any).isServeur || (r.requestedRole && r.requestedRole !== 'client'));
 
   const members = acceptedRequests.map(r => {
     const memberId = r.type === 'client_join' ? r.initiatorId : r.targetId;
@@ -68,6 +70,7 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
       user: memberUser,
       isDJ: r.isDJ || r.requestedRole === 'dj' || false,
       isCaissier: r.isCaissier || r.requestedRole === 'caissier' || false,
+      isServeur: (r as any).isServeur || r.requestedRole === 'serveur' || false,
       requestedRole: r.requestedRole || 'client'
     };
   });
@@ -109,12 +112,18 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
         initiatorId: currentUser.id,
         targetId: selectedClientId,
         establishmentId: est.id,
-        type: 'gerant_invite'
+        type: 'gerant_invite',
+        requestedRole: selectedRole,
+        isServeur: selectedRole === 'serveur',
+        isCaissier: selectedRole === 'caissier',
+        isDJ: selectedRole === 'dj'
       });
       
       const targetClient = users.find(u => u.id === selectedClientId);
-      setSuccessMsg(`Invitation envoyée avec succès à ${targetClient?.name || 'Client'} !`);
+      const roleLabel = selectedRole === 'serveur' ? 'Serveur/Serveuse' : selectedRole === 'caissier' ? 'Caissier' : selectedRole === 'dj' ? 'DJ' : 'Client';
+      setSuccessMsg(`Invitation (${roleLabel}) envoyée avec succès à ${targetClient?.name || 'Client'} !`);
       setSelectedClientId('');
+      setSelectedRole('client');
     } catch (err: any) {
       console.error("Erreur d'invitation client:", err);
       setErrorMsg("Impossible d'envoyer l'invitation. Veuillez réessayer.");
@@ -181,19 +190,30 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            <div className="flex gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <select
                 required
                 value={selectedClientId}
                 onChange={(e) => setSelectedClientId(e.target.value)}
-                className="flex-1 px-3 py-2 text-xs bg-gray-50 rounded-xl border border-gray-200 outline-none font-bold text-gray-700 focus:bg-white focus:border-orange-500"
+                className="w-full px-3 py-2 text-xs bg-gray-50 rounded-xl border border-gray-200 outline-none font-bold text-gray-700 focus:bg-white focus:border-orange-500"
               >
-                <option value="">-- Sélectionnez un client --</option>
+                <option value="">-- Sélectionnez un utilisateur --</option>
                 {eligibleClients.map(c => (
                   <option key={c.id} value={c.id}>
                     {c.name} ({c.phone || c.email || 'Pas de contact'})
                   </option>
                 ))}
+              </select>
+
+              <select
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value as any)}
+                className="w-full px-3 py-2 text-xs bg-gray-50 rounded-xl border border-gray-200 outline-none font-bold text-gray-700 focus:bg-white focus:border-orange-500"
+              >
+                <option value="client">Rôle : Client / Membre</option>
+                <option value="serveur">Rôle : Serveur / Serveuse 🍽️</option>
+                <option value="caissier">Rôle : Caissier 🛒</option>
+                <option value="dj">Rôle : DJ 🎧</option>
               </select>
             </div>
             <div className="flex gap-2 justify-end">
@@ -408,7 +428,17 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
                           DJ Actif
                         </span>
                       )}
-                      {!member.isDJ && member.requestedRole !== 'client' && (
+                      {member.isServeur && (
+                        <span className="text-[9px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded">
+                          Serveur / Serveuse
+                        </span>
+                      )}
+                      {member.isCaissier && (
+                        <span className="text-[9px] bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded">
+                          Caissier
+                        </span>
+                      )}
+                      {!member.isDJ && !member.isServeur && !member.isCaissier && member.requestedRole !== 'client' && (
                         <span className="text-[9px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded uppercase">
                           {member.requestedRole}
                         </span>
@@ -456,6 +486,38 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
                     <MessageSquare className="w-4 h-4" />
                   </button>
                   
+                  {member.isServeur ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await toggleServeurStatus(member.requestId, false);
+                          setSuccessMsg(`Le statut Serveur/Serveuse a été retiré pour ${member.user?.name || 'le membre'}.`);
+                        } catch (err) {
+                          setErrorMsg("Erreur lors du retrait du statut Serveur/Serveuse.");
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-[10px] rounded-lg transition-colors cursor-pointer"
+                    >
+                      Retirer Serveur(se)
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await toggleServeurStatus(member.requestId, true);
+                          setSuccessMsg(`${member.user?.name || 'Le membre'} a été promu Serveur/Serveuse de l'établissement !`);
+                        } catch (err) {
+                          setErrorMsg("Erreur lors de la promotion en Serveur/Serveuse.");
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-[10px] rounded-lg transition-colors cursor-pointer"
+                    >
+                      Promouvoir en Serveur(se)
+                    </button>
+                  )}
+
                   {member.isDJ ? (
                     <button
                       type="button"

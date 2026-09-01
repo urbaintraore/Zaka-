@@ -52,7 +52,7 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
 
   // Staff members in this establishment
   const staffMembers = relationshipRequests.filter(
-    r => r.establishmentId === establishmentId && r.status === 'acceptee' && (r.isDJ || (r.requestedRole && r.requestedRole !== 'client'))
+    r => r.establishmentId === establishmentId && r.status === 'acceptee' && (r.isDJ || r.isCaissier || (r as any).isServeur || (r.requestedRole && r.requestedRole !== 'client'))
   );
 
   // Filter attendances for this establishment and selected month
@@ -100,7 +100,7 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
       incidentsCount: 0,
       shiftsCount: 0,
       name: u?.name || 'Employé',
-      role: m.isDJ ? 'DJ' : (m.requestedRole || 'Employé'),
+      role: m.isDJ ? 'DJ' : m.isCaissier ? 'Caissier' : ((m as any).isServeur || m.requestedRole === 'serveur') ? 'Serveur/Serveuse' : (m.requestedRole || 'Employé'),
       avgRating,
       calculatedBonusOrSanction: { type: 'bonus', amount: 0, reason: 'Ponctualité irréprochable' }
     };

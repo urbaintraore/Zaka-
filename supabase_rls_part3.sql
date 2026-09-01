@@ -31,49 +31,72 @@ CREATE POLICY "campaigns_access" ON public.ad_campaigns FOR ALL USING ("advertis
 CREATE POLICY "payments_access" ON public.payments FOR ALL USING ("advertiserId" = auth.uid() OR public.is_admin());
 CREATE POLICY "invoices_access" ON public.invoices FOR ALL USING ("advertiserId" = auth.uid() OR public.is_admin());
 
--- Stocks & Ventes (Caissiers & Gérants)
+-- Stocks, Ventes & Staff Roles (Gérants, Caissiers, Serveurs & Personnel)
+ALTER TABLE public.staff_roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.stocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ventes ENABLE ROW LEVEL SECURITY;
 
+-- STAFF_ROLES POLICIES
+DROP POLICY IF EXISTS "staff_roles_select_policy" ON public.staff_roles;
+CREATE POLICY "staff_roles_select_policy" ON public.staff_roles FOR SELECT USING (
+  public.is_establishment_owner(establishment_id) OR user_id = auth.uid() OR public.is_establishment_staff(establishment_id) OR public.is_admin()
+);
+
+DROP POLICY IF EXISTS "staff_roles_insert_policy" ON public.staff_roles;
+CREATE POLICY "staff_roles_insert_policy" ON public.staff_roles FOR INSERT WITH CHECK (
+  public.is_establishment_owner(establishment_id) OR public.is_admin()
+);
+
+DROP POLICY IF EXISTS "staff_roles_update_policy" ON public.staff_roles;
+CREATE POLICY "staff_roles_update_policy" ON public.staff_roles FOR UPDATE USING (
+  public.is_establishment_owner(establishment_id) OR public.is_admin()
+);
+
+DROP POLICY IF EXISTS "staff_roles_delete_policy" ON public.staff_roles;
+CREATE POLICY "staff_roles_delete_policy" ON public.staff_roles FOR DELETE USING (
+  public.is_establishment_owner(establishment_id) OR public.is_admin()
+);
+
+-- STOCKS POLICIES
+DROP POLICY IF EXISTS "stocks_select_policy" ON public.stocks;
 CREATE POLICY "stocks_select_policy" ON public.stocks FOR SELECT USING (
-  public.is_establishment_owner("establishmentId") 
-  OR EXISTS (SELECT 1 FROM public.relationship_requests rr WHERE rr."establishmentId" = stocks."establishmentId" AND rr."userId" = auth.uid() AND rr.status = 'acceptee' AND (rr."requestedRole" = 'caissier' OR rr."isCaissier" = true))
-  OR public.is_admin()
+  public.is_establishment_staff("establishmentId") OR public.is_admin()
 );
 
+DROP POLICY IF EXISTS "stocks_insert_policy" ON public.stocks;
 CREATE POLICY "stocks_insert_policy" ON public.stocks FOR INSERT WITH CHECK (
-  public.is_establishment_owner("establishmentId") 
-  OR EXISTS (SELECT 1 FROM public.relationship_requests rr WHERE rr."establishmentId" = stocks."establishmentId" AND rr."userId" = auth.uid() AND rr.status = 'acceptee' AND (rr."requestedRole" = 'caissier' OR rr."isCaissier" = true))
-  OR public.is_admin()
+  public.is_establishment_cashier("establishmentId") OR public.is_admin()
 );
 
+DROP POLICY IF EXISTS "stocks_update_policy" ON public.stocks;
 CREATE POLICY "stocks_update_policy" ON public.stocks FOR UPDATE USING (
-  public.is_establishment_owner("establishmentId") 
-  OR EXISTS (SELECT 1 FROM public.relationship_requests rr WHERE rr."establishmentId" = stocks."establishmentId" AND rr."userId" = auth.uid() AND rr.status = 'acceptee' AND (rr."requestedRole" = 'caissier' OR rr."isCaissier" = true))
-  OR public.is_admin()
+  public.is_establishment_staff("establishmentId") OR public.is_admin()
 );
 
+DROP POLICY IF EXISTS "stocks_delete_policy" ON public.stocks;
 CREATE POLICY "stocks_delete_policy" ON public.stocks FOR DELETE USING (
   public.is_establishment_owner("establishmentId") OR public.is_admin()
 );
 
+-- VENTES POLICIES
+DROP POLICY IF EXISTS "ventes_select_policy" ON public.ventes;
 CREATE POLICY "ventes_select_policy" ON public.ventes FOR SELECT USING (
-  public.is_establishment_owner("establishmentId") 
-  OR EXISTS (SELECT 1 FROM public.relationship_requests rr WHERE rr."establishmentId" = ventes."establishmentId" AND rr."userId" = auth.uid() AND rr.status = 'acceptee' AND (rr."requestedRole" = 'caissier' OR rr."isCaissier" = true))
-  OR public.is_admin()
+  public.is_establishment_staff("establishmentId") OR public.is_admin()
 );
 
+DROP POLICY IF EXISTS "ventes_insert_policy" ON public.ventes;
 CREATE POLICY "ventes_insert_policy" ON public.ventes FOR INSERT WITH CHECK (
-  public.is_establishment_owner("establishmentId") 
-  OR EXISTS (SELECT 1 FROM public.relationship_requests rr WHERE rr."establishmentId" = ventes."establishmentId" AND rr."userId" = auth.uid() AND rr.status = 'acceptee' AND (rr."requestedRole" = 'caissier' OR rr."isCaissier" = true))
-  OR public.is_admin()
+  public.is_establishment_staff("establishmentId") OR public.is_admin()
 );
 
+DROP POLICY IF EXISTS "ventes_update_policy" ON public.ventes;
 CREATE POLICY "ventes_update_policy" ON public.ventes FOR UPDATE USING (
   public.is_establishment_owner("establishmentId") OR public.is_admin()
 );
 
+DROP POLICY IF EXISTS "ventes_delete_policy" ON public.ventes;
 CREATE POLICY "ventes_delete_policy" ON public.ventes FOR DELETE USING (
-  public.is_admin()
+  public.is_establishment_owner("establishmentId") OR public.is_admin()
 );
+
 

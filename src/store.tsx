@@ -100,6 +100,7 @@ interface AppContextType extends AppState {
   createConversation: (clientId: string, establishmentId: string, clientName: string, establishmentName: string, ownerId: string) => Promise<string>;
   toggleDJStatus: (requestId: string, isDJ: boolean) => Promise<void>;
   toggleCaissierStatus: (requestId: string, isCaissier: boolean) => Promise<void>;
+  toggleServeurStatus: (requestId: string, isServeur: boolean) => Promise<void>;
   addStockItem: (item: Omit<StockItem, 'id' | 'createdAt'>) => Promise<void>;
   updateStockItem: (id: string, updates: Partial<Omit<StockItem, 'id' | 'establishmentId'>>) => Promise<void>;
   deleteStockItem: (id: string) => Promise<void>;
@@ -1942,12 +1943,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleCaissierStatus = async (requestId: string, isCaissier: boolean) => {
     try {
+      const requestedRole = isCaissier ? 'caissier' : 'client';
       if (isSupabaseConfigured) {
-        await supabase.from('relationship_requests').update({ isCaissier }).eq('id', requestId);
+        await supabase.from('relationship_requests').update({ isCaissier, requestedRole }).eq('id', requestId);
       }
-      await updateDoc(doc(db, 'relationshipRequests', requestId), { isCaissier });
+      await updateDoc(doc(db, 'relationshipRequests', requestId), { isCaissier, requestedRole });
     } catch (error: any) {
       console.error("Erreur toggleCaissierStatus:", error);
+      throw error;
+    }
+  };
+
+  const toggleServeurStatus = async (requestId: string, isServeur: boolean) => {
+    try {
+      const requestedRole = isServeur ? 'serveur' : 'client';
+      if (isSupabaseConfigured) {
+        await supabase.from('relationship_requests').update({ isServeur, requestedRole }).eq('id', requestId);
+      }
+      await updateDoc(doc(db, 'relationshipRequests', requestId), { isServeur, requestedRole });
+    } catch (error: any) {
+      console.error("Erreur toggleServeurStatus:", error);
       throw error;
     }
   };
@@ -3220,6 +3235,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createConversation,
       toggleDJStatus,
       toggleCaissierStatus,
+      toggleServeurStatus,
       addStockItem,
       updateStockItem,
       deleteStockItem,

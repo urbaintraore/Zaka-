@@ -203,16 +203,20 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   };
 
   if (currentUser) {
-    const cashierRequests = relationshipRequests.filter(
-      r => (r.initiatorId === currentUser.id || r.targetId === currentUser.id || (r as any).userId === currentUser.id) &&
-      r.status === 'acceptee' &&
-      (r.isCaissier === true || r.requestedRole === 'caissier')
-    );
-    const assignedCashierEsts = establishments.filter(e => cashierRequests.some(r => r.establishmentId === e.id));
-    const isAssignedCashier = cashierRequests.length > 0;
-    const isCashierUser = (currentUser.role as any) === 'caissier' || isAssignedCashier || (currentUser as any).isCaissier === true;
+    const isOwnerOrGerant = currentUser.role === 'gerant' || currentUser.role === 'admin' || currentUser.role === 'salon_coiffure';
 
-    // 1. DEDICATED CASHIER EXPERIENCE (PRIORITIZED OVER ADS/CLIENT VIEWS)
+    const cashierRequests = isOwnerOrGerant ? [] : relationshipRequests.filter(r => {
+      if (r.status !== 'acceptee') return false;
+      if (!r.isCaissier && r.requestedRole !== 'caissier') return false;
+      const targetUserId = r.type === 'gerant_invite' ? r.targetId : r.initiatorId;
+      return targetUserId === currentUser.id || (r as any).userId === currentUser.id;
+    });
+
+    const assignedCashierEsts = establishments.filter(e => cashierRequests.some(r => r.establishmentId === e.id));
+    const isAssignedCashier = !isOwnerOrGerant && cashierRequests.length > 0;
+    const isCashierUser = !isOwnerOrGerant && ((currentUser.role as any) === 'caissier' || isAssignedCashier || (currentUser as any).isCaissier === true);
+
+    // 1. DEDICATED CASHIER EXPERIENCE (FOR CASHIER ROLE ONLY, NOT GERANTS/ADMINS)
     // Cashiers must NEVER access ZAKA Ads or advertisement creation
     if (isCashierUser) {
       return (
