@@ -1,11 +1,17 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../store';
 import { StockItem, SaleRecord, SaleItem } from '../types';
 import { 
   ShoppingBag, Plus, Minus, Search, AlertTriangle, CheckCircle, 
-  X, Share2, Printer, User, ArrowLeft 
+  X, Share2, Printer, User, Download, Image as ImageIcon, Sparkles,
+  GlassWater, Flame, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { 
+  generateReceiptDataUrl, 
+  downloadReceiptImage, 
+  shareReceiptImage 
+} from '../utils/receiptImageGenerator';
 
 interface PointOfSaleViewProps {
   establishmentId: string;
@@ -19,8 +25,12 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [saleSuccess, setSaleSuccess] = useState<boolean>(false);
   const [lastSaleRecord, setLastSaleRecord] = useState<SaleRecord | null>(null);
+  const [receiptImageUrl, setReceiptImageUrl] = useState<string | null>(null);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'bieres' | 'liqueurs' | 'softs' | 'nourriture'>('all');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -30,12 +40,43 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
     return stocks.filter(item => item.establishmentId === establishmentId);
   }, [stocks, establishmentId]);
 
-  // Filter stocks by search query
+  // Categorize drink/food
+  const getItemCategory = (name: string): 'bieres' | 'liqueurs' | 'softs' | 'nourriture' => {
+    const n = name.toLowerCase();
+    if (n.includes('poulet') || n.includes('poisson') || n.includes('grill') || n.includes('frite') || n.includes('attiéké') || n.includes('alloco') || n.includes('plat') || n.includes('brochette') || n.includes('viande') || n.includes('porc') || n.includes('riz')) {
+      return 'nourriture';
+    }
+    if (n.includes('whisky') || n.includes('vodka') || n.includes('gin') || n.includes('rhum') || n.includes('cognac') || n.includes('champagne') || n.includes('liqueur') || n.includes('pastis') || n.includes('tequila') || n.includes('vin') || n.includes('ricard')) {
+      return 'liqueurs';
+    }
+    if (n.includes('coca') || n.includes('fanta') || n.includes('sprite') || n.includes('youki') || n.includes('eau') || n.includes('jus') || n.includes('red bull') || n.includes('sobebra') || n.includes('malt') || n.includes('tonic') || n.includes('cocktail')) {
+      return 'softs';
+    }
+    return 'bieres';
+  };
+
+  // Filter stocks by search query & category
   const filteredStocks = useMemo(() => {
-    return estStocks.filter(drink => 
-      drink.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [estStocks, searchQuery]);
+    return estStocks.filter(drink => {
+      const matchesSearch = drink.name.toLowerCase().includes(searchQuery.toLowerCase());
+      if (!matchesSearch) return false;
+      if (selectedCategory === 'all') return true;
+      return getItemCategory(drink.name) === selectedCategory;
+    });
+  }, [estStocks, searchQuery, selectedCategory]);
+
+  // Generate Receipt Image on sale completion
+  useEffect(() => {
+    if (saleSuccess && lastSaleRecord) {
+      setIsGeneratingImage(true);
+      generateReceiptDataUrl(lastSaleRecord, est)
+        .then(url => setReceiptImageUrl(url))
+        .catch(err => console.error('Erreur génération image reçu:', err))
+        .finally(() => setIsGeneratingImage(false));
+    } else {
+      setReceiptImageUrl(null);
+    }
+  }, [saleSuccess, lastSaleRecord, est]);
 
   // Cart helper functions
   const addToCart = (stockId: string) => {
@@ -150,6 +191,28 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
     return `${amount.toLocaleString('fr-FR')} F CFA`;
   };
 
+  const handleShareImage = async () => {
+    if (!lastSaleRecord) return;
+    try {
+      const res = await shareReceiptImage(lastSaleRecord, est);
+      if (res.shared) {
+        setShareFeedback("Reçu partagé avec succès !");
+      } else if (res.method === 'download') {
+        setShareFeedback("Image du reçu téléchargée !");
+      }
+      setTimeout(() => setShareFeedback(null), 3000);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDownloadImage = () => {
+    if (!lastSaleRecord) return;
+    downloadReceiptImage(lastSaleRecord, est);
+    setShareFeedback("Image du reçu téléchargée (PNG) !");
+    setTimeout(() => setShareFeedback(null), 3000);
+  };
+
   const shareReceiptWhatsApp = (sale: SaleRecord) => {
     const itemsText = sale.items
       .map(it => `• ${it.name} x${it.quantity} (${formatPrice(it.unitPrice)}/u) = ${formatPrice(it.unitPrice * it.quantity)}`)
@@ -164,8 +227,8 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
       `---------------------------\n` +
       `*Articles vendus :*\n${itemsText}\n` +
       `---------------------------\n` +
-      `💰 *TOTAL PAYÉ : ${formatPrice(sale.totalAmount)}*\n\n` +
-      `Merci pour votre visite ! ✨`;
+      `💰 *TOTAL ENCAISSÉ : ${formatPrice(sale.totalAmount)}*\n\n` +
+      `Merci pour votre confiance ! ✨`;
     
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
@@ -179,87 +242,128 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
       {/* SUCCESS RECEIPT PAGE */}
       {saleSuccess && lastSaleRecord ? (
         <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
+          initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md mx-auto bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 p-6 rounded-3xl shadow-xl space-y-6"
+          className="max-w-md mx-auto bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 p-6 rounded-3xl shadow-xl space-y-5"
         >
           <div className="text-center space-y-1">
-            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-950/40 rounded-full flex items-center justify-center mx-auto mb-3">
+            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-950/40 rounded-full flex items-center justify-center mx-auto mb-2">
               <CheckCircle className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <h3 className="text-base font-black text-gray-900 dark:text-white">Vente Validée</h3>
-            <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">Reçu virtuel généré et disponible ci-dessous.</p>
+            <h3 className="text-base font-black text-gray-900 dark:text-white">Vente Validée avec Succès</h3>
+            <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">Reçu récapitulatif généré prêt à être imprimé ou partagé en image.</p>
           </div>
 
-          {/* Ticket styling */}
-          <div className="p-4 bg-gray-50 dark:bg-gray-950 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 font-mono space-y-4">
-            <div className="text-center border-b border-dashed border-gray-200 dark:border-gray-800 pb-3">
-              <h4 className="text-xs font-black text-gray-900 dark:text-white">{est?.name || 'ZAKA+ POINT DE VENTE'}</h4>
-              <p className="text-[9px] text-gray-500 mt-1">Ticket de caisse officiel</p>
+          {shareFeedback && (
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-bold text-center">
+              {shareFeedback}
             </div>
+          )}
 
-            <div className="text-[10px] space-y-1 text-gray-600 dark:text-gray-400">
-              <div className="flex justify-between">
-                <span>Date :</span>
-                <span>{new Date(lastSaleRecord.date).toLocaleString('fr-FR')}</span>
+          {/* Render Generated Receipt Image or Virtual Receipt */}
+          {receiptImageUrl ? (
+            <div className="rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-800 shadow-sm bg-gray-50 dark:bg-gray-950">
+              <div className="p-2 bg-gray-100 dark:bg-gray-800 text-[10px] font-black uppercase text-gray-500 flex items-center justify-between">
+                <span>Aperçu de l'image générée (PNG)</span>
+                <span className="text-emerald-600 font-bold">Prêt</span>
               </div>
-              <div className="flex justify-between">
-                <span>Caissier :</span>
-                <span>{lastSaleRecord.cashierName}</span>
-              </div>
+              <img 
+                src={receiptImageUrl} 
+                alt="Ticket de caisse" 
+                className="w-full object-contain max-h-[360px] mx-auto p-1"
+                referrerPolicy="no-referrer"
+              />
             </div>
+          ) : (
+            <div className="p-4 bg-gray-50 dark:bg-gray-950 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 font-mono space-y-3 text-xs">
+              <div className="text-center border-b border-dashed border-gray-200 dark:border-gray-800 pb-2">
+                <h4 className="font-black text-gray-900 dark:text-white">{est?.name || 'ZAKA+ POINT DE VENTE'}</h4>
+                <p className="text-[10px] text-gray-500">Ticket de caisse officiel</p>
+              </div>
 
-            <div className="border-t border-b border-dashed border-gray-200 dark:border-gray-800 py-3 space-y-2">
-              {lastSaleRecord.items.map((it, idx) => (
-                <div key={idx} className="flex justify-between text-[11px] font-bold text-gray-800 dark:text-gray-200">
-                  <span>{it.name} x{it.quantity}</span>
-                  <span>{formatPrice(it.unitPrice * it.quantity)}</span>
+              <div className="space-y-1 text-[11px] text-gray-600 dark:text-gray-400">
+                <div className="flex justify-between">
+                  <span>Date :</span>
+                  <span>{new Date(lastSaleRecord.date).toLocaleString('fr-FR')}</span>
                 </div>
-              ))}
-            </div>
+                <div className="flex justify-between">
+                  <span>Caissier :</span>
+                  <span>{lastSaleRecord.cashierName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Réf :</span>
+                  <span>#{lastSaleRecord.id.slice(0, 8)}</span>
+                </div>
+              </div>
 
-            <div className="flex justify-between text-xs font-black text-gray-950 dark:text-white pt-1">
-              <span>TOTAL PAYÉ</span>
-              <span className="text-orange-600 dark:text-orange-400">{formatPrice(lastSaleRecord.totalAmount)}</span>
+              <div className="border-t border-b border-dashed border-gray-200 dark:border-gray-800 py-2 space-y-1.5">
+                {lastSaleRecord.items.map((it, idx) => (
+                  <div key={idx} className="flex justify-between font-bold text-gray-800 dark:text-gray-200">
+                    <span>{it.name} x{it.quantity}</span>
+                    <span>{formatPrice(it.unitPrice * it.quantity)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-between font-black text-gray-950 dark:text-white pt-1">
+                <span>TOTAL PAYÉ</span>
+                <span className="text-orange-600 dark:text-orange-400">{formatPrice(lastSaleRecord.totalAmount)}</span>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Share & Print Toolbar */}
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <button
-              onClick={() => shareReceiptWhatsApp(lastSaleRecord)}
-              className="py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-transform active:scale-95"
-            >
-              <Share2 className="w-4 h-4" />
-              WhatsApp
-            </button>
+          <div className="grid grid-cols-3 gap-2 pt-1">
             <button
               onClick={printReceipt}
-              className="py-3 px-4 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-750 transition-colors"
+              className="py-3 px-2 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl text-[11px] font-black uppercase flex items-center justify-center gap-1.5 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-750 transition-colors"
             >
-              <Printer className="w-4 h-4" />
+              <Printer className="w-4 h-4 text-gray-700 dark:text-gray-300" />
               Imprimer
+            </button>
+
+            <button
+              onClick={handleShareImage}
+              className="py-3 px-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[11px] font-black uppercase flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-transform active:scale-95"
+            >
+              <Share2 className="w-4 h-4" />
+              Partager
+            </button>
+
+            <button
+              onClick={handleDownloadImage}
+              className="py-3 px-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl text-[11px] font-black uppercase flex items-center justify-center gap-1.5 cursor-pointer hover:opacity-90 transition-opacity"
+            >
+              <Download className="w-4 h-4" />
+              Image PNG
             </button>
           </div>
 
           <button
-            onClick={() => { setSaleSuccess(false); setLastSaleRecord(null); }}
+            onClick={() => shareReceiptWhatsApp(lastSaleRecord)}
+            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 cursor-pointer shadow-xs transition-colors"
+          >
+            <span>💬 Envoyer par WhatsApp</span>
+          </button>
+
+          <button
+            onClick={() => { setSaleSuccess(false); setLastSaleRecord(null); setReceiptImageUrl(null); }}
             className="w-full py-3 bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 rounded-xl text-xs font-black uppercase text-center cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors"
           >
-            Nouvelle Vente
+            + Nouvelle Vente
           </button>
         </motion.div>
       ) : (
         /* STANDARD POS GRID VIEW */
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* POS Catalog Item Grid (Left 2 Columns) */}
-          <div className="md:col-span-2 space-y-4">
+          <div className="lg:col-span-2 space-y-3.5">
             {/* Search Filter bar */}
-            <div className="flex items-center gap-3 bg-white dark:bg-gray-900 px-4 py-3 border border-gray-100 dark:border-gray-850 rounded-2xl">
+            <div className="flex items-center gap-3 bg-white dark:bg-gray-900 px-4 py-3 border border-gray-150 dark:border-gray-800 rounded-2xl shadow-xs">
               <Search className="w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Rechercher une boisson dans le menu..."
+                placeholder="Rechercher une boisson ou un plat (Brakina, Beaufort, Heineken, Poulet...)"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="flex-1 text-xs font-semibold outline-none bg-transparent text-gray-900 dark:text-white"
@@ -271,6 +375,64 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
               )}
             </div>
 
+            {/* Quick Category Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 hide-scrollbar">
+              <button
+                onClick={() => setSelectedCategory('all')}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase whitespace-nowrap transition-all cursor-pointer ${
+                  selectedCategory === 'all' 
+                    ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' 
+                    : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-150 dark:border-gray-800'
+                }`}
+              >
+                Tous ({estStocks.length})
+              </button>
+              <button
+                onClick={() => setSelectedCategory('bieres')}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                  selectedCategory === 'bieres' 
+                    ? 'bg-orange-600 text-white' 
+                    : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-150 dark:border-gray-800'
+                }`}
+              >
+                <GlassWater className="w-3.5 h-3.5" />
+                Bières & Vins
+              </button>
+              <button
+                onClick={() => setSelectedCategory('liqueurs')}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                  selectedCategory === 'liqueurs' 
+                    ? 'bg-orange-600 text-white' 
+                    : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-150 dark:border-gray-800'
+                }`}
+              >
+                <span>🍾</span>
+                Liqueurs & Spiritueux
+              </button>
+              <button
+                onClick={() => setSelectedCategory('softs')}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                  selectedCategory === 'softs' 
+                    ? 'bg-orange-600 text-white' 
+                    : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-150 dark:border-gray-800'
+                }`}
+              >
+                <span>🥤</span>
+                Softs & Jus
+              </button>
+              <button
+                onClick={() => setSelectedCategory('nourriture')}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                  selectedCategory === 'nourriture' 
+                    ? 'bg-orange-600 text-white' 
+                    : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-150 dark:border-gray-800'
+                }`}
+              >
+                <Flame className="w-3.5 h-3.5" />
+                Plats & Grillades
+              </button>
+            </div>
+
             {errorMsg && (
               <div className="p-3.5 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 text-red-700 dark:text-red-400 rounded-xl text-xs font-bold flex items-center gap-2">
                 <AlertTriangle className="w-4.5 h-4.5 text-red-500 shrink-0" />
@@ -279,12 +441,12 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
             )}
 
             {filteredStocks.length === 0 ? (
-              <div className="p-12 text-center bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800">
+              <div className="p-12 text-center bg-white dark:bg-gray-900 rounded-3xl border border-gray-150 dark:border-gray-800">
                 <ShoppingBag className="w-10 h-10 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
-                <p className="text-xs font-bold text-gray-400">Aucune boisson enregistrée dans le stock.</p>
+                <p className="text-xs font-bold text-gray-500 dark:text-gray-400">Aucun article trouvé dans cette sélection.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {filteredStocks.map(drink => {
                   const currentCartQty = cart[drink.id] || 0;
                   const isOutOfStock = drink.quantity <= 0;
@@ -297,10 +459,10 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
                       disabled={isOutOfStock}
                       className={`relative bg-white dark:bg-gray-900 p-4 rounded-2xl border text-left flex flex-col justify-between hover:shadow-md transition-all active:scale-95 cursor-pointer min-h-[130px] ${
                         isOutOfStock 
-                          ? 'opacity-40 border-gray-150 dark:border-gray-800 bg-gray-50 dark:bg-gray-950' 
+                          ? 'opacity-40 border-gray-150 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 cursor-not-allowed' 
                           : isLowStock
                           ? 'border-amber-300 dark:border-amber-900/60 bg-amber-50/10'
-                          : 'border-gray-100 hover:border-gray-300 dark:border-gray-800'
+                          : 'border-gray-150 hover:border-orange-300 dark:border-gray-800'
                       }`}
                     >
                       <div>
@@ -327,7 +489,7 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
                             ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 animate-pulse'
                             : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
                         }`}>
-                          {isOutOfStock ? "Rupture" : `${drink.quantity} dispo`}
+                          {isOutOfStock ? "Rupture" : `${drink.quantity} en stock`}
                         </span>
                         
                         <div className="w-7 h-7 rounded-full bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 flex items-center justify-center hover:bg-orange-100 dark:hover:bg-orange-900/30">
@@ -346,7 +508,7 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
             <div>
               <div className="flex items-center justify-between border-b border-gray-150 dark:border-gray-800 pb-3 mb-4">
                 <div className="flex items-center gap-2">
-                  <ShoppingBag className="w-5 h-5 text-orange-500" />
+                  <ShoppingBag className="w-5 h-5 text-orange-600" />
                   <span className="text-sm font-black text-gray-900 dark:text-white">Panier de Vente</span>
                 </div>
                 {cartItems.length > 0 && (
@@ -362,7 +524,7 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
               {cartItems.length === 0 ? (
                 <div className="py-12 text-center text-xs font-bold text-gray-400 dark:text-gray-500">
                   <ShoppingBag className="w-10 h-10 text-gray-200 dark:text-gray-800 mx-auto mb-2" />
-                  Sélectionnez des boissons pour composer la commande client.
+                  Sélectionnez des boissons ou plats pour composer la commande client.
                 </div>
               ) : (
                 <div className="space-y-2.5 max-h-[320px] overflow-y-auto">
@@ -400,15 +562,15 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
               <div className="border-t border-gray-150 dark:border-gray-800 pt-4 space-y-4">
                 <div className="flex items-center justify-between text-sm font-black text-gray-900 dark:text-white">
                   <span>Total à encaisser</span>
-                  <span className="text-orange-600 dark:text-orange-400 text-lg">{formatPrice(cartTotal)}</span>
+                  <span className="text-orange-600 dark:text-orange-400 text-xl font-black">{formatPrice(cartTotal)}</span>
                 </div>
 
                 <button
                   onClick={handleValidateSale}
                   disabled={isSubmitting}
-                  className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-black text-xs uppercase shadow-md active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-600/20 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  {isSubmitting ? "Validation & Décrémentation..." : "Valider la vente"}
+                  {isSubmitting ? "Validation & Décrémentation..." : "Valider l'encaissement"}
                 </button>
               </div>
             )}

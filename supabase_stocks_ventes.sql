@@ -50,7 +50,11 @@ BEGIN
   RETURN EXISTS (
     SELECT 1 FROM public.relationship_requests
     WHERE "establishmentId" = est_id
-      AND "userId" = auth.uid()
+      AND (
+        "initiatorId" = auth.uid() 
+        OR "targetId" = auth.uid()
+        OR "userId" = auth.uid()
+      )
       AND status = 'acceptee'
       AND ("requestedRole" = 'caissier' OR "isCaissier" = true)
   );

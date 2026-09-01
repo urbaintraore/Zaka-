@@ -204,7 +204,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
 
   if (currentUser) {
     const cashierRequests = relationshipRequests.filter(
-      r => (r.userId === currentUser.id || r.initiatorId === currentUser.id || r.targetId === currentUser.id) &&
+      r => (r.initiatorId === currentUser.id || r.targetId === currentUser.id) &&
       r.status === 'acceptee' &&
       (r.isCaissier === true || r.requestedRole === 'caissier')
     );
@@ -589,7 +589,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                     className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white font-black rounded-xl hover:opacity-95 transition-all cursor-pointer shadow-lg shadow-orange-500/25"
                   >
                     <ShoppingBag className="w-5 h-5 fill-white" />
-                    <span>🛒 Ouvrir mon Espace Caisse (POS)</span>
+                    <span>🛒 Ouvrir mon Espace Caisse (POS & Catalogue)</span>
                   </button>
                 )}
                 <button 
@@ -598,20 +598,24 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 >
                   Modifier le profil
                 </button>
-                <button
-                  onClick={() => setShowExpressAdsModal(true)}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-orange-600 to-amber-500 text-white font-extrabold rounded-xl hover:opacity-95 transition-all cursor-pointer shadow-md shadow-orange-500/25"
-                >
-                  <Rocket className="w-5 h-5 fill-white" />
-                  <span>🚀 Créer une Pub Express (2 min)</span>
-                </button>
-                <button
-                  onClick={() => setShowAdsDashboard(true)}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700 font-bold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-750 transition-all cursor-pointer shadow-xs"
-                >
-                  <Megaphone className="w-5 h-5 text-orange-600" />
-                  <span>Tableau de bord ZAKA Ads</span>
-                </button>
+                {!isAssignedCashier && (currentUser.role as any) !== 'caissier' && (
+                  <>
+                    <button
+                      onClick={() => setShowExpressAdsModal(true)}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-orange-600 to-amber-500 text-white font-extrabold rounded-xl hover:opacity-95 transition-all cursor-pointer shadow-md shadow-orange-500/25"
+                    >
+                      <Rocket className="w-5 h-5 fill-white" />
+                      <span>🚀 Créer une Pub Express (2 min)</span>
+                    </button>
+                    <button
+                      onClick={() => setShowAdsDashboard(true)}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-gray-700 font-bold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-750 transition-all cursor-pointer shadow-xs"
+                    >
+                      <Megaphone className="w-5 h-5 text-orange-600" />
+                      <span>Tableau de bord ZAKA Ads</span>
+                    </button>
+                  </>
+                )}
                 {isInstallable && (
                   <button onClick={promptInstall} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 text-blue-600 font-bold rounded-xl hover:bg-blue-100 transition-colors cursor-pointer">
                     <Download className="w-5 h-5" />

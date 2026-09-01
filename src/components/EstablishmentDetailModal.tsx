@@ -58,7 +58,7 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
   
   const isCaissier = currentUser && relationshipRequests.some(r => 
     r.establishmentId === establishment.id && 
-    (r.initiatorId === currentUser.id || r.targetId === currentUser.id || r.userId === currentUser.id) &&
+    (r.initiatorId === currentUser.id || r.targetId === currentUser.id) &&
     r.status === 'acceptee' &&
     (r.isCaissier === true || r.requestedRole === 'caissier')
   );

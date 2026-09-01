@@ -767,7 +767,7 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
               <SalonManagement establishment={est} />
             )}
 
-            {(est.category === 'maquis' || est.category === 'boite_de_nuit') && (
+            {(est.category === 'maquis' || est.category === 'boite_de_nuit' || est.category === 'restaurant' || est.category === 'restaurants' || est.category === 'bar' || est.category === 'glacier_pizzeria' || est.category === 'hotel') && (
               <div className="bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 rounded-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <h5 className="text-xs font-black text-amber-900 dark:text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
