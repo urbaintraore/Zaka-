@@ -392,3 +392,31 @@ CREATE TABLE IF NOT EXISTS public.ad_statistics (
     spent NUMERIC(10, 2) NOT NULL DEFAULT 0.0,
     UNIQUE("campaignId", "creativeId", date)
 );
+
+-- =============================================================================
+-- 15. STOCKS & VENTES (GESTION CAISSE & INVENTAIRE MAQUIS/BARS/CLUBS)
+-- =============================================================================
+
+ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "isCaissier" BOOLEAN DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS public.stocks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "establishmentId" UUID NOT NULL REFERENCES public.establishments(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    price NUMERIC(10, 2) NOT NULL DEFAULT 0.0,
+    quantity INTEGER NOT NULL DEFAULT 0,
+    stock_faible BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE TABLE IF NOT EXISTS public.ventes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "establishmentId" UUID NOT NULL REFERENCES public.establishments(id) ON DELETE CASCADE,
+    "cashierId" UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    "cashierName" TEXT NOT NULL DEFAULT 'Caissier',
+    items JSONB NOT NULL DEFAULT '[]'::jsonb,
+    "totalAmount" NUMERIC(10, 2) NOT NULL DEFAULT 0.0,
+    date TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+

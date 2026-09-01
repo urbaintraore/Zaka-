@@ -13,6 +13,7 @@ import { SalonManagement } from '../components/SalonManagement';
 import { AffluenceManager } from '../components/AffluenceManager';
 import { EstablishmentPhotoGalleryManager } from '../components/EstablishmentPhotoGalleryManager';
 import { EstablishmentPhotoGallery } from '../components/EstablishmentPhotoGallery';
+import { CashierDashboard } from '../components/CashierDashboard';
 import { Sparkles, TrendingUp, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { AdExpressWizard } from '../components/AdExpressWizard';
 
@@ -764,6 +765,17 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
             
             {est.category === 'salon_de_coiffure' && (
               <SalonManagement establishment={est} />
+            )}
+
+            {(est.category === 'maquis' || est.category === 'boite_de_nuit') && (
+              <div className="bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-xs font-black text-amber-900 dark:text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>📦</span> Inventaire des Stocks & Supervision Caisse
+                  </h5>
+                </div>
+                <CashierDashboard establishmentId={est.id} />
+              </div>
             )}
 
             {/* Publications & Communications Section */}

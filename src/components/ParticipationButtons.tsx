@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db } from '../lib/firebase';
-import { collection, onSnapshot, query, where, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { useAppStore } from '../store';
 import { Publication, Establishment, EventParticipation } from '../types';
 import { Heart, CheckCircle2, MapPin, Eye, Users, Info, Sparkles, Zap } from 'lucide-react';
@@ -19,29 +18,67 @@ export function ParticipationButtons({ event, establishment }: ParticipationProp
 
   // Load participations for this event
   useEffect(() => {
-    const q = query(
-      collection(db, 'event_participations'),
-      where('eventId', '==', event.id)
-    );
+    let active = true;
+    let channel: any = null;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list: EventParticipation[] = [];
-      snapshot.forEach(docSnap => {
-        list.push({ id: docSnap.id, ...docSnap.data() } as EventParticipation);
-      });
-      setParticipations(list);
+    const loadAndSubscribe = async () => {
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from('event_participations')
+            .select('*')
+            .eq('eventId', event.id);
+          
+          if (!error && data && active) {
+            setParticipations(data as EventParticipation[]);
+            
+            // Resolve my own status
+            if (currentUser) {
+              const mine = data.find((p: any) => p.userId === currentUser.id);
+              setMyStatus(mine ? mine.status : null);
+              if (mine) setIsVisible(mine.isVisible);
+            }
+          }
 
-      // Resolve my own status
-      if (currentUser) {
-        const mine = list.find(p => p.userId === currentUser.id);
-        setMyStatus(mine ? mine.status : null);
-        if (mine) setIsVisible(mine.isVisible);
+          // Subscribe to real-time events with unique channel name to prevent "after subscribe" errors
+          const uniquePartChannel = `participations:${event.id}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+          channel = supabase
+            .channel(uniquePartChannel)
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'event_participations', filter: `eventId=eq.${event.id}` },
+              () => {
+                supabase
+                  .from('event_participations')
+                  .select('*')
+                  .eq('eventId', event.id)
+                  .then(({ data: freshData }) => {
+                    if (freshData && active) {
+                      setParticipations(freshData as EventParticipation[]);
+                      if (currentUser) {
+                        const mine = freshData.find((p: any) => p.userId === currentUser.id);
+                        setMyStatus(mine ? mine.status : null);
+                        if (mine) setIsVisible(mine.isVisible);
+                      }
+                    }
+                  });
+              }
+            )
+            .subscribe();
+        } catch (e) {
+          console.error(e);
+        }
       }
-    }, (error) => {
-      console.error("Error loading participations:", error);
-    });
+    };
 
-    return () => unsubscribe();
+    loadAndSubscribe();
+
+    return () => {
+      active = false;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, [event.id, currentUser]);
 
   // Aggregate counts
@@ -139,12 +176,13 @@ export function ParticipationButtons({ event, establishment }: ParticipationProp
     if (!currentUser) return;
 
     const docId = `${event.id}_${currentUser.id}`;
-    const partRef = doc(db, 'event_participations', docId);
 
     // If clicking same button, delete status (deselect)
     if (myStatus === status) {
       try {
-        await deleteDoc(partRef);
+        if (isSupabaseConfigured) {
+          await supabase.from('event_participations').delete().eq('id', docId);
+        }
         setMyStatus(null);
         return;
       } catch (err) {
@@ -164,7 +202,9 @@ export function ParticipationButtons({ event, establishment }: ParticipationProp
     };
 
     try {
-      await setDoc(partRef, payload);
+      if (isSupabaseConfigured) {
+        await supabase.from('event_participations').upsert({ id: docId, ...payload });
+      }
       
       // Haptic Feedback trigger
       import('../utils/haptics').then(m => m.triggerHapticFeedback([50, 30, 50]));
@@ -190,9 +230,10 @@ export function ParticipationButtons({ event, establishment }: ParticipationProp
     setIsVisible(checked);
     if (currentUser && myStatus) {
       const docId = `${event.id}_${currentUser.id}`;
-      const partRef = doc(db, 'event_participations', docId);
       try {
-        await setDoc(partRef, { isVisible: checked }, { merge: true });
+        if (isSupabaseConfigured) {
+          await supabase.from('event_participations').update({ isVisible: checked }).eq('id', docId);
+        }
       } catch (e) {
         console.error(e);
       }

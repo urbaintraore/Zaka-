@@ -1,6 +1,4 @@
-import { useState, useEffect } from 'react';
-import { db } from '../lib/firebase';
-import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
+import { useState } from 'react';
 import { useAppStore } from '../store';
 import { triggerHapticFeedback } from '../utils/haptics';
 import { 
@@ -32,7 +30,6 @@ const affluenceConfig = {
 
 export function AffluenceTracker({ establishmentId }: AffluenceTrackerProps) {
   const { currentUser, establishments, updateEstablishment } = useAppStore();
-  const [affluence, setAffluence] = useState<AffluenceLevel>('calme');
   const [gpsActive, setGpsActive] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [scannedSuccess, setScannedSuccess] = useState(false);
@@ -40,27 +37,14 @@ export function AffluenceTracker({ establishmentId }: AffluenceTrackerProps) {
   
   const establishment = establishments.find(e => e.id === establishmentId);
   const isOwner = currentUser && establishment?.ownerId === currentUser.id;
-
-  // Real-time synchronization
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'establishments', establishmentId), (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        if (data.affluence) {
-          setAffluence(data.affluence as AffluenceLevel);
-        }
-      }
-    });
-    return () => unsub();
-  }, [establishmentId]);
+  const affluence = (establishment?.affluence as AffluenceLevel) || 'calme';
 
   const handleUpdateAffluence = async (level: AffluenceLevel) => {
     triggerHapticFeedback(30);
     try {
-      await updateDoc(doc(db, 'establishments', establishmentId), {
+      await updateEstablishment(establishmentId, {
         affluence: level
       });
-      setAffluence(level);
     } catch (err) {
       console.error(err);
     }

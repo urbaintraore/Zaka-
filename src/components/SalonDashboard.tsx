@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Establishment, Coiffeur, Reservation, Review } from '../types';
 import { useAppStore } from '../store';
-import { db } from '../lib/firebase';
-import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { Users, Scissors, Clock, CheckCircle, XCircle, MessageSquare, Star, Plus, Trash2, AlertCircle } from 'lucide-react';
 
 export function SalonDashboard({ establishment }: { establishment: Establishment }) {
-  const [coiffeurs, setCoiffeurs] = useState<Coiffeur[]>([]);
+  const coiffeurs = (establishment.hairSalonData?.hairdressers || []) as Coiffeur[];
   const [newHairdresserName, setNewHairdresserName] = useState('');
   const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
   const [replyingReviewId, setReplyingReviewId] = useState<string | null>(null);
@@ -19,29 +17,11 @@ export function SalonDashboard({ establishment }: { establishment: Establishment
     updateHairSalonData 
   } = useAppStore();
 
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'establishments', establishment.id, 'coiffeurs'), (snapshot) => {
-      const coiffeurList: Coiffeur[] = [];
-      snapshot.forEach(docSnap => {
-        coiffeurList.push({ id: docSnap.id, ...docSnap.data() } as Coiffeur);
-      });
-      setCoiffeurs(coiffeurList);
-    });
-    return unsub;
-  }, [establishment.id]);
-
   const updateClientCount = async (coiffeurId: string, count: number) => {
     const validCount = Math.max(0, count);
     const now = new Date().toISOString();
     
-    // Update subcollection
     try {
-      await updateDoc(doc(db, 'establishments', establishment.id, 'coiffeurs', coiffeurId), {
-        waitingClientsCount: validCount,
-        lastUpdated: now
-      });
-
-      // Also sync to establishment's hairSalonData hairdressers array if applicable
       const updatedHairdressers = (establishment.hairSalonData?.hairdressers || []).map(h => 
         h.id === coiffeurId ? { ...h, waitingClientsCount: validCount, lastUpdated: now } : h
       );
@@ -59,21 +39,13 @@ export function SalonDashboard({ establishment }: { establishment: Establishment
     if (!newHairdresserName.trim()) return;
     const newId = 'h_' + Date.now();
     const now = new Date().toISOString();
-    const newCoiffeur: Coiffeur = {
-      id: newId,
-      establishmentId: establishment.id,
-      name: newHairdresserName.trim(),
-      waitingClientsCount: 0,
-      lastUpdated: now
-    };
 
     try {
-      await setDoc(doc(db, 'establishments', establishment.id, 'coiffeurs', newId), newCoiffeur);
-      
       const currentHairdressers = establishment.hairSalonData?.hairdressers || [];
       const updatedHairdressers = [...currentHairdressers, {
         id: newId,
-        name: newCoiffeur.name,
+        establishmentId: establishment.id,
+        name: newHairdresserName.trim(),
         waitingClientsCount: 0,
         lastUpdated: now
       }];
@@ -91,7 +63,6 @@ export function SalonDashboard({ establishment }: { establishment: Establishment
 
   const handleDeleteHairdresser = async (id: string) => {
     try {
-      await deleteDoc(doc(db, 'establishments', establishment.id, 'coiffeurs', id));
       const updatedHairdressers = (establishment.hairSalonData?.hairdressers || []).filter(h => h.id !== id);
       await updateHairSalonData(establishment.id, {
         hairdressers: updatedHairdressers,

@@ -5,7 +5,7 @@ import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone,
 import { stripHtml } from '../utils/htmlHelpers';
 import { ReservationModal } from '../components/ReservationModal';
 import { Publication, Establishment } from '../types';
-import { db } from '../lib/firebase';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { EstablishmentDetailModal } from '../components/EstablishmentDetailModal';
 import { StoriesSection } from '../components/StoriesSection';
 import { AdPlacementBanner } from '../components/AdPlacementBanner';
@@ -115,28 +115,37 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
     const fetchFavoritesAndCalculatePopularity = async () => {
       try {
         setIsPopularLoading(true);
-        const { collection, getDocs } = await import('firebase/firestore');
-        const favSnap = await getDocs(collection(db, 'favorites'));
-        if (!active) return;
-
-        const counts: Record<string, number> = {};
-        favSnap.forEach(docSnap => {
-          const data = docSnap.data();
-          const estIds = data?.establishmentIds || [];
-          estIds.forEach((id: string) => {
-            counts[id] = (counts[id] || 0) + 1;
-          });
-        });
-
-        // Map and sort establishments by favorite count
-        const estsWithCounts = Object.entries(counts)
-          .map(([id, count]) => ({ id, favoritesCount: count }))
-          .sort((a, b) => b.favoritesCount - a.favoritesCount);
-
-        setPopularEstsByFavorites(estsWithCounts);
+        let counts: Record<string, number> = {};
+        if (isSupabaseConfigured) {
+          const { data, error } = await supabase.from('favorites').select('establishmentIds');
+          if (!error && data) {
+            data.forEach(row => {
+              const estIds = row.establishmentIds || [];
+              estIds.forEach((id: string) => {
+                counts[id] = (counts[id] || 0) + 1;
+              });
+            });
+          }
+        }
+        if (Object.keys(counts).length === 0) {
+          // Fallback: use establishments list sorted by averageRating (simulating counts using rating)
+          const fallback = establishments
+            .filter(e => e.status === 'valide')
+            .map(e => ({ id: e.id, favoritesCount: Math.round(e.averageRating * 3) }))
+            .sort((a, b) => b.favoritesCount - a.favoritesCount);
+          if (active) {
+            setPopularEstsByFavorites(fallback);
+          }
+        } else {
+          const estsWithCounts = Object.entries(counts)
+            .map(([id, count]) => ({ id, favoritesCount: count }))
+            .sort((a, b) => b.favoritesCount - a.favoritesCount);
+          if (active) {
+            setPopularEstsByFavorites(estsWithCounts);
+          }
+        }
       } catch (err) {
         console.error("Erreur lors de la récupération des favoris pour les Coups de cœur:", err);
-        // Fallback: use establishments list sorted by averageRating (simulating counts using rating)
         const fallback = establishments
           .filter(e => e.status === 'valide')
           .map(e => ({ id: e.id, favoritesCount: Math.round(e.averageRating * 3) }))
@@ -169,14 +178,16 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
     const fetchRankings = async () => {
       try {
         setIsRankingsLoading(true);
-        const { getDoc, doc } = await import('firebase/firestore');
-        const docRef = doc(db, 'rankings', 'cache');
-        const docSnap = await getDoc(docRef);
-        
         let cachedData = null;
-        if (docSnap.exists()) {
-          cachedData = docSnap.data();
-          if (active && cachedData) {
+        if (isSupabaseConfigured) {
+          const { data, error } = await supabase.from('rankings').select('*').eq('id', 'cache').maybeSingle();
+          if (!error && data) {
+            cachedData = data;
+          }
+        }
+        
+        if (cachedData) {
+          if (active) {
             setRankings({
               mostViewed: cachedData.mostViewed || [],
               bestRated: cachedData.bestRated || [],
@@ -190,10 +201,6 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
         // Always run the fresh real-time recalculation in the background
         await runRecalculate();
       } catch (err: any) {
-        // If offline or network unavailable, silently fallback to direct recalculation
-        if (err?.code !== 'unavailable' && !err?.message?.includes('offline')) {
-          console.warn("Chargement initial des classements depuis le cache local (mode réseau réduit/hors-ligne).");
-        }
         await runRecalculate();
       } finally {
         if (active) setIsRankingsLoading(false);
@@ -204,42 +211,25 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
       if (isRecalculating) return;
       setIsRecalculating(true);
       try {
-        const { getDocs, collection, query, where, setDoc, doc } = await import('firebase/firestore');
         const nowStr = new Date().toISOString();
         const sevenDaysAgoDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
         const sevenDaysAgo = sevenDaysAgoDate.toISOString();
         
         let rawEstViews: any[] = [];
-        try {
-          const qEstViews = query(collection(db, 'establishment_views'), where('timestamp', '>=', sevenDaysAgo));
-          const estViewsSnap = await getDocs(qEstViews);
-          estViewsSnap.forEach(d => {
-            rawEstViews.push(d.data());
-          });
-        } catch {
-          // Fallback gracefully if offline or query fails
-        }
-
         let rawPubViews: any[] = [];
-        try {
-          const qPubViews = query(collection(db, 'publication_views'), where('timestamp', '>=', sevenDaysAgo));
-          const pubViewsSnap = await getDocs(qPubViews);
-          pubViewsSnap.forEach(d => {
-            rawPubViews.push(d.data());
-          });
-        } catch {
-          // Fallback gracefully if offline or query fails
-        }
-
         let rawParticipations: any[] = [];
-        try {
-          const qParticipations = query(collection(db, 'event_participations'), where('timestamp', '>=', sevenDaysAgo));
-          const participationsSnap = await getDocs(qParticipations);
-          participationsSnap.forEach(d => {
-            rawParticipations.push(d.data());
-          });
-        } catch {
-          // Fallback gracefully if offline or query fails
+
+        if (isSupabaseConfigured) {
+          try {
+            const { data: estViews } = await supabase.from('establishment_views').select('*').gte('timestamp', sevenDaysAgo);
+            rawEstViews = estViews || [];
+            const { data: pubViews } = await supabase.from('publication_views').select('*').gte('timestamp', sevenDaysAgo);
+            rawPubViews = pubViews || [];
+            const { data: participationsData } = await supabase.from('event_participations').select('*').gte('timestamp', sevenDaysAgo);
+            rawParticipations = participationsData || [];
+          } catch (e) {
+            console.error("Error querying stats from Supabase:", e);
+          }
         }
 
         // --- CALCULATE ESTABLISHMENT VIEWS RANKING (Top des plus vus) ---
@@ -344,10 +334,12 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           updatedAt: nowStr
         };
 
-        try {
-          await setDoc(doc(db, 'rankings', 'cache'), newRankings);
-        } catch {
-          // Silent when offline or local cache
+        if (isSupabaseConfigured) {
+          try {
+            await supabase.from('rankings').upsert({ id: 'cache', ...newRankings });
+          } catch {
+            // Silent when offline or local cache
+          }
         }
         
         if (active) {

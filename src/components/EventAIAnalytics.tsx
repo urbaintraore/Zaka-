@@ -1,7 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { Publication, Establishment, EventParticipation } from '../types';
-import { db } from '../lib/firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { Sparkles, TrendingUp, Clock, AlertTriangle, Lightbulb, Zap, Send, BarChart2, ShieldAlert } from 'lucide-react';
 
 interface AIAnalyticsProps {
@@ -18,24 +17,33 @@ export function EventAIAnalytics({ event, establishment }: AIAnalyticsProps) {
 
   // Load live participations to calculate exact statistics
   useEffect(() => {
-    const q = query(
-      collection(db, 'event_participations'),
-      where('eventId', '==', event.id)
-    );
+    let active = true;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list: EventParticipation[] = [];
-      snapshot.forEach(docSnap => {
-        list.push({ id: docSnap.id, ...docSnap.data() } as EventParticipation);
-      });
-      setParticipations(list);
-      setLoading(false);
-    }, (error) => {
-      console.error(error);
-      setLoading(false);
-    });
+    const fetchParticipations = async () => {
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from('event_participations')
+            .select('*')
+            .eq('eventId', event.id);
+          
+          if (!error && data && active) {
+            setParticipations(data as EventParticipation[]);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      if (active) {
+        setLoading(false);
+      }
+    };
 
-    return () => unsubscribe();
+    fetchParticipations();
+
+    return () => {
+      active = false;
+    };
   }, [event.id]);
 
   // Participation breakdowns

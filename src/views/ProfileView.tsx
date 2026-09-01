@@ -5,6 +5,7 @@ import { LogOut, User, Check, X, MessageSquare, Store, Sparkles, Calendar, Downl
 import { GerantDashboard } from './GerantDashboard';
 import { AdminDashboard } from './AdminDashboard';
 import { EntrepriseDashboard } from './EntrepriseDashboard';
+import { CaissierView } from '../components/CaissierView';
 import { ZakaAdsDashboard } from '../components/ZakaAdsDashboard';
 import { useInstallApp } from '../hooks/useInstallApp';
 import { PersonalTimelineAndRecs } from '../components/PersonalTimelineAndRecs';
@@ -50,6 +51,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   const [ordersActiveTab, setOrdersActiveTab] = useState<'current' | 'history'>('current');
   const [showAdsDashboard, setShowAdsDashboard] = useState(false);
   const [showExpressAdsModal, setShowExpressAdsModal] = useState(false);
+  const [showCashierTerminal, setShowCashierTerminal] = useState(false);
 
   // Profile editing state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -201,6 +203,33 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   };
 
   if (currentUser) {
+    const cashierRequests = relationshipRequests.filter(
+      r => (r.userId === currentUser.id || r.initiatorId === currentUser.id || r.targetId === currentUser.id) &&
+      r.status === 'acceptee' &&
+      (r.isCaissier === true || r.requestedRole === 'caissier')
+    );
+    const assignedCashierEsts = establishments.filter(e => cashierRequests.some(r => r.establishmentId === e.id));
+    const isAssignedCashier = cashierRequests.length > 0;
+
+    if (showCashierTerminal) {
+      return (
+        <div className="pb-24 max-w-5xl mx-auto p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setShowCashierTerminal(false)}
+              className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-bold text-xs hover:bg-gray-200 cursor-pointer"
+            >
+              ← Retour au Profil
+            </button>
+            <span className="text-xs font-black text-orange-600 dark:text-orange-400">
+              🛒 Poste de Caisse Actif
+            </span>
+          </div>
+          <CaissierView onLogout={logout} />
+        </div>
+      );
+    }
+
     if (showAdsDashboard || currentUser.role === 'annonceur') {
       return (
         <div className="pb-24 max-w-5xl mx-auto p-4 space-y-4">
@@ -227,7 +256,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
         </div>
       );
     }
-    if (currentUser.role === 'admin' || currentUser.role === 'gerant' || currentUser.role === 'salon_coiffure') {
+    if (currentUser.role === 'admin' || currentUser.role === 'gerant' || currentUser.role === 'salon_coiffure' || currentUser.role === 'caissier') {
       return (
         <div className="pb-24">
           {/* Sub Navigation for Dashboard/Profile */}
@@ -240,7 +269,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 }}
                 className={`flex-1 py-4 text-center font-bold text-sm border-b-2 transition-all ${subView === 'dashboard' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
               >
-                {currentUser.role === 'salon_coiffure' ? 'Espace Salon' : currentUser.role === 'gerant' ? 'Espace Gérant' : 'Administration'}
+                {currentUser.role === 'salon_coiffure' ? 'Espace Salon' : currentUser.role === 'gerant' ? 'Espace Gérant' : currentUser.role === 'caissier' ? '🛒 Espace Caisse (POS)' : 'Administration'}
               </button>
               <button 
                 onClick={() => {
@@ -264,6 +293,8 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
             {subView === 'dashboard' ? (
               currentUser.role === 'admin' ? (
                 <AdminDashboard onLogout={logout} />
+              ) : currentUser.role === 'caissier' ? (
+                <CaissierView onLogout={logout} />
               ) : (
                 <GerantDashboard onLogout={logout} onNavigate={onNavigate} onStartChatWithConv={onStartChatWithConv} />
               )
@@ -280,7 +311,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                       <p className="text-gray-500 font-medium">{currentUser.email || currentUser.phone}</p>
                       <p className="text-gray-400 text-sm mt-1">{currentUser.city}, {currentUser.country}</p>
                       <div className="mt-4 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold uppercase tracking-wider">
-                        Compte {currentUser.role === 'gerant' ? 'Gérant' : currentUser.role === 'salon_coiffure' ? 'Salon de Coiffure' : 'Administrateur'}
+                        Compte {currentUser.role === 'gerant' ? 'Gérant' : currentUser.role === 'caissier' ? 'Caissier' : currentUser.role === 'salon_coiffure' ? 'Salon de Coiffure' : 'Administrateur'}
                       </div>
 
                       <div className="mt-8 w-full flex flex-col gap-3">
@@ -544,11 +575,23 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               <h2 className="text-2xl font-black text-gray-900">{currentUser.name}</h2>
               <p className="text-gray-500 font-medium">{currentUser.email || currentUser.phone}</p>
               <p className="text-gray-400 text-sm mt-1">{currentUser.city}, {currentUser.country}</p>
-              <div className="mt-4 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold uppercase tracking-wider">
-                Compte {(currentUser.role as any) === 'gerant' ? 'Gérant' : (currentUser.role as any) === 'admin' ? 'Administrateur' : 'Client'}
+              <div className="mt-4 px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full text-xs font-bold uppercase tracking-wider">
+                {isAssignedCashier 
+                  ? `Compte Caissier • ${assignedCashierEsts.map(e => e.name).join(', ') || 'Établissement'}`
+                  : `Compte ${(currentUser.role as any) === 'gerant' ? 'Gérant' : (currentUser.role as any) === 'admin' ? 'Administrateur' : (currentUser.role as any) === 'caissier' ? 'Caissier' : 'Client'}`
+                }
               </div>
 
               <div className="mt-8 w-full flex flex-col gap-3">
+                {isAssignedCashier && (
+                  <button 
+                    onClick={() => setShowCashierTerminal(true)} 
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white font-black rounded-xl hover:opacity-95 transition-all cursor-pointer shadow-lg shadow-orange-500/25"
+                  >
+                    <ShoppingBag className="w-5 h-5 fill-white" />
+                    <span>🛒 Ouvrir mon Espace Caisse (POS)</span>
+                  </button>
+                )}
                 <button 
                   onClick={startEditing} 
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors cursor-pointer shadow-md shadow-orange-600/10"
@@ -1519,8 +1562,9 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {mode === 'register' && !isOtpSent && (
             <>
-              <div className="grid grid-cols-2 gap-2 mb-2 p-1.5 bg-gray-100/80 rounded-xl">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mb-2 p-1.5 bg-gray-100/80 rounded-xl">
                 <button type="button" onClick={() => setRole('client')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'client' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>👤 Client</button>
+                <button type="button" onClick={() => setRole('caissier')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'caissier' ? 'bg-white shadow-sm text-orange-600 font-black' : 'text-gray-500 hover:text-gray-700'}`}>🛒 Caissier</button>
                 <button type="button" onClick={() => setRole('gerant')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'gerant' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>🏪 Gérant</button>
                 <button type="button" onClick={() => setRole('annonceur')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'annonceur' ? 'bg-white shadow-sm text-orange-600 font-extrabold' : 'text-gray-500 hover:text-gray-700'}`}>📢 Annonceur</button>
                 <button type="button" onClick={() => setRole('entreprise')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'entreprise' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>🏢 Entreprise</button>

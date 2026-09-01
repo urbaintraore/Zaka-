@@ -1,16 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { db } from '../lib/firebase';
-import { 
-  collection, 
-  onSnapshot, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where, 
-  setDoc 
-} from 'firebase/firestore';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { useAppStore } from '../store';
 import { triggerHapticFeedback } from '../utils/haptics';
 import { 
@@ -65,10 +54,26 @@ interface ArchivedPlaylist {
 const genres = ['Afrobeat', 'Amapiano', 'Coupe Decale', 'Dancehall', 'Hip Hop', 'Salsa', 'Zouk'];
 
 export function PlaylistDJ({ establishmentId }: PlaylistDJProps) {
-  const { currentUser, establishments } = useAppStore();
-  const [currentSong, setCurrentSong] = useState<Song | null>(null);
+  const { currentUser, establishments, updateEstablishment } = useAppStore();
   const [suggestions, setSuggestions] = useState<SongSuggestion[]>([]);
-  const [archivedPlaylists, setArchivedPlaylists] = useState<ArchivedPlaylist[]>([]);
+  const [archivedPlaylists] = useState<ArchivedPlaylist[]>([
+    {
+      id: 'arch_1',
+      establishmentId,
+      name: 'Groove de Vendredi',
+      date: 'Vendredi dernier',
+      songsCount: 18,
+      genre: 'Amapiano & Afrobeat',
+    },
+    {
+      id: 'arch_2',
+      establishmentId,
+      name: 'La Nuit Electro-Salsa',
+      date: 'Samedi dernier',
+      songsCount: 24,
+      genre: 'Salsa & Clubbing',
+    }
+  ]);
   const [activeTab, setActiveTab] = useState<'live' | 'proposals' | 'archives'>('live');
   
   // Suggest song form state
@@ -84,58 +89,91 @@ export function PlaylistDJ({ establishmentId }: PlaylistDJProps) {
   const [djGenre, setDjGenre] = useState('Afrobeat');
 
   const establishment = establishments.find(e => e.id === establishmentId);
+  const currentSong = (establishment?.currentSong as Song) || null;
+
   const isDJOrOwner = currentUser && (
     currentUser.id === establishment?.ownerId || 
     currentUser.role === 'dj'
   );
 
-  // Real-time synchronization
+  // Real-time synchronization of song proposals
   useEffect(() => {
-    // Current song listener
-    const estDocRef = doc(db, 'establishments', establishmentId);
-    const unsubEst = onSnapshot(estDocRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        if (data.currentSong) {
-          setCurrentSong(data.currentSong as Song);
-        } else {
-          setCurrentSong(null);
+    let active = true;
+    let channel: any = null;
+
+    const loadAndSubscribe = async () => {
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from('playlists_dj')
+            .select('*')
+            .eq('establishmentId', establishmentId);
+          
+          if (!error && data && active) {
+            const list = (data as any[]).map(row => ({
+              id: row.id,
+              establishmentId: row.establishmentId,
+              title: row.title,
+              artist: row.artist,
+              genre: row.genre,
+              suggestedBy: row.suggestedBy,
+              suggestedByName: row.suggestedByName,
+              votes: Array.isArray(row.votes) ? row.votes : [],
+              status: row.status as SongSuggestion['status'],
+              createdAt: new Date(row.createdAt).getTime()
+            }));
+            
+            list.sort((a, b) => b.votes.length - a.votes.length);
+            setSuggestions(list);
+          }
+
+          // Subscribe with unique channel name to prevent "after subscribe" errors
+          const uniquePlaylistChannel = `playlists_dj:${establishmentId}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+          channel = supabase
+            .channel(uniquePlaylistChannel)
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'playlists_dj', filter: `establishmentId=eq.${establishmentId}` },
+              () => {
+                supabase
+                  .from('playlists_dj')
+                  .select('*')
+                  .eq('establishmentId', establishmentId)
+                  .then(({ data: freshData }) => {
+                    if (freshData && active) {
+                      const list = (freshData as any[]).map(row => ({
+                        id: row.id,
+                        establishmentId: row.establishmentId,
+                        title: row.title,
+                        artist: row.artist,
+                        genre: row.genre,
+                        suggestedBy: row.suggestedBy,
+                        suggestedByName: row.suggestedByName,
+                        votes: Array.isArray(row.votes) ? row.votes : [],
+                        status: row.status as SongSuggestion['status'],
+                        createdAt: new Date(row.createdAt).getTime()
+                      }));
+                      
+                      list.sort((a, b) => b.votes.length - a.votes.length);
+                      setSuggestions(list);
+                    }
+                  });
+              }
+            )
+            .subscribe();
+        } catch (err) {
+          console.error(err);
         }
       }
-    });
+    };
 
-    // Client song suggestions listener
-    const suggestionsCol = collection(db, 'song_suggestions');
-    const unsubSug = onSnapshot(suggestionsCol, (snapshot) => {
-      const list: SongSuggestion[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data.establishmentId === establishmentId) {
-          list.push({ id: docSnap.id, ...data } as SongSuggestion);
-        }
-      });
-      // Sort suggestions by votes count descending, then pending first
-      list.sort((a, b) => b.votes.length - a.votes.length);
-      setSuggestions(list);
-    });
-
-    // DJ Archived playlists listener
-    const archivesCol = collection(db, 'dj_archived_playlists');
-    const unsubArch = onSnapshot(archivesCol, (snapshot) => {
-      const list: ArchivedPlaylist[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data.establishmentId === establishmentId) {
-          list.push({ id: docSnap.id, ...data } as ArchivedPlaylist);
-        }
-      });
-      setArchivedPlaylists(list);
-    });
+    loadAndSubscribe();
 
     return () => {
-      unsubEst();
-      unsubSug();
-      unsubArch();
+      active = false;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [establishmentId]);
 
@@ -149,12 +187,12 @@ export function PlaylistDJ({ establishmentId }: PlaylistDJProps) {
       artist: djArtist.trim(),
       genre: djGenre,
       duration: '3:30',
-      coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=200', // Neon club vinyl cover
+      coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=200',
       playedAt: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
     };
 
     try {
-      await updateDoc(doc(db, 'establishments', establishmentId), {
+      await updateEstablishment(establishmentId, {
         currentSong: updatedSong
       });
       setIsUpdatingCurrentSong(false);
@@ -171,7 +209,7 @@ export function PlaylistDJ({ establishmentId }: PlaylistDJProps) {
     setSubmittingSuggestion(true);
     triggerHapticFeedback([40, 20, 40]);
 
-    const proposal: Omit<SongSuggestion, 'id'> = {
+    const proposal = {
       establishmentId,
       title: newTitle.trim(),
       artist: newArtist.trim(),
@@ -180,11 +218,13 @@ export function PlaylistDJ({ establishmentId }: PlaylistDJProps) {
       suggestedByName: currentUser.name,
       votes: [currentUser.id], // Auto vote for own proposal
       status: 'pending',
-      createdAt: Date.now()
+      createdAt: new Date().toISOString()
     };
 
     try {
-      await addDoc(collection(db, 'song_suggestions'), proposal);
+      if (isSupabaseConfigured) {
+        await supabase.from('playlists_dj').insert(proposal);
+      }
       setNewTitle('');
       setNewArtist('');
     } catch (err) {
@@ -200,16 +240,18 @@ export function PlaylistDJ({ establishmentId }: PlaylistDJProps) {
 
     let updatedVotes = [...votes];
     if (updatedVotes.includes(currentUser.id)) {
-      // Remove vote if already voted
       updatedVotes = updatedVotes.filter(uid => uid !== currentUser.id);
     } else {
       updatedVotes.push(currentUser.id);
     }
 
     try {
-      await updateDoc(doc(db, 'song_suggestions', id), {
-        votes: updatedVotes
-      });
+      if (isSupabaseConfigured) {
+        await supabase
+          .from('playlists_dj')
+          .update({ votes: updatedVotes })
+          .eq('id', id);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -218,7 +260,12 @@ export function PlaylistDJ({ establishmentId }: PlaylistDJProps) {
   const handleUpdateStatus = async (id: string, status: SongSuggestion['status']) => {
     triggerHapticFeedback(25);
     try {
-      await updateDoc(doc(db, 'song_suggestions', id), { status });
+      if (isSupabaseConfigured) {
+        await supabase
+          .from('playlists_dj')
+          .update({ status })
+          .eq('id', id);
+      }
     } catch (err) {
       console.error(err);
     }

@@ -32,7 +32,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
     try {
       console.error("[ErrorBoundary] LocalStorage state overview:", {
         theme: localStorage.getItem('app-theme'),
-        hasFirebaseToken: !!Object.keys(localStorage).find(k => k.includes('firebase:authUser'))
+        hasToken: !!Object.keys(localStorage).find(k => k.includes('sb-') || k.includes('supabase'))
       });
     } catch(e) {}
   }

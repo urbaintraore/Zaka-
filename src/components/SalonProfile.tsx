@@ -1,24 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Establishment, Coiffeur } from '../types';
 import { HairGallery } from './HairGallery';
-import { Users } from 'lucide-react';
-import { db } from '../lib/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
 
 export function SalonProfile({ establishment }: { establishment: Establishment }) {
-  const [coiffeurs, setCoiffeurs] = useState<Coiffeur[]>([]);
+  const coiffeurs = (establishment.hairSalonData?.hairdressers || []) as Coiffeur[];
   const salonData = establishment.hairSalonData;
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'establishments', establishment.id, 'coiffeurs'), (snapshot) => {
-      const coiffeurList: Coiffeur[] = [];
-      snapshot.forEach(doc => {
-        coiffeurList.push({ id: doc.id, ...doc.data() } as Coiffeur);
-      });
-      setCoiffeurs(coiffeurList);
-    });
-    return unsub;
-  }, [establishment.id]);
 
   return (
     <div className="space-y-6">

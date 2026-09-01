@@ -9,6 +9,7 @@ import { LiveDAmbiance } from './LiveDAmbiance';
 import { AffluenceTracker } from './AffluenceTracker';
 import { PlaylistDJ } from './PlaylistDJ';
 import { CashierDashboard } from './CashierDashboard';
+import { CaissierView } from './CaissierView';
 import { TableauDeBordRH } from './TableauDeBordRH';
 import { AdPlacementBanner } from './AdPlacementBanner';
 import { CrowdStatusBadge } from './CrowdStatusBadge';
@@ -57,9 +58,9 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
   
   const isCaissier = currentUser && relationshipRequests.some(r => 
     r.establishmentId === establishment.id && 
-    (r.initiatorId === currentUser.id || r.targetId === currentUser.id) &&
+    (r.initiatorId === currentUser.id || r.targetId === currentUser.id || r.userId === currentUser.id) &&
     r.status === 'acceptee' &&
-    r.isCaissier
+    (r.isCaissier === true || r.requestedRole === 'caissier')
   );
 
   const visitCount = carnetEntrees 
@@ -382,7 +383,10 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
               { id: 'rh', label: '💼 Tableau RH' }
             ];
             if ((isOwner || isCaissier) && (establishment.category === 'maquis' || establishment.category === 'boite_de_nuit')) {
-              tabs.push({ id: 'stocks_ventes', label: '🛒 Stocks & Caisse' });
+              tabs.push({ 
+                id: 'stocks_ventes', 
+                label: isOwner ? '🛒 Stocks & Ventes' : '🛒 Ma Caisse (POS)' 
+              });
             }
             return (
               <div className="flex bg-gray-100 dark:bg-gray-900 rounded-2xl p-1 gap-1 border border-gray-150 dark:border-gray-800 flex-shrink-0 overflow-x-auto hide-scrollbar">
@@ -556,7 +560,11 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
           ) : activeSubTab === 'dj' ? (
             <PlaylistDJ establishmentId={establishment.id} />
           ) : activeSubTab === 'stocks_ventes' ? (
-            <CashierDashboard establishmentId={establishment.id} />
+            isOwner ? (
+              <CashierDashboard establishmentId={establishment.id} />
+            ) : (
+              <CaissierView initialEstablishmentId={establishment.id} />
+            )
           ) : activeSubTab === 'rh' ? (
             <TableauDeBordRH establishmentId={establishment.id} establishmentName={establishment.name} />
           ) : (

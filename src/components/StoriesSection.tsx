@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, FormEvent } from 'react';
-import { db } from '../lib/firebase';
-import { collection, onSnapshot, query, doc, addDoc, updateDoc, deleteDoc, arrayUnion, setDoc } from 'firebase/firestore';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { useAppStore } from '../store';
 import { Story, Establishment } from '../types';
 import { X, Play, Heart, Send, Plus, Eye, Award, Volume2, MapPin, Smile, MessageCircle, BarChart3, Star, Trash2 } from 'lucide-react';
@@ -67,29 +66,65 @@ export function StoriesSection({ onStartChat }: { onStartChat?: (estId: string, 
   const djRequests = relationshipRequests.filter(r => r.initiatorId === currentUser?.id && r.isDJ && r.status === 'acceptee');
   const isPartner = currentUser?.role === 'entreprise';
 
-  // Load active stories from firestore
+  // Load active stories from Supabase
   useEffect(() => {
-    const q = query(collection(db, 'stories'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const allStories: Story[] = [];
-      snapshot.forEach(docSnap => {
-        allStories.push({ id: docSnap.id, ...docSnap.data() } as Story);
-      });
+    let active = true;
+    let channel: any = null;
 
-      // Filter 24h client-side to keep current
-      const active = allStories.filter(s => {
-        const diff = Date.now() - new Date(s.createdAt).getTime();
-        return diff < 24 * 60 * 60 * 1000;
-      });
+    const loadStories = async () => {
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from('stories')
+            .select('*');
 
-      // Sort by date ascending so oldest story of creator plays first
-      active.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      setStories(active);
-    }, (error) => {
-      console.error("Error loading stories:", error);
-    });
+          if (!error && data && active) {
+            const allStories = data as Story[];
+            
+            // Filter 24h client-side to keep current
+            const activeStories = allStories.filter(s => {
+              const diff = Date.now() - new Date(s.createdAt).getTime();
+              return diff < 24 * 60 * 60 * 1000;
+            });
 
-    return () => unsubscribe();
+            // Sort by date ascending so oldest story of creator plays first
+            activeStories.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+            setStories(activeStories);
+          }
+
+          // Realtime Postgres changes with a unique name to prevent "after subscribe" subscription errors
+          const uniqueChannelName = `stories-channel-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+          channel = supabase
+            .channel(uniqueChannelName)
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'stories' },
+              async () => {
+                const { data: updatedStories } = await supabase.from('stories').select('*');
+                if (updatedStories && active) {
+                  const activeStories = (updatedStories as Story[]).filter(s => {
+                    const diff = Date.now() - new Date(s.createdAt).getTime();
+                    return diff < 24 * 60 * 60 * 1000;
+                  });
+                  activeStories.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+                  setStories(activeStories);
+                }
+              }
+            )
+            .subscribe();
+
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    };
+
+    loadStories();
+
+    return () => {
+      active = false;
+      if (channel) supabase.removeChannel(channel);
+    };
   }, []);
 
   // Preset autofills
@@ -137,12 +172,18 @@ export function StoriesSection({ onStartChat }: { onStartChat?: (estId: string, 
       const currentCreator = creatorsList[activeCreatorIndex];
       const currentStory = currentCreator.stories[activeStoryIndex];
 
-      // Mark as viewed in Firestore if not already viewed
+      // Mark as viewed in Supabase if not already viewed
       if (currentUser && !currentStory.views?.includes(currentUser.id)) {
-        const storyRef = doc(db, 'stories', currentStory.id);
-        updateDoc(storyRef, {
-          views: arrayUnion(currentUser.id)
-        }).catch(err => console.error("Error updating story view:", err));
+        const updatedViews = [...(currentStory.views || []), currentUser.id];
+        if (isSupabaseConfigured) {
+          supabase
+            .from('stories')
+            .update({ views: updatedViews })
+            .eq('id', currentStory.id)
+            .then(({ error }) => {
+              if (error) console.error("Error updating story view:", error);
+            });
+        }
       }
 
       setStoryProgress(0);
@@ -201,24 +242,20 @@ export function StoriesSection({ onStartChat }: { onStartChat?: (estId: string, 
   // Cleanup expired stories simulation button
   const handleCleanupExpired = async () => {
     try {
-      const q = query(collection(db, 'stories'));
-      const snapshot = await new Promise<any>((resolve) => {
-        const unsub = onSnapshot(q, (snap) => {
-          unsub();
-          resolve(snap);
-        });
-      });
-
-      let count = 0;
-      snapshot.forEach(async (docSnap: any) => {
-        const data = docSnap.data();
-        const diff = Date.now() - new Date(data.createdAt).getTime();
-        if (diff >= 24 * 60 * 60 * 1000) {
-          await deleteDoc(doc(db, 'stories', docSnap.id));
-          count++;
+      if (isSupabaseConfigured) {
+        const { data } = await supabase.from('stories').select('*');
+        if (data) {
+          let count = 0;
+          for (const s of data) {
+            const diff = Date.now() - new Date(s.createdAt).getTime();
+            if (diff >= 24 * 60 * 60 * 1000) {
+              await supabase.from('stories').delete().eq('id', s.id);
+              count++;
+            }
+          }
+          alert(`Nettoyage complété. ${count} stories expirées (>24h) supprimées.`);
         }
-      });
-      alert(`Nettoyage complété. ${count} stories expirées (>24h) supprimées.`);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -270,7 +307,7 @@ export function StoriesSection({ onStartChat }: { onStartChat?: (estId: string, 
       }
     }
 
-    const storyData: Omit<Story, 'id'> = {
+    const storyData = {
       creatorId: selectedCreatorId,
       creatorName,
       creatorAvatar,
@@ -282,14 +319,17 @@ export function StoriesSection({ onStartChat }: { onStartChat?: (estId: string, 
       music: storyMusic,
       location: customLocation || storyLocation || "Ouagadougou",
       createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       views: [],
       reactions: {},
       responsesCount: 0,
-      establishmentId: establishmentId || undefined
+      establishmentId: establishmentId || null
     };
 
     try {
-      await addDoc(collection(db, 'stories'), storyData);
+      if (isSupabaseConfigured) {
+        await supabase.from('stories').insert([storyData]);
+      }
       setIsPosting(false);
       setStoryText("");
       setCustomMedia("");
@@ -319,11 +359,15 @@ export function StoriesSection({ onStartChat }: { onStartChat?: (estId: string, 
       setFloatingReactions(prev => prev.filter(r => r.id !== reactionId));
     }, 2000);
 
-    const storyRef = doc(db, 'stories', currentStory.id);
     const updatedReactions = { ...currentStory.reactions, [currentUser.id]: emoji };
 
     try {
-      await updateDoc(storyRef, { reactions: updatedReactions });
+      if (isSupabaseConfigured) {
+        await supabase
+          .from('stories')
+          .update({ reactions: updatedReactions })
+          .eq('id', currentStory.id);
+      }
       import('../utils/haptics').then(m => m.triggerHapticFeedback(30));
     } catch (err) {
       console.error(err);
@@ -348,39 +392,49 @@ export function StoriesSection({ onStartChat }: { onStartChat?: (estId: string, 
     const textPayload = `💬 Réponse à votre story "${currentStory.text || "image"}" :\n\n${replyText}`;
 
     try {
-      // 1. Ensure conversation document exists
-      const isDJChat = currentStory.creatorType === 'dj';
-      const convRef = doc(db, 'conversations', convId);
-      
-      const convData = {
-        clientId: currentUser.id,
-        clientName: currentUser.name || currentUser.email || 'Client',
-        establishmentId: targetEst.id,
-        establishmentName: targetEst.name,
-        ownerId: targetEst.ownerId,
-        recipientType: isDJChat ? 'dj' : 'gerant',
-        lastMessage: textPayload,
-        lastMessageAt: new Date().toISOString(),
-        lastSenderId: currentUser.id,
-        unreadByClient: false,
-        unreadByGerant: !isDJChat,
-        unreadByDj: isDJChat
-      };
+      if (isSupabaseConfigured) {
+        const isDJChat = currentStory.creatorType === 'dj';
+        
+        // 1. Ensure conversation document exists
+        const convData = {
+          clientId: currentUser.id,
+          clientName: currentUser.name || currentUser.email || 'Client',
+          establishmentId: targetEst.id,
+          establishmentName: targetEst.name,
+          ownerId: targetEst.ownerId,
+          lastMessage: textPayload,
+          lastMessageAt: new Date().toISOString(),
+          lastSenderId: currentUser.id,
+          unreadByClient: false,
+          unreadByGerant: !isDJChat,
+          unreadByDj: isDJChat
+        };
 
-      await setDoc(convRef, convData, { merge: true });
+        const { data: conv } = await supabase
+          .from('conversations')
+          .upsert([convData], { onConflict: 'id' })
+          .select()
+          .single();
 
-      // 2. Add message to messages subcollection
-      const messageData = {
-        senderId: currentUser.id,
-        text: textPayload,
-        createdAt: new Date().toISOString()
-      };
+        if (conv) {
+          // 2. Add message
+          const messageData = {
+            conversationId: conv.id,
+            senderId: currentUser.id,
+            senderName: currentUser.name || 'Client',
+            text: textPayload,
+            createdAt: new Date().toISOString()
+          };
 
-      await addDoc(collection(db, 'conversations', convId, 'messages'), messageData);
+          await supabase.from('messages').insert([messageData]);
+        }
 
-      // 3. Increment story response count
-      const storyRef = doc(db, 'stories', currentStory.id);
-      await updateDoc(storyRef, { responsesCount: (currentStory.responsesCount || 0) + 1 });
+        // 3. Increment story response count
+        await supabase
+          .from('stories')
+          .update({ responsesCount: (currentStory.responsesCount || 0) + 1 })
+          .eq('id', currentStory.id);
+      }
 
       setReplyText("");
       setGlobalError({ message: "Votre réponse a été envoyée directement dans l'inbox privé !", type: "info" });
@@ -404,7 +458,9 @@ export function StoriesSection({ onStartChat }: { onStartChat?: (estId: string, 
   const handleDeleteStory = async (storyId: string) => {
     if (!window.confirm("Voulez-vous vraiment supprimer cette Story ?")) return;
     try {
-      await deleteDoc(doc(db, 'stories', storyId));
+      if (isSupabaseConfigured) {
+        await supabase.from('stories').delete().eq('id', storyId);
+      }
       if (showStats) {
         setShowStats(prev => prev ? prev.filter(s => s.id !== storyId) : null);
       }

@@ -102,6 +102,7 @@ interface AppContextType extends AppState {
   toggleCaissierStatus: (requestId: string, isCaissier: boolean) => Promise<void>;
   addStockItem: (item: Omit<StockItem, 'id' | 'createdAt'>) => Promise<void>;
   updateStockItem: (id: string, updates: Partial<Omit<StockItem, 'id' | 'establishmentId'>>) => Promise<void>;
+  deleteStockItem: (id: string) => Promise<void>;
   recordSale: (sale: Omit<SaleRecord, 'id' | 'date'>) => Promise<void>;
   addApplication: (app: Omit<Application, 'id' | 'status' | 'date'>) => Promise<void>;
   updateApplicationStatus: (id: string, status: 'acceptee' | 'refusee') => Promise<void>;
@@ -593,10 +594,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
               message: error?.message,
               stack: error?.stack
             });
-            if (error?.code === 'permission-denied') {
-              console.warn("Token invalide ou permissions insuffisantes, déconnexion...");
-              auth.signOut();
-            }
             setState(s => ({ ...s, currentUser: null, loading: false }));
           });
           } catch (snapshotError) {
@@ -1922,6 +1919,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleCaissierStatus = async (requestId: string, isCaissier: boolean) => {
     try {
+      if (isSupabaseConfigured) {
+        await supabase.from('relationship_requests').update({ isCaissier }).eq('id', requestId);
+      }
       await updateDoc(doc(db, 'relationshipRequests', requestId), { isCaissier });
     } catch (error: any) {
       console.error("Erreur toggleCaissierStatus:", error);
@@ -1931,6 +1931,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addStockItem = async (item: Omit<StockItem, 'id' | 'createdAt'>) => {
     try {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase.from('stocks').insert([{
+          establishmentId: item.establishmentId,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          stock_faible: item.stock_faible ?? (item.quantity <= 5)
+        }]).select().single();
+        
+        if (!error && data) {
+          setState(s => ({
+            ...s,
+            stocks: [...s.stocks.filter(st => st.id !== data.id), data as StockItem]
+          }));
+        }
+      }
       await addDoc(collection(db, 'stocks'), {
         ...item,
         createdAt: new Date().toISOString()
@@ -1942,14 +1958,66 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateStockItem = async (id: string, updates: Partial<Omit<StockItem, 'id' | 'establishmentId'>>) => {
     try {
+      if (isSupabaseConfigured) {
+        await supabase.from('stocks').update(updates).eq('id', id);
+        setState(s => ({
+          ...s,
+          stocks: s.stocks.map(item => item.id === id ? { ...item, ...updates } : item)
+        }));
+      }
       await updateDoc(doc(db, 'stocks', id), updates);
     } catch (error: any) {
       handleFirestoreError(error, OperationType.UPDATE, `stocks/${id}`);
     }
   };
 
+  const deleteStockItem = async (id: string) => {
+    try {
+      if (isSupabaseConfigured) {
+        await supabase.from('stocks').delete().eq('id', id);
+        setState(s => ({
+          ...s,
+          stocks: s.stocks.filter(item => item.id !== id)
+        }));
+      }
+      await deleteDoc(doc(db, 'stocks', id));
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.DELETE, `stocks/${id}`);
+    }
+  };
+
   const recordSale = async (sale: Omit<SaleRecord, 'id' | 'date'>) => {
     try {
+      if (isSupabaseConfigured) {
+        // 1. Decrement stock in Supabase
+        for (const item of sale.items) {
+          const { data: stockRow } = await supabase.from('stocks').select('quantity').eq('id', item.stockId).single();
+          if (stockRow) {
+            const nextQty = Math.max(0, (stockRow.quantity || 0) - item.quantity);
+            await supabase.from('stocks').update({
+              quantity: nextQty,
+              stock_faible: nextQty <= 5
+            }).eq('id', item.stockId);
+          }
+        }
+        // 2. Insert sale record into Supabase ventes table
+        const { data: saleData } = await supabase.from('ventes').insert([{
+          establishmentId: sale.establishmentId,
+          cashierId: sale.cashierId,
+          cashierName: sale.cashierName || 'Caissier',
+          items: sale.items,
+          totalAmount: sale.totalAmount,
+          date: new Date().toISOString()
+        }]).select().single();
+
+        if (saleData) {
+          setState(s => ({
+            ...s,
+            ventes: [saleData as SaleRecord, ...s.ventes]
+          }));
+        }
+      }
+
       await runTransaction(db, async (transaction) => {
         const stockItemsToUpdate = [];
         
@@ -3131,6 +3199,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toggleCaissierStatus,
       addStockItem,
       updateStockItem,
+      deleteStockItem,
       recordSale,
       addApplication,
       updateApplicationStatus,

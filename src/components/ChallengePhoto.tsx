@@ -1,14 +1,5 @@
 import { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react';
-import { db } from '../lib/firebase';
-import { 
-  collection, 
-  onSnapshot, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  arrayUnion, 
-  arrayRemove 
-} from 'firebase/firestore';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { useAppStore } from '../store';
 import { triggerHapticFeedback } from '../utils/haptics';
 import { compressImage } from '../utils/imageCompressor';
@@ -74,38 +65,107 @@ export function ChallengePhoto({ eventId, eventTitle }: ChallengePhotoProps) {
 
   // Sync entries in real-time
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'photo_challenges'), (snapshot) => {
-      const list: PhotoSubmission[] = [];
-      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-      
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data.eventId === eventId && data.createdAt >= oneDayAgo) {
-          list.push({ id: docSnap.id, ...data } as PhotoSubmission);
+    let active = true;
+    let channel: any = null;
+
+    const loadAndSubscribe = async () => {
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from('photo_challenges')
+            .select('*')
+            .eq('eventId', eventId);
+          
+          if (!error && data && active) {
+            const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+            const filtered = (data as any[])
+              .filter(item => {
+                const itemTime = new Date(item.createdAt).getTime();
+                return itemTime >= oneDayAgo;
+              })
+              .map(item => ({
+                id: item.id,
+                eventId: item.eventId,
+                userId: item.userId,
+                userName: item.userName,
+                userAvatar: item.userAvatar,
+                photoUrl: item.photoUrl,
+                caption: item.caption,
+                emoji: item.emoji,
+                votes: Array.isArray(item.votes) ? item.votes : [],
+                createdAt: new Date(item.createdAt).getTime()
+              }));
+            
+            filtered.sort((a, b) => b.votes.length - a.votes.length);
+            setSubmissions(filtered);
+            setLoading(false);
+          }
+
+          // Subscribe with unique channel name to prevent "after subscribe" errors
+          const uniqueChallengeChannel = `photo_challenges:${eventId}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+          channel = supabase
+            .channel(uniqueChallengeChannel)
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'photo_challenges', filter: `eventId=eq.${eventId}` },
+              () => {
+                supabase
+                  .from('photo_challenges')
+                  .select('*')
+                  .eq('eventId', eventId)
+                  .then(({ data: freshData }) => {
+                    if (freshData && active) {
+                      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+                      const filtered = (freshData as any[])
+                        .filter(item => new Date(item.createdAt).getTime() >= oneDayAgo)
+                        .map(item => ({
+                          id: item.id,
+                          eventId: item.eventId,
+                          userId: item.userId,
+                          userName: item.userName,
+                          userAvatar: item.userAvatar,
+                          photoUrl: item.photoUrl,
+                          caption: item.caption,
+                          emoji: item.emoji,
+                          votes: Array.isArray(item.votes) ? item.votes : [],
+                          createdAt: new Date(item.createdAt).getTime()
+                        }));
+                      filtered.sort((a, b) => b.votes.length - a.votes.length);
+                      setSubmissions(filtered);
+                    }
+                  });
+              }
+            )
+            .subscribe();
+        } catch (e) {
+          console.error(e);
         }
-      });
+      }
+    };
 
-      // Sort by votes descending
-      list.sort((a, b) => b.votes.length - a.votes.length);
-      setSubmissions(list);
-      setLoading(false);
-    });
+    loadAndSubscribe();
 
-    return () => unsub();
+    return () => {
+      active = false;
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [eventId]);
 
   const handleVote = async (id: string, votes: string[]) => {
     if (!currentUser) return;
     triggerHapticFeedback(30);
 
-    const docRef = doc(db, 'photo_challenges', id);
     const hasVoted = votes.includes(currentUser.id);
+    const updatedVotes = hasVoted 
+      ? votes.filter(v => v !== currentUser.id)
+      : [...votes, currentUser.id];
 
     try {
-      if (hasVoted) {
-        await updateDoc(docRef, { votes: arrayRemove(currentUser.id) });
-      } else {
-        await updateDoc(docRef, { votes: arrayUnion(currentUser.id) });
+      if (isSupabaseConfigured) {
+        await supabase
+          .from('photo_challenges')
+          .update({ votes: updatedVotes })
+          .eq('id', id);
       }
     } catch (err) {
       console.error(err);
@@ -136,7 +196,7 @@ export function ChallengePhoto({ eventId, eventTitle }: ChallengePhotoProps) {
     setTimeout(async () => {
       const finalPhoto = photoUrl.trim();
       
-      const payload: Omit<PhotoSubmission, 'id'> = {
+      const payload = {
         eventId,
         userId: currentUser.id,
         userName: currentUser.name,
@@ -145,11 +205,13 @@ export function ChallengePhoto({ eventId, eventTitle }: ChallengePhotoProps) {
         caption: caption.trim() || 'Ambiance de folie !',
         emoji,
         votes: [currentUser.id], // Auto vote own photo
-        createdAt: Date.now()
+        createdAt: new Date().toISOString()
       };
 
       try {
-        await addDoc(collection(db, 'photo_challenges'), payload);
+        if (isSupabaseConfigured) {
+          await supabase.from('photo_challenges').insert(payload);
+        }
         setPhotoUrl('');
         setCaption('');
         setEmoji('🔥');

@@ -1,4 +1,4 @@
-export type Role = 'client' | 'gerant' | 'admin' | 'entreprise' | 'salon_coiffure' | 'annonceur' | 'partenaire' | 'dj';
+export type Role = 'client' | 'gerant' | 'admin' | 'entreprise' | 'salon_coiffure' | 'annonceur' | 'partenaire' | 'dj' | 'caissier';
 
 export interface User {
   id: string;
@@ -372,6 +372,8 @@ export interface Establishment {
   zakaPointsCost?: number;
   reservationsClosed?: boolean;
   reservationsClosedReason?: string;
+  affluence?: 'calme' | 'anime' | 'tres_anime' | 'complet';
+  currentSong?: any;
 }
 
 export type PubType = 'annonce' | 'promo' | 'bon_plan' | 'evenement' | 'recrutement';
@@ -667,6 +669,7 @@ export interface StockItem {
   name: string;
   price: number;
   quantity: number;
+  stock_faible?: boolean;
   createdAt: string;
 }
 

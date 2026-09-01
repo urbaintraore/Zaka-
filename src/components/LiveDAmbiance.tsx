@@ -1,16 +1,5 @@
 import { useState, useEffect, useRef, FormEvent } from 'react';
-import { db } from '../lib/firebase';
-import { 
-  doc, 
-  setDoc, 
-  onSnapshot, 
-  updateDoc, 
-  arrayUnion, 
-  deleteDoc, 
-  collection, 
-  addDoc, 
-  Timestamp 
-} from 'firebase/firestore';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { useAppStore } from '../store';
 import { triggerHapticFeedback } from '../utils/haptics';
 import { 
@@ -82,26 +71,91 @@ export function LiveDAmbiance({ establishmentId, establishmentName }: LiveDAmbia
 
   // Listen to the live session for this establishment
   useEffect(() => {
-    const liveDocRef = doc(db, 'lives', establishmentId);
-    const unsubscribe = onSnapshot(liveDocRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data() as LiveSession;
-        setActiveLive(data);
-        if (data.status === 'live') {
-          // Calculate remaining time
-          const now = Date.now();
-          const endsAt = data.endsAt instanceof Timestamp ? data.endsAt.toMillis() : data.endsAt;
-          const diff = Math.max(0, Math.floor((endsAt - now) / 1000));
-          setTimeRemaining(diff);
-        }
-      } else {
-        setActiveLive(null);
-      }
-      setLoading(false);
-    });
+    let active = true;
+    let channel: any = null;
 
-    return () => unsubscribe();
-  }, [establishmentId]);
+    const loadAndSubscribe = async () => {
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from('live_ambiance')
+            .select('*')
+            .eq('establishmentId', establishmentId)
+            .eq('isLive', true)
+            .maybeSingle();
+
+          if (!error && data && active) {
+            const row = data as any;
+            const liveData: LiveSession = {
+              id: row.id,
+              establishmentId: row.establishmentId,
+              establishmentName: establishmentName,
+              broadcasterId: row.broadcasterId || currentUser?.id || 'dj',
+              broadcasterName: row.broadcasterName || 'DJ Live',
+              status: 'live',
+              startedAt: new Date(row.startedAt).getTime(),
+              endsAt: new Date(row.endedAt || (new Date(row.startedAt).getTime() + 300 * 1000)).getTime(),
+              viewersCount: row.viewersCount || 10,
+              comments: Array.isArray(row.comments) ? row.comments : [],
+              reactions: row.reactions || { heart: 1, fire: 1, clap: 1, love: 1, laugh: 1 },
+              isPremium: isPremiumEst
+            };
+            setActiveLive(liveData);
+
+            const now = Date.now();
+            const diff = Math.max(0, Math.floor((liveData.endsAt - now) / 1000));
+            setTimeRemaining(diff);
+          } else if (active) {
+            setActiveLive(null);
+          }
+
+          // Subscribe with unique channel name to prevent "after subscribe" errors
+          const uniqueLiveChannel = `live_ambiance:${establishmentId}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+          channel = supabase
+            .channel(uniqueLiveChannel)
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'live_ambiance', filter: `establishmentId=eq.${establishmentId}` },
+              (payload: any) => {
+                if (payload.new && payload.new.isLive && active) {
+                  const row = payload.new;
+                  const liveData: LiveSession = {
+                    id: row.id,
+                    establishmentId: row.establishmentId,
+                    establishmentName: establishmentName,
+                    broadcasterId: row.broadcasterId || currentUser?.id || 'dj',
+                    broadcasterName: row.broadcasterName || 'DJ Live',
+                    status: 'live',
+                    startedAt: new Date(row.startedAt).getTime(),
+                    endsAt: new Date(row.endedAt || (new Date(row.startedAt).getTime() + 300 * 1000)).getTime(),
+                    viewersCount: row.viewersCount || 10,
+                    comments: Array.isArray(row.comments) ? row.comments : [],
+                    reactions: row.reactions || { heart: 1, fire: 1, clap: 1, love: 1, laugh: 1 },
+                    isPremium: isPremiumEst
+                  };
+                  setActiveLive(liveData);
+                } else if (active) {
+                  setActiveLive(null);
+                }
+              }
+            )
+            .subscribe();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      if (active) {
+        setLoading(false);
+      }
+    };
+
+    loadAndSubscribe();
+
+    return () => {
+      active = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [establishmentId, establishmentName]);
 
   // Broadcaster Timer
   useEffect(() => {
@@ -109,8 +163,7 @@ export function LiveDAmbiance({ establishmentId, establishmentName }: LiveDAmbia
 
     const interval = setInterval(() => {
       const now = Date.now();
-      const endsAt = activeLive.endsAt instanceof Timestamp ? activeLive.endsAt.toMillis() : activeLive.endsAt;
-      const diff = Math.max(0, Math.floor((endsAt - now) / 1000));
+      const diff = Math.max(0, Math.floor((activeLive.endsAt - now) / 1000));
       setTimeRemaining(diff);
 
       if (diff <= 0) {
@@ -150,16 +203,16 @@ export function LiveDAmbiance({ establishmentId, establishmentName }: LiveDAmbia
     const maxDurationSeconds = isPremiumEst ? 600 : 300; // 10 mins vs 5 mins
     const endsAt = Date.now() + maxDurationSeconds * 1000;
 
-    const newLive: LiveSession = {
-      id: establishmentId,
+    const newLive = {
       establishmentId,
-      establishmentName,
+      videoUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7',
+      title: `Direct de ${establishmentName}`,
+      isLive: true,
+      viewersCount: Math.floor(Math.random() * 12) + 5,
+      startedAt: new Date().toISOString(),
+      endedAt: new Date(endsAt).toISOString(),
       broadcasterId: currentUser.id,
       broadcasterName: currentUser.name,
-      status: 'live',
-      startedAt: Date.now(),
-      endsAt,
-      viewersCount: Math.floor(Math.random() * 12) + 5, // Simulated organic starter viewers
       comments: [
         {
           id: 'system-1',
@@ -169,12 +222,13 @@ export function LiveDAmbiance({ establishmentId, establishmentName }: LiveDAmbia
           timestamp: Date.now()
         }
       ],
-      reactions: { heart: 1, fire: 1, clap: 1, love: 1, laugh: 1 },
-      isPremium: isPremiumEst
+      reactions: { heart: 1, fire: 1, clap: 1, love: 1, laugh: 1 }
     };
 
     try {
-      await setDoc(doc(db, 'lives', establishmentId), newLive);
+      if (isSupabaseConfigured) {
+        await supabase.from('live_ambiance').insert(newLive);
+      }
       setIsBroadcasting(true);
       
       // Simulate pushing a notification to followers
@@ -194,27 +248,30 @@ export function LiveDAmbiance({ establishmentId, establishmentName }: LiveDAmbia
     triggerHapticFeedback([100, 50, 100]);
 
     // Save Replay to Stories automatically
-    const storyId = `replay-${establishmentId}-${Date.now()}`;
     const storyPayload = {
-      id: storyId,
       establishmentId,
       establishmentName,
       creatorId: currentUser?.id || 'system',
       creatorName: currentUser?.name || 'Gérant',
       creatorAvatar: currentUser?.avatar || '',
       type: 'video',
-      mediaUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=600', // Premium nightlife theme
+      mediaUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=600',
       caption: `🔴 REPLAY : Super Ambiance d'hier soir chez ${establishmentName} !`,
-      createdAt: Timestamp.now(),
-      expiresAt: Timestamp.fromDate(new Date(Date.now() + 24 * 60 * 60 * 1000)), // 24h
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       reactions: { '🔥': [], '❤️': [], '👏': [] },
       views: [],
       location: establishmentName
     };
 
     try {
-      // Add story
-      await setDoc(doc(db, 'stories', storyId), storyPayload);
+      if (isSupabaseConfigured) {
+        // Add story
+        await supabase.from('stories').insert(storyPayload);
+
+        // Delete the live session
+        await supabase.from('live_ambiance').delete().eq('establishmentId', establishmentId);
+      }
 
       // Generate random interesting stats
       const totalSpectators = Math.floor(Math.random() * 180) + 45;
@@ -231,8 +288,6 @@ export function LiveDAmbiance({ establishmentId, establishmentName }: LiveDAmbia
         profileClicks
       });
 
-      // Delete the live session
-      await deleteDoc(doc(db, 'lives', establishmentId));
       setIsBroadcasting(false);
     } catch (err) {
       console.error(err);
@@ -251,10 +306,15 @@ export function LiveDAmbiance({ establishmentId, establishmentName }: LiveDAmbia
       timestamp: Date.now()
     };
 
+    const updatedComments = [...activeLive.comments, newComment];
+
     try {
-      await updateDoc(doc(db, 'lives', establishmentId), {
-        comments: arrayUnion(newComment)
-      });
+      if (isSupabaseConfigured) {
+        await supabase
+          .from('live_ambiance')
+          .update({ comments: updatedComments })
+          .eq('establishmentId', establishmentId);
+      }
       setChatInput('');
       triggerHapticFeedback(15);
     } catch (err) {
@@ -266,11 +326,18 @@ export function LiveDAmbiance({ establishmentId, establishmentName }: LiveDAmbia
     if (!activeLive) return;
     triggerHapticFeedback(20);
 
-    const key = `reactions.${type}`;
+    const updatedReactions = {
+      ...activeLive.reactions,
+      [type]: (activeLive.reactions[type] || 0) + 1
+    };
+
     try {
-      await updateDoc(doc(db, 'lives', establishmentId), {
-        [key]: (activeLive.reactions[type] || 0) + 1
-      });
+      if (isSupabaseConfigured) {
+        await supabase
+          .from('live_ambiance')
+          .update({ reactions: updatedReactions })
+          .eq('establishmentId', establishmentId);
+      }
     } catch (err) {
       console.error(err);
     }

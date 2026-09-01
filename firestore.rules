@@ -244,7 +244,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming()) && incoming().role != 'admin';
       allow update: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming()) && incoming().role == existing().role || isUserAdmin();
     }
@@ -291,10 +291,10 @@ service cloud.firestore {
     }
 
     match /conversations/{convId} {
-      allow get: if isSignedIn() && (resource == null || resource.data.clientId == request.auth.uid || resource.data.ownerId == request.auth.uid);
+      allow get: if isSignedIn() && (resource == null || resource.data.clientId == request.auth.uid || resource.data.ownerId == request.auth.uid || resource.data.get('djId', '') == request.auth.uid);
       allow list: if isSignedIn();
-      allow create: if isSignedIn() && (incoming().clientId == request.auth.uid || incoming().ownerId == request.auth.uid) && isValidConversation(incoming());
-      allow update: if isSignedIn() && (existing().clientId == request.auth.uid || existing().ownerId == request.auth.uid) && (incoming().clientId == existing().clientId && incoming().ownerId == existing().ownerId);
+      allow create: if isSignedIn() && (incoming().clientId == request.auth.uid || incoming().ownerId == request.auth.uid || incoming().get('djId', '') == request.auth.uid) && isValidConversation(incoming());
+      allow update: if isSignedIn() && (existing().clientId == request.auth.uid || existing().ownerId == request.auth.uid || existing().get('djId', '') == request.auth.uid) && (incoming().clientId == existing().clientId && incoming().ownerId == existing().ownerId);
       allow delete: if false;
       
       match /messages/{msgId} {
@@ -303,12 +303,14 @@ service cloud.firestore {
           || !exists(/databases/$(database)/documents/conversations/$(convId))
           || (exists(/databases/$(database)/documents/conversations/$(convId)) && get(/databases/$(database)/documents/conversations/$(convId)).data.clientId == request.auth.uid)
           || (exists(/databases/$(database)/documents/conversations/$(convId)) && get(/databases/$(database)/documents/conversations/$(convId)).data.ownerId == request.auth.uid)
+          || (exists(/databases/$(database)/documents/conversations/$(convId)) && get(/databases/$(database)/documents/conversations/$(convId)).data.get('djId', '') == request.auth.uid)
         );
         allow create: if isSignedIn() && isValidMessage(incoming()) && incoming().senderId == request.auth.uid && (
           isUserAdmin()
           || !exists(/databases/$(database)/documents/conversations/$(convId))
           || (exists(/databases/$(database)/documents/conversations/$(convId)) && get(/databases/$(database)/documents/conversations/$(convId)).data.clientId == request.auth.uid)
           || (exists(/databases/$(database)/documents/conversations/$(convId)) && get(/databases/$(database)/documents/conversations/$(convId)).data.ownerId == request.auth.uid)
+          || (exists(/databases/$(database)/documents/conversations/$(convId)) && get(/databases/$(database)/documents/conversations/$(convId)).data.get('djId', '') == request.auth.uid)
         );
       }
     }
@@ -536,14 +538,16 @@ service cloud.firestore {
 
     match /stocks/{stockId} {
       allow read: if true;
-      allow create, update: if isSignedIn() && isValidStockItem(incoming());
+      allow create: if isSignedIn() && isValidStockItem(incoming());
+      allow update: if isSignedIn() && isValidStockItem(incoming());
       allow delete: if isSignedIn();
     }
 
     match /ventes/{venteId} {
-      allow read: if true;
-      allow create, update: if isSignedIn() && isValidSaleRecord(incoming());
-      allow delete: if isSignedIn();
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidSaleRecord(incoming()) && (incoming().cashierId == request.auth.uid || isUserAdmin());
+      allow update: if isUserAdmin();
+      allow delete: if isUserAdmin();
     }
   }
 }

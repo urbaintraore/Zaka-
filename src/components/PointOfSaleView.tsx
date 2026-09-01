@@ -12,7 +12,9 @@ interface PointOfSaleViewProps {
 }
 
 export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
-  const { currentUser, stocks, recordSale } = useAppStore();
+  const { currentUser, stocks, recordSale, establishments } = useAppStore();
+
+  const est = establishments.find(e => e.id === establishmentId);
 
   const [cart, setCart] = useState<Record<string, number>>({});
   const [saleSuccess, setSaleSuccess] = useState<boolean>(false);
@@ -42,7 +44,7 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
 
     const currentQty = cart[stockId] || 0;
     if (currentQty >= item.quantity) {
-      setErrorMsg(`Stock insuffisant pour "${item.name}".`);
+      setErrorMsg(`Stock insuffisant pour "${item.name}". Quantité disponible en stock : ${item.quantity}.`);
       return;
     }
 
@@ -92,8 +94,16 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
   // Safe Sale Transaction with atomic stock checks
   const handleValidateSale = async () => {
     if (cartItems.length === 0) {
-      setErrorMsg("Votre panier est vide.");
+      setErrorMsg("Votre panier de vente est vide.");
       return;
+    }
+
+    // Pre-flight check
+    for (const ci of cartItems) {
+      if (ci.quantity > ci.item!.quantity) {
+        setErrorMsg(`Stock insuffisant pour "${ci.item!.name}". Disponible: ${ci.item!.quantity}, Demandé: ${ci.quantity}`);
+        return;
+      }
     }
 
     const saleItems: SaleItem[] = cartItems.map(ci => ({
@@ -115,7 +125,7 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
       setIsSubmitting(true);
       setErrorMsg(null);
       
-      // Calls the transactional store function (decrements and raises errors if stock runs below required amount)
+      // Calls the transactional store function (decrements stock and throws error if stock runs below required amount)
       await recordSale(salePayload);
 
       setLastSaleRecord({
@@ -126,7 +136,7 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
 
       setCart({});
       setSaleSuccess(true);
-      setSuccessMsg("Vente enregistrée et stock décrémenté atomiquement !");
+      setSuccessMsg("Vente validée et stock décrémenté avec succès !");
       
       setTimeout(() => setSuccessMsg(null), 5000);
     } catch (err: any) {
@@ -142,10 +152,20 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
 
   const shareReceiptWhatsApp = (sale: SaleRecord) => {
     const itemsText = sale.items
-      .map(it => `• ${it.name} x${it.quantity} (${formatPrice(it.unitPrice)}/u)`)
+      .map(it => `• ${it.name} x${it.quantity} (${formatPrice(it.unitPrice)}/u) = ${formatPrice(it.unitPrice * it.quantity)}`)
       .join('\n');
     
-    const text = `🧾 *REÇU DE VENTE*\n---------------------------\n🏢 Établissement: *${currentUser?.name || 'Notre établissement'}*\n📅 Date: ${new Date(sale.date).toLocaleString('fr-FR')}\n👤 Caissier: ${sale.cashierName || 'Staff'}\n---------------------------\n*Articles vendus :*\n${itemsText}\n---------------------------\n💰 *TOTAL : ${formatPrice(sale.totalAmount)}*\n\nMerci pour votre confiance ! ✨`;
+    const text = `🧾 *REÇU DE VENTE - ${est?.name || 'Zaka+'}*\n` +
+      `---------------------------\n` +
+      `🏢 Établissement : *${est?.name || 'Notre établissement'}*\n` +
+      `📅 Date : ${new Date(sale.date).toLocaleString('fr-FR')}\n` +
+      `👤 Caissier : ${sale.cashierName || 'Staff'}\n` +
+      `🧾 Réf : #${sale.id.slice(0, 8)}\n` +
+      `---------------------------\n` +
+      `*Articles vendus :*\n${itemsText}\n` +
+      `---------------------------\n` +
+      `💰 *TOTAL PAYÉ : ${formatPrice(sale.totalAmount)}*\n\n` +
+      `Merci pour votre visite ! ✨`;
     
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
@@ -167,24 +187,24 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
             <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-950/40 rounded-full flex items-center justify-center mx-auto mb-3">
               <CheckCircle className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <h3 className="text-base font-black text-gray-900 dark:text-white">Transaction Validée</h3>
+            <h3 className="text-base font-black text-gray-900 dark:text-white">Vente Validée</h3>
             <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">Reçu virtuel généré et disponible ci-dessous.</p>
           </div>
 
           {/* Ticket styling */}
           <div className="p-4 bg-gray-50 dark:bg-gray-950 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 font-mono space-y-4">
             <div className="text-center border-b border-dashed border-gray-200 dark:border-gray-800 pb-3">
-              <h4 className="text-xs font-black text-gray-900 dark:text-white">REÇU DE CAISSE</h4>
-              <p className="text-[9px] text-gray-500 mt-1">Zaka+ POS System</p>
+              <h4 className="text-xs font-black text-gray-900 dark:text-white">{est?.name || 'ZAKA+ POINT DE VENTE'}</h4>
+              <p className="text-[9px] text-gray-500 mt-1">Ticket de caisse officiel</p>
             </div>
 
             <div className="text-[10px] space-y-1 text-gray-600 dark:text-gray-400">
               <div className="flex justify-between">
-                <span>Date:</span>
+                <span>Date :</span>
                 <span>{new Date(lastSaleRecord.date).toLocaleString('fr-FR')}</span>
               </div>
               <div className="flex justify-between">
-                <span>Caissier:</span>
+                <span>Caissier :</span>
                 <span>{lastSaleRecord.cashierName}</span>
               </div>
             </div>
@@ -198,9 +218,9 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
               ))}
             </div>
 
-            <div className="flex justify-between text-xs font-black text-gray-950 dark:text-white">
-              <span>TOTAL</span>
-              <span>{formatPrice(lastSaleRecord.totalAmount)}</span>
+            <div className="flex justify-between text-xs font-black text-gray-950 dark:text-white pt-1">
+              <span>TOTAL PAYÉ</span>
+              <span className="text-orange-600 dark:text-orange-400">{formatPrice(lastSaleRecord.totalAmount)}</span>
             </div>
           </div>
 
@@ -226,7 +246,7 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
             onClick={() => { setSaleSuccess(false); setLastSaleRecord(null); }}
             className="w-full py-3 bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 rounded-xl text-xs font-black uppercase text-center cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors"
           >
-            Nouvelle Transaction
+            Nouvelle Vente
           </button>
         </motion.div>
       ) : (
@@ -239,13 +259,13 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
               <Search className="w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Rechercher une boisson ou un article..."
+                placeholder="Rechercher une boisson dans le menu..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="flex-1 text-xs font-semibold outline-none bg-transparent text-gray-900 dark:text-white"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="text-gray-400 hover:text-gray-600 text-xs">
+                <button onClick={() => setSearchQuery('')} className="text-gray-400 hover:text-gray-600 text-xs font-bold cursor-pointer">
                   Vider
                 </button>
               )}
@@ -253,22 +273,22 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
 
             {errorMsg && (
               <div className="p-3.5 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 text-red-700 dark:text-red-400 rounded-xl text-xs font-bold flex items-center gap-2">
-                <AlertTriangle className="w-4.5 h-4.5 text-red-500" />
-                {errorMsg}
+                <AlertTriangle className="w-4.5 h-4.5 text-red-500 shrink-0" />
+                <span>{errorMsg}</span>
               </div>
             )}
 
             {filteredStocks.length === 0 ? (
               <div className="p-12 text-center bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800">
                 <ShoppingBag className="w-10 h-10 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
-                <p className="text-xs font-bold text-gray-400">Aucune boisson disponible en stock.</p>
+                <p className="text-xs font-bold text-gray-400">Aucune boisson enregistrée dans le stock.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
                 {filteredStocks.map(drink => {
                   const currentCartQty = cart[drink.id] || 0;
                   const isOutOfStock = drink.quantity <= 0;
-                  const isLowStock = drink.quantity > 0 && drink.quantity < 10;
+                  const isLowStock = drink.quantity > 0 && drink.quantity <= 5;
                   
                   return (
                     <button
@@ -279,7 +299,7 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
                         isOutOfStock 
                           ? 'opacity-40 border-gray-150 dark:border-gray-800 bg-gray-50 dark:bg-gray-950' 
                           : isLowStock
-                          ? 'border-amber-200 hover:border-amber-400 dark:border-amber-900'
+                          ? 'border-amber-300 dark:border-amber-900/60 bg-amber-50/10'
                           : 'border-gray-100 hover:border-gray-300 dark:border-gray-800'
                       }`}
                     >
@@ -289,12 +309,12 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
                             {drink.name}
                           </span>
                           {currentCartQty > 0 && (
-                            <span className="px-2 py-0.5 bg-orange-600 text-white rounded-full text-[10px] font-black">
-                              {currentCartQty}
+                            <span className="px-2 py-0.5 bg-orange-600 text-white rounded-full text-[10px] font-black shrink-0">
+                              x{currentCartQty}
                             </span>
                           )}
                         </div>
-                        <span className="text-xs font-bold text-orange-600 dark:text-orange-400 mt-1 block">
+                        <span className="text-xs font-black text-orange-600 dark:text-orange-400 mt-1 block">
                           {formatPrice(drink.price)}
                         </span>
                       </div>
@@ -304,10 +324,10 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
                           isOutOfStock 
                             ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' 
                             : isLowStock 
-                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 animate-pulse'
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 animate-pulse'
                             : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
                         }`}>
-                          {isOutOfStock ? "Rupture" : `${drink.quantity} en stock`}
+                          {isOutOfStock ? "Rupture" : `${drink.quantity} dispo`}
                         </span>
                         
                         <div className="w-7 h-7 rounded-full bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 flex items-center justify-center hover:bg-orange-100 dark:hover:bg-orange-900/30">
@@ -322,12 +342,12 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
           </div>
 
           {/* Cart & Checkout Panel (Right Column) */}
-          <div className="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 flex flex-col justify-between h-fit space-y-4 shadow-sm">
+          <div className="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-150 dark:border-gray-800 flex flex-col justify-between h-fit space-y-4 shadow-xs">
             <div>
-              <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3 mb-4">
+              <div className="flex items-center justify-between border-b border-gray-150 dark:border-gray-800 pb-3 mb-4">
                 <div className="flex items-center gap-2">
                   <ShoppingBag className="w-5 h-5 text-orange-500" />
-                  <span className="text-sm font-black text-gray-900 dark:text-white">Panier</span>
+                  <span className="text-sm font-black text-gray-900 dark:text-white">Panier de Vente</span>
                 </div>
                 {cartItems.length > 0 && (
                   <button
@@ -342,28 +362,30 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
               {cartItems.length === 0 ? (
                 <div className="py-12 text-center text-xs font-bold text-gray-400 dark:text-gray-500">
                   <ShoppingBag className="w-10 h-10 text-gray-200 dark:text-gray-800 mx-auto mb-2" />
-                  Tapez sur des boissons pour les ajouter au panier de vente.
+                  Sélectionnez des boissons pour composer la commande client.
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[320px] overflow-y-auto">
+                <div className="space-y-2.5 max-h-[320px] overflow-y-auto">
                   {cartItems.map(ci => (
-                    <div key={ci.stockId} className="flex items-center justify-between bg-gray-50/50 dark:bg-gray-950 p-2.5 rounded-xl border border-gray-100 dark:border-gray-850">
+                    <div key={ci.stockId} className="flex items-center justify-between bg-gray-50 dark:bg-gray-950 p-2.5 rounded-xl border border-gray-100 dark:border-gray-850">
                       <div className="flex-1 min-w-0 pr-2">
                         <p className="text-xs font-bold text-gray-900 dark:text-white truncate">{ci.item!.name}</p>
-                        <p className="text-[10px] font-bold text-orange-600 dark:text-orange-400">{formatPrice(ci.item!.price)}</p>
+                        <p className="text-[10px] font-bold text-orange-600 dark:text-orange-400">
+                          {formatPrice(ci.item!.price)} / unité
+                        </p>
                       </div>
                       
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-center gap-2">
                         <button
                           onClick={() => removeFromCart(ci.stockId)}
-                          className="w-7 h-7 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-850 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-center cursor-pointer"
+                          className="w-7 h-7 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center cursor-pointer"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
                         <span className="text-xs font-black min-w-[15px] text-center dark:text-white">{ci.quantity}</span>
                         <button
                           onClick={() => addToCart(ci.stockId)}
-                          className="w-7 h-7 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-850 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-center cursor-pointer"
+                          className="w-7 h-7 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
@@ -375,18 +397,18 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
             </div>
 
             {cartItems.length > 0 && (
-              <div className="border-t border-gray-100 dark:border-gray-800 pt-4 space-y-4">
+              <div className="border-t border-gray-150 dark:border-gray-800 pt-4 space-y-4">
                 <div className="flex items-center justify-between text-sm font-black text-gray-900 dark:text-white">
-                  <span>Montant Total</span>
-                  <span className="text-orange-600 dark:text-orange-400 text-base">{formatPrice(cartTotal)}</span>
+                  <span>Total à encaisser</span>
+                  <span className="text-orange-600 dark:text-orange-400 text-lg">{formatPrice(cartTotal)}</span>
                 </div>
 
                 <button
                   onClick={handleValidateSale}
                   disabled={isSubmitting}
-                  className="w-full py-3 bg-orange-600 text-white rounded-xl font-black text-xs uppercase shadow-md active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-black text-xs uppercase shadow-md active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  {isSubmitting ? "Validation..." : "Enregistrer la vente"}
+                  {isSubmitting ? "Validation & Décrémentation..." : "Valider la vente"}
                 </button>
               </div>
             )}

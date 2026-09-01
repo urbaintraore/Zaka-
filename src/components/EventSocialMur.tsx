@@ -1,17 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { db } from '../lib/firebase';
-import { 
-  collection, 
-  onSnapshot, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where, 
-  arrayUnion, 
-  arrayRemove 
-} from 'firebase/firestore';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { useAppStore } from '../store';
 import { triggerHapticFeedback } from '../utils/haptics';
 import { 
@@ -76,28 +64,99 @@ export function EventSocialMur({ eventId, isOwnerOrDJ }: EventSocialMurProps) {
 
   // Listen to the Social Wall posts for this event
   useEffect(() => {
-    const postsCol = collection(db, 'event_comments');
-    const unsub = onSnapshot(postsCol, (snapshot) => {
-      const list: SocialPost[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data.eventId === eventId) {
-          list.push({ id: docSnap.id, ...data } as SocialPost);
+    let active = true;
+    let channel: any = null;
+
+    const loadAndSubscribe = async () => {
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from('event_social_posts')
+            .select('*')
+            .eq('eventId', eventId);
+          
+          if (!error && data && active) {
+            const list = (data as any[]).map(item => ({
+              id: item.id,
+              eventId: item.eventId,
+              userId: item.userId,
+              userName: item.userName,
+              userAvatar: item.userAvatar || '',
+              text: item.text,
+              imageUrl: item.imageUrl || undefined,
+              isPinned: item.isPinned || false,
+              isHidden: item.isHidden || false,
+              likes: Array.isArray(item.likes) ? item.likes : [],
+              poll: item.poll || undefined,
+              comments: Array.isArray(item.comments) ? item.comments : [],
+              createdAt: new Date(item.createdAt).getTime()
+            }));
+
+            // Sort: Pinned posts first, then newest first
+            list.sort((a, b) => {
+              if (a.isPinned && !b.isPinned) return -1;
+              if (!a.isPinned && b.isPinned) return 1;
+              return b.createdAt - a.createdAt;
+            });
+
+            setPosts(list);
+            setLoading(false);
+          }
+
+          // Subscribe with unique channel name to prevent "after subscribe" errors
+          const uniqueSocialChannel = `event_social_posts:${eventId}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+          channel = supabase
+            .channel(uniqueSocialChannel)
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'event_social_posts', filter: `eventId=eq.${eventId}` },
+              () => {
+                supabase
+                  .from('event_social_posts')
+                  .select('*')
+                  .eq('eventId', eventId)
+                  .then(({ data: freshData }) => {
+                    if (freshData && active) {
+                      const list = (freshData as any[]).map(item => ({
+                        id: item.id,
+                        eventId: item.eventId,
+                        userId: item.userId,
+                        userName: item.userName,
+                        userAvatar: item.userAvatar || '',
+                        text: item.text,
+                        imageUrl: item.imageUrl || undefined,
+                        isPinned: item.isPinned || false,
+                        isHidden: item.isHidden || false,
+                        likes: Array.isArray(item.likes) ? item.likes : [],
+                        poll: item.poll || undefined,
+                        comments: Array.isArray(item.comments) ? item.comments : [],
+                        createdAt: new Date(item.createdAt).getTime()
+                      }));
+
+                      list.sort((a, b) => {
+                        if (a.isPinned && !b.isPinned) return -1;
+                        if (!a.isPinned && b.isPinned) return 1;
+                        return b.createdAt - a.createdAt;
+                      });
+
+                      setPosts(list);
+                    }
+                  });
+              }
+            )
+            .subscribe();
+        } catch (e) {
+          console.error(e);
         }
-      });
+      }
+    };
 
-      // Sort: Pinned posts first, then newest first
-      list.sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        return b.createdAt - a.createdAt;
-      });
+    loadAndSubscribe();
 
-      setPosts(list);
-      setLoading(false);
-    });
-
-    return () => unsub();
+    return () => {
+      active = false;
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [eventId]);
 
   const handleCreatePost = async (e: FormEvent) => {
@@ -105,7 +164,7 @@ export function EventSocialMur({ eventId, isOwnerOrDJ }: EventSocialMurProps) {
     if (!currentUser || (!textInput.trim() && !imageInput.trim() && !pollQuestion.trim())) return;
     triggerHapticFeedback([40, 20, 40]);
 
-    const payload: Omit<SocialPost, 'id'> = {
+    const payload: any = {
       eventId,
       userId: currentUser.id,
       userName: currentUser.name,
@@ -113,7 +172,7 @@ export function EventSocialMur({ eventId, isOwnerOrDJ }: EventSocialMurProps) {
       text: textInput.trim(),
       likes: [],
       comments: [],
-      createdAt: Date.now()
+      createdAt: new Date().toISOString()
     };
 
     if (imageInput.trim()) {
@@ -131,7 +190,9 @@ export function EventSocialMur({ eventId, isOwnerOrDJ }: EventSocialMurProps) {
     }
 
     try {
-      await addDoc(collection(db, 'event_comments'), payload);
+      if (isSupabaseConfigured) {
+        await supabase.from('event_social_posts').insert(payload);
+      }
       setTextInput('');
       setImageInput('');
       setPollQuestion('');
@@ -147,14 +208,17 @@ export function EventSocialMur({ eventId, isOwnerOrDJ }: EventSocialMurProps) {
     if (!currentUser) return;
     triggerHapticFeedback(20);
 
-    const docRef = doc(db, 'event_comments', id);
     const hasLiked = likes.includes(currentUser.id);
+    const updatedLikes = hasLiked
+      ? likes.filter(uid => uid !== currentUser.id)
+      : [...likes, currentUser.id];
 
     try {
-      if (hasLiked) {
-        await updateDoc(docRef, { likes: arrayRemove(currentUser.id) });
-      } else {
-        await updateDoc(docRef, { likes: arrayUnion(currentUser.id) });
+      if (isSupabaseConfigured) {
+        await supabase
+          .from('event_social_posts')
+          .update({ likes: updatedLikes })
+          .eq('id', id);
       }
     } catch (err) {
       console.error(err);
@@ -165,9 +229,7 @@ export function EventSocialMur({ eventId, isOwnerOrDJ }: EventSocialMurProps) {
     if (!currentUser || !poll) return;
     triggerHapticFeedback(25);
 
-    const docRef = doc(db, 'event_comments', postId);
     const updatedOptions = poll.options.map((opt, idx) => {
-      // Remove user's previous votes on other options
       let votes = opt.votes.filter(uid => uid !== currentUser.id);
       if (idx === optionIdx) {
         votes.push(currentUser.id);
@@ -176,7 +238,12 @@ export function EventSocialMur({ eventId, isOwnerOrDJ }: EventSocialMurProps) {
     });
 
     try {
-      await updateDoc(docRef, { 'poll.options': updatedOptions });
+      if (isSupabaseConfigured) {
+        await supabase
+          .from('event_social_posts')
+          .update({ poll: { ...poll, options: updatedOptions } })
+          .eq('id', postId);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -187,7 +254,6 @@ export function EventSocialMur({ eventId, isOwnerOrDJ }: EventSocialMurProps) {
     if (!currentUser || !commentInput.trim()) return;
     triggerHapticFeedback(15);
 
-    const docRef = doc(db, 'event_comments', postId);
     const commentPayload = {
       id: `${currentUser.id}-${Date.now()}`,
       userId: currentUser.id,
@@ -196,10 +262,17 @@ export function EventSocialMur({ eventId, isOwnerOrDJ }: EventSocialMurProps) {
       createdAt: Date.now()
     };
 
+    const targetPost = posts.find(p => p.id === postId);
+    const currentComments = targetPost?.comments || [];
+    const updatedComments = [...currentComments, commentPayload];
+
     try {
-      await updateDoc(docRef, {
-        comments: arrayUnion(commentPayload)
-      });
+      if (isSupabaseConfigured) {
+        await supabase
+          .from('event_social_posts')
+          .update({ comments: updatedComments })
+          .eq('id', postId);
+      }
       setCommentInput('');
       setActiveCommentPostId(null);
     } catch (err) {
@@ -211,7 +284,12 @@ export function EventSocialMur({ eventId, isOwnerOrDJ }: EventSocialMurProps) {
   const handleTogglePin = async (id: string, isPinned: boolean) => {
     triggerHapticFeedback(30);
     try {
-      await updateDoc(doc(db, 'event_comments', id), { isPinned: !isPinned });
+      if (isSupabaseConfigured) {
+        await supabase
+          .from('event_social_posts')
+          .update({ isPinned: !isPinned })
+          .eq('id', id);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -220,7 +298,12 @@ export function EventSocialMur({ eventId, isOwnerOrDJ }: EventSocialMurProps) {
   const handleToggleHide = async (id: string, isHidden: boolean) => {
     triggerHapticFeedback(30);
     try {
-      await updateDoc(doc(db, 'event_comments', id), { isHidden: !isHidden });
+      if (isSupabaseConfigured) {
+        await supabase
+          .from('event_social_posts')
+          .update({ isHidden: !isHidden })
+          .eq('id', id);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -230,7 +313,12 @@ export function EventSocialMur({ eventId, isOwnerOrDJ }: EventSocialMurProps) {
     if (!confirm("Voulez-vous supprimer ce message ?")) return;
     triggerHapticFeedback(40);
     try {
-      await deleteDoc(doc(db, 'event_comments', id));
+      if (isSupabaseConfigured) {
+        await supabase
+          .from('event_social_posts')
+          .delete()
+          .eq('id', id);
+      }
     } catch (err) {
       console.error(err);
     }

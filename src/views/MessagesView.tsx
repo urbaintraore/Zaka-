@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../store';
-import { db } from './../lib/firebase';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, setDoc, doc, orderBy, limit, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { supabase, isSupabaseConfigured } from './../lib/supabaseClient';
 import { MessageSquare, Send, Paperclip, ChevronLeft, Calendar, FileText, Download, Loader2, X, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { compressImage } from '../utils/imageCompressor';
@@ -97,15 +96,11 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
       setActiveConv(existingConv);
       if (onClearPreselected) onClearPreselected();
     } else {
-      // Create new temporary/actual conversation document
+      // Create new conversation
       const startNewConversation = async () => {
         try {
           const activeDJReq = relationshipRequests.find(r => r.establishmentId === targetEst.id && r.status === 'acceptee' && r.isDJ);
           const djId = activeDJReq ? (activeDJReq.type === 'client_join' ? activeDJReq.initiatorId : activeDJReq.targetId) : null;
-
-          const convId = isDJChat 
-            ? `${currentUser.id}_${preselectedEstablishmentId}_dj`
-            : `${currentUser.id}_${preselectedEstablishmentId}`;
 
           const newConv = {
             clientId: currentUser.id,
@@ -114,7 +109,7 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
             establishmentName: targetEst.name,
             ownerId: targetEst.ownerId,
             recipientType: preselectedRecipientType || 'gerant',
-            ...(djId ? { djId } : {}),
+            djId: djId || null,
             lastMessage: 'Discussion démarrée',
             lastMessageAt: new Date().toISOString(),
             lastSenderId: currentUser.id,
@@ -123,9 +118,18 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
             unreadByDj: isDJChat
           };
 
-          await setDoc(doc(db, 'conversations', convId), newConv);
+          if (isSupabaseConfigured) {
+            const { data, error } = await supabase
+              .from('conversations')
+              .insert([newConv])
+              .select()
+              .single();
+
+            if (!error && data) {
+              setActiveConv(data as any);
+            }
+          }
           
-          setActiveConv({ id: convId, ...newConv } as any);
           if (onClearPreselected) onClearPreselected();
         } catch (err) {
           console.error("Erreur lors de la création de la conversation:", err);
@@ -138,81 +142,70 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
   // Load conversations
   useEffect(() => {
     if (!currentUser) return;
+    let active = true;
+    let channel: any = null;
 
-    let convQuery;
-    if (isGerant) {
-      // Manager sees conversations for any of their establishments directly by ownerId
-      convQuery = query(
-        collection(db, 'conversations'),
-        where('ownerId', '==', currentUser.id)
-      );
-    } else {
-      // Client sees their own conversations
-      convQuery = query(
-        collection(db, 'conversations'),
-        where('clientId', '==', currentUser.id)
-      );
-    }
+    const loadConvs = async () => {
+      if (isSupabaseConfigured) {
+        try {
+          let query = supabase.from('conversations').select('*');
+          if (isGerant) {
+            query = query.eq('ownerId', currentUser.id);
+          } else {
+            query = query.or(`clientId.eq.${currentUser.id},djId.eq.${currentUser.id}`);
+          }
 
-    const djQuery = query(
-      collection(db, 'conversations'),
-      where('djId', '==', currentUser.id),
-      where('recipientType', '==', 'dj')
-    );
+          const { data, error } = await query;
+          if (!error && data && active) {
+            const list = data as Conversation[];
+            list.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+            setConversations(list);
+            setLoadingConvs(false);
 
-    let mainConvs: Conversation[] = [];
-    let djConvs: Conversation[] = [];
+            if (activeConv) {
+              const fresh = list.find(c => c.id === activeConv.id);
+              if (fresh) {
+                setActiveConv(fresh);
+              }
+            }
+          }
 
-    const updateCombined = () => {
-      // For manager, filter out DJ chats in memory
-      let filteredMain = isGerant 
-        ? mainConvs.filter(c => (c as any).recipientType !== 'dj')
-        : mainConvs;
+          // Subscribe to live updates in conversations table with unique channel name to prevent "after subscribe" errors
+          const uniqueConvChannel = `conversations-channel-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+          channel = supabase
+            .channel(uniqueConvChannel)
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'conversations' },
+              async () => {
+                const { data: updatedData } = await supabase
+                  .from('conversations')
+                  .select('*')
+                  .or(isGerant ? `ownerId.eq.${currentUser.id}` : `clientId.eq.${currentUser.id},djId.eq.${currentUser.id}`);
+                
+                if (updatedData && active) {
+                  const sorted = updatedData as Conversation[];
+                  sorted.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+                  setConversations(sorted);
+                }
+              }
+            )
+            .subscribe();
 
-      // Merge and sort
-      const combined = [...filteredMain, ...djConvs];
-      
-      // Remove duplicates by ID just in case
-      const uniqueConvsMap = new Map<string, Conversation>();
-      combined.forEach(c => uniqueConvsMap.set(c.id, c));
-      const list = Array.from(uniqueConvsMap.values());
-
-      list.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
-      setConversations(list);
-      setLoadingConvs(false);
-
-      if (activeConv) {
-        const fresh = list.find(c => c.id === activeConv.id);
-        if (fresh) {
-          setActiveConv(fresh);
+        } catch (e) {
+          console.error(e);
+          if (active) setLoadingConvs(false);
         }
+      } else {
+        if (active) setLoadingConvs(false);
       }
     };
 
-    const unsubscribeMain = onSnapshot(convQuery, (snapshot) => {
-      mainConvs = [];
-      snapshot.forEach((d) => {
-        mainConvs.push({ id: d.id, ...d.data() } as Conversation);
-      });
-      updateCombined();
-    }, (err) => {
-      console.error("Erreur main conversations:", err);
-      setLoadingConvs(false);
-    });
-
-    const unsubscribeDJ = onSnapshot(djQuery, (snapshot) => {
-      djConvs = [];
-      snapshot.forEach((d) => {
-        djConvs.push({ id: d.id, ...d.data() } as Conversation);
-      });
-      updateCombined();
-    }, (err) => {
-      console.error("Erreur DJ conversations:", err);
-    });
+    loadConvs();
 
     return () => {
-      unsubscribeMain();
-      unsubscribeDJ();
+      active = false;
+      if (channel) supabase.removeChannel(channel);
     };
   }, [currentUser, isGerant, activeConv?.id]);
 
@@ -223,33 +216,67 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
       return;
     }
 
-    const msgQuery = query(
-      collection(db, 'conversations', activeConv.id, 'messages'),
-      orderBy('createdAt', 'asc'),
-      limit(100)
-    );
+    let active = true;
+    let channel: any = null;
 
-    const unsubscribe = onSnapshot(msgQuery, (snapshot) => {
-      const list: Message[] = [];
-      snapshot.forEach((d) => {
-        list.push({ id: d.id, ...d.data() } as Message);
-      });
-      setMessages(list);
+    const loadMessages = async () => {
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('conversationId', activeConv.id)
+            .order('createdAt', { ascending: true })
+            .limit(100);
 
-      // Mark messages as read
-      const isDJOfActive = activeConv.djId === currentUser?.id && (activeConv as any).recipientType === 'dj';
-      if (isDJOfActive && (activeConv as any).unreadByDj) {
-        updateDoc(doc(db, 'conversations', activeConv.id), { unreadByDj: false });
-      } else if (isGerant && activeConv.unreadByGerant) {
-        updateDoc(doc(db, 'conversations', activeConv.id), { unreadByGerant: false });
-      } else if (!isGerant && !isDJOfActive && activeConv.unreadByClient) {
-        updateDoc(doc(db, 'conversations', activeConv.id), { unreadByClient: false });
+          if (!error && data && active) {
+            setMessages(data as Message[]);
+          }
+
+          // Subscribe to updates with unique channel name to prevent "after subscribe" errors
+          const uniqueMsgChannel = `messages:${activeConv.id}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+          channel = supabase
+            .channel(uniqueMsgChannel)
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'messages', filter: `conversationId=eq.${activeConv.id}` },
+              async () => {
+                const { data: updatedMsgs } = await supabase
+                  .from('messages')
+                  .select('*')
+                  .eq('conversationId', activeConv.id)
+                  .order('createdAt', { ascending: true })
+                  .limit(100);
+
+                if (updatedMsgs && active) {
+                  setMessages(updatedMsgs as Message[]);
+                }
+              }
+            )
+            .subscribe();
+
+          // Mark conversation as read
+          const isDJOfActive = activeConv.djId === currentUser?.id && (activeConv as any).recipientType === 'dj';
+          if (isDJOfActive && (activeConv as any).unreadByDj) {
+            await supabase.from('conversations').update({ unreadByDj: false }).eq('id', activeConv.id);
+          } else if (isGerant && activeConv.unreadByGerant) {
+            await supabase.from('conversations').update({ unreadByGerant: false }).eq('id', activeConv.id);
+          } else if (!isGerant && !isDJOfActive && activeConv.unreadByClient) {
+            await supabase.from('conversations').update({ unreadByClient: false }).eq('id', activeConv.id);
+          }
+
+        } catch (e) {
+          console.error(e);
+        }
       }
-    }, (err) => {
-      console.error("Erreur chargement des messages:", err);
-    });
+    };
 
-    return () => unsubscribe();
+    loadMessages();
+
+    return () => {
+      active = false;
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [activeConv?.id]);
 
   // Handle sending text or file messages
@@ -272,10 +299,12 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
     setAttachedFile(null);
 
     try {
-      const msgData: Omit<Message, 'id'> = {
+      const msgData = {
+        conversationId: activeConv.id,
         senderId: currentUser.id,
+        senderName: currentUser.name || 'Utilisateur',
         text: textToSend,
-        createdAt: new Date().toISOString(), // Use ISO string or server timestamp
+        createdAt: new Date().toISOString(),
         ...(fileToSend ? {
           fileUrl: fileToSend.base64,
           fileName: fileToSend.name,
@@ -283,21 +312,23 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
         } : {})
       };
 
-      // Add to messages subcollection
-      await addDoc(collection(db, 'conversations', activeConv.id, 'messages'), msgData);
+      if (isSupabaseConfigured) {
+        // Add to messages
+        await supabase.from('messages').insert([msgData]);
 
-      // Update conversation summary
-      const isDJOfActive = activeConv.djId === currentUser?.id && (activeConv as any).recipientType === 'dj';
-      const updateData: Partial<Conversation> = {
-        lastMessage: fileToSend ? `📎 ${fileToSend.name}` : textToSend,
-        lastMessageAt: new Date().toISOString(),
-        lastSenderId: currentUser.id,
-        unreadByClient: isGerant || isDJOfActive, // Unread for client if manager or DJ sent it
-        unreadByGerant: !isGerant && !isDJOfActive && (activeConv as any).recipientType !== 'dj', // Unread for manager if client sent it and it's not a DJ chat
-        unreadByDj: !isDJOfActive && (activeConv as any).recipientType === 'dj' // Unread for DJ if client sent it
-      };
+        // Update conversation summary
+        const isDJOfActive = activeConv.djId === currentUser?.id && (activeConv as any).recipientType === 'dj';
+        const updateData = {
+          lastMessage: fileToSend ? `📎 ${fileToSend.name}` : textToSend,
+          lastMessageAt: new Date().toISOString(),
+          lastSenderId: currentUser.id,
+          unreadByClient: isGerant || isDJOfActive,
+          unreadByGerant: !isGerant && !isDJOfActive && (activeConv as any).recipientType !== 'dj',
+          unreadByDj: !isDJOfActive && (activeConv as any).recipientType === 'dj'
+        };
 
-      await updateDoc(doc(db, 'conversations', activeConv.id), updateData);
+        await supabase.from('conversations').update(updateData).eq('id', activeConv.id);
+      }
     } catch (err) {
       console.error("Erreur lors de l'envoi du message:", err);
       setErrorMsg("Impossible d'envoyer le message. Veuillez réessayer.");

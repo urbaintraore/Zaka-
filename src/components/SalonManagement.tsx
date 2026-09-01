@@ -3,8 +3,6 @@ import { Establishment, Hairdresser, Hairstyle } from '../types';
 import { useAppStore } from '../store';
 import { Users, Scissors, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { compressImage } from '../utils/imageCompressor';
-import { db } from '../lib/firebase';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 export function SalonManagement({ establishment }: { establishment: Establishment }) {
   const { updateHairSalonData } = useAppStore();
@@ -24,18 +22,6 @@ export function SalonManagement({ establishment }: { establishment: Establishmen
     );
     setHairdressers(updatedHairdressers);
     await updateHairSalonData(establishment.id, { hairdressers: updatedHairdressers, hairstyles });
-    
-    try {
-      await setDoc(doc(db, 'establishments', establishment.id, 'coiffeurs', hairdresserId), {
-        id: hairdresserId,
-        establishmentId: establishment.id,
-        name: updatedHairdressers.find(h => h.id === hairdresserId)?.name || '',
-        waitingClientsCount: count,
-        lastUpdated: new Date().toISOString()
-      }, { merge: true });
-    } catch (e) {
-      console.error("Error updating coiffeur subcollection:", e);
-    }
   };
 
   const handleAddHairdresser = async (e: React.FormEvent) => {
@@ -52,29 +38,12 @@ export function SalonManagement({ establishment }: { establishment: Establishmen
     setHairdressers(updatedHairdressers);
     setNewHairdresserName('');
     await updateHairSalonData(establishment.id, { hairdressers: updatedHairdressers, hairstyles });
-    
-    try {
-      await setDoc(doc(db, 'establishments', establishment.id, 'coiffeurs', newId), {
-        id: newId,
-        establishmentId: establishment.id,
-        name: newH.name,
-        waitingClientsCount: 0,
-        lastUpdated: newH.lastUpdated
-      });
-    } catch (e) {
-      console.error("Error adding coiffeur subcollection:", e);
-    }
   };
 
   const handleDeleteHairdresser = async (id: string) => {
     const updatedHairdressers = hairdressers.filter(h => h.id !== id);
     setHairdressers(updatedHairdressers);
     await updateHairSalonData(establishment.id, { hairdressers: updatedHairdressers, hairstyles });
-    try {
-      await deleteDoc(doc(db, 'establishments', establishment.id, 'coiffeurs', id));
-    } catch (e) {
-      console.error("Error deleting coiffeur subcollection:", e);
-    }
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
