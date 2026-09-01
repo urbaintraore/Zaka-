@@ -81,7 +81,17 @@ interface ExploreViewProps {
 }
 
 export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
-  const { establishments, currentUser, relationshipRequests, createRelationshipRequest, createServiceRequest, setGlobalError, users, favorites, toggleFavorite } = useAppStore();
+  const { establishments, currentUser, relationshipRequests, createRelationshipRequest, createServiceRequest, setGlobalError, users, favorites, toggleFavorite, loading } = useAppStore();
+  
+  const isSupabaseReady = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+  
+  console.log('[ExploreView] State:', {
+    establishmentsCount: establishments.length,
+    loading,
+    hasUser: !!currentUser,
+    isSupabaseReady,
+    firstFewEsts: (establishments || []).slice(0, 3).map(e => ({ id: e.id, name: e.name, status: e.status }))
+  });
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string>('all');
   const [priceFilter, setPriceFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all');
@@ -169,6 +179,17 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
 
   return (
     <div className="p-4 max-w-3xl mx-auto pb-24">
+      {!isSupabaseReady && !loading && (
+        <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-amber-800 dark:text-amber-400 font-black text-sm">
+            <span className="text-xl">⚠️</span> Configuration Supabase manquante
+          </div>
+          <p className="text-xs text-amber-700 dark:text-amber-300 font-medium leading-relaxed">
+            L'application est en mode "Démo locale" car les clés API Supabase ne sont pas configurées. 
+            Les établissements créés ne seront pas persistés en production.
+          </p>
+        </div>
+      )}
       <div className="mb-6">
         <div className="relative mb-4">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />

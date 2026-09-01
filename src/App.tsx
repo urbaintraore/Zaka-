@@ -12,14 +12,33 @@ import { Toast } from './components/Toast';
 import { BackToTop } from './components/BackToTop';
 import { InstallPrompt } from './components/InstallPrompt';
 import { requestNotificationPermission, sendPushNotification } from './utils/pushNotifications';
+import { Database, Copy, Check, AlertTriangle } from 'lucide-react';
 
 function AppContent() {
   const [currentTab, setCurrentTab] = useState<Tab>('home');
   const [preselectedChatEstId, setPreselectedChatEstId] = useState<string | null>(null);
   const [preselectedChatRecipient, setPreselectedChatRecipient] = useState<'gerant' | 'dj'>('gerant');
   const [preselectedConvId, setPreselectedConvId] = useState<string | null>(null);
+  const [isCopied, setIsCopied] = useState(false);
 
-  const { currentUser, loading, reservations } = useAppStore();
+  const { currentUser, loading, reservations, missingTables, setGlobalError } = useAppStore();
+
+  const handleCopySQL = async () => {
+    try {
+      const response = await fetch('/supabase_schema.sql');
+      const text = await response.text();
+      await navigator.clipboard.writeText(text);
+      setIsCopied(true);
+      setGlobalError({
+        message: 'Le script SQL a été copié dans votre presse-papiers. Collez-le dans le SQL Editor de Supabase.',
+        type: 'info',
+        code: 'supabase/connected'
+      });
+      setTimeout(() => setIsCopied(false), 3000);
+    } catch (err) {
+      console.error('Failed to copy SQL:', err);
+    }
+  };
 
   // Logging rendering state
   console.log('[AppContent Render]', {
@@ -28,7 +47,8 @@ function AppContent() {
     currentUserExists: !!currentUser,
     userId: currentUser?.id,
     userRole: currentUser?.role,
-    reservationsCount: reservations?.length
+    reservationsCount: reservations?.length,
+    missingTablesCount: missingTables?.length
   });
 
   useEffect(() => {
@@ -142,6 +162,51 @@ function AppContent() {
     <div className="min-h-screen bg-gray-50/50 dark:bg-gray-900 font-sans text-gray-900 dark:text-gray-100 selection:bg-orange-100 selection:text-orange-900 pb-safe">
       <TopBar />
       
+      {missingTables && missingTables.length > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-800/50 p-4">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-amber-100 dark:bg-amber-800/40 p-2 rounded-xl text-amber-600 dark:text-amber-400">
+                <Database className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-amber-900 dark:text-amber-100 flex items-center gap-2">
+                  Action Requise : Mise à jour de la base de données
+                  <span className="px-1.5 py-0.5 rounded-full bg-amber-200 dark:bg-amber-800 text-[10px] uppercase tracking-wider font-black">
+                    Importante
+                  </span>
+                </h4>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5 leading-relaxed">
+                  Certaines tables sont manquantes ({missingTables.slice(0, 4).join(', ')}...). 
+                  Pour activer ces fonctionnalités, copiez et exécutez le script SQL ci-dessous.
+                </p>
+              </div>
+            </div>
+            
+            <button 
+              onClick={handleCopySQL}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${
+                isCopied 
+                ? 'bg-emerald-500 text-white' 
+                : 'bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-500/20'
+              }`}
+            >
+              {isCopied ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  Copié !
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  Copier le Script SQL
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
       <main className="w-full">
         {currentTab === 'home' && <HomeView onStartChat={handleStartChat} onNavigate={setCurrentTab} />}
         {currentTab === 'explore' && <ExploreView onStartChat={handleStartChat} onNavigate={setCurrentTab} />}

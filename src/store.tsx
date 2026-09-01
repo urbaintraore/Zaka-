@@ -341,6 +341,25 @@ const onSnapshot = (queryObj: any, callback: (snapshot: any) => void, errorCallb
   
   supabase.from(tableName).select('*').then(({ data, error }) => {
     if (error) {
+      if (error?.code === 'PGRST205') {
+        const isAlreadyReported = (window as any)._reportedMissingTables?.has(tableName);
+        if (!isAlreadyReported) {
+          if (!(window as any)._reportedMissingTables) (window as any)._reportedMissingTables = new Set();
+          (window as any)._reportedMissingTables.add(tableName);
+          console.warn(`[Supabase] Table manquante détectée : "${tableName}". L'application continuera de fonctionner mais cette fonctionnalité sera limitée. Veuillez exécuter supabase_schema.sql.`);
+          window.dispatchEvent(new CustomEvent('supabase-missing-table', { detail: tableName }));
+        }
+        // We resolve with empty data instead of calling errorCallback to avoid console noise
+        callback({
+          forEach: (fn: any) => [],
+          docs: [],
+          empty: true,
+          size: 0,
+          exists: () => false,
+          data: () => null
+        });
+        return;
+      }
       if (errorCallback) errorCallback(error);
     } else {
       const docs = (data || []).map(item => ({
@@ -418,6 +437,7 @@ interface AppState {
   ventes: SaleRecord[];
   loading: boolean;
   globalError: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null;
+  missingTables: string[];
   theme: 'light' | 'dark';
 }
 
@@ -556,11 +576,23 @@ export interface FirestoreErrorInfo {
   }
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+export function handleFirestoreError(error: any, operationType: OperationType, path: string | null) {
   const errorMessage = error instanceof Error 
     ? error.message 
     : (typeof error === 'object' && error !== null ? JSON.stringify(error) : String(error));
     
+  const isMissingTable = (error?.code === 'PGRST205') || 
+                        errorMessage.includes('PGRST205') ||
+                        errorMessage.includes('not found') ||
+                        errorMessage.includes('does not exist');
+
+  if (isMissingTable) {
+    const tableName = path || 'inconnue';
+    console.warn(`[Supabase Error] Table manquante détectée : "${tableName}". L'opération "${operationType}" a échoué. Veuillez exécuter supabase_schema.sql.`);
+    window.dispatchEvent(new CustomEvent('supabase-missing-table', { detail: tableName }));
+    return;
+  }
+
   const errInfo: FirestoreErrorInfo = {
     error: errorMessage,
     authInfo: {
@@ -578,7 +610,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  // Removed throw to prevent crashing the entire application state when a table is missing
 }
 
 const DEFAULT_ESTABLISHMENTS: Establishment[] = [];
@@ -643,10 +675,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ventes: [],
     loading: false,
     globalError: null,
+    missingTables: [],
     theme: getInitialTheme()
   });
 
   // Safety fallback: ensure loading state resolves even if firebase auth callback is delayed
+  useEffect(() => {
+    const handleMissingTable = (e: any) => {
+      const tableName = e.detail;
+      setState(s => {
+        if (s.missingTables.includes(tableName)) return s;
+        return { ...s, missingTables: [...s.missingTables, tableName] };
+      });
+    };
+
+    window.addEventListener('supabase-missing-table', handleMissingTable);
+    return () => window.removeEventListener('supabase-missing-table', handleMissingTable);
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setState(s => s.loading ? { ...s, loading: false } : s);
@@ -879,7 +925,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                            photos: pending.estData.photos || [],
                            tags: pending.estData.tags || [],
                            geolocation: pending.estData.geolocation || '',
-                           status: 'en_attente',
+                           status: 'valide',
                            averageRating: 0
                          };
                          if (newProfile.role === 'salon_coiffure' || pending.estData.category === 'salon_de_coiffure') {
@@ -889,13 +935,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
                       }
                       if (pending.entrepriseData && newProfile.role === 'entreprise') {
                          await supabase.from('entreprises').insert({
-                           id: session.user.id,
+                           ownerId: session.user.id,
                            name: newProfile.name,
                            sector: pending.entrepriseData.sector || '',
                            logo: pending.entrepriseData.logo || '',
                            description: pending.entrepriseData.description || '',
                            philosophy: pending.entrepriseData.philosophy || '',
-                           status: 'en_attente'
+                           status: 'valide'
                          });
                       }
                       localStorage.removeItem('zaka_pending_registration');

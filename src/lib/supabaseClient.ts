@@ -2,16 +2,26 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Support both naming conventions (with and without VITE_ prefix)
 const supabaseUrl = 
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || 
+  import.meta.env.VITE_SUPABASE_URL || 
+  import.meta.env.SUPABASE_URL || 
   (typeof process !== 'undefined' && process.env?.SUPABASE_URL) || 
   '';
 
 const supabaseAnonKey = 
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || 
+  import.meta.env.VITE_SUPABASE_ANON_KEY || 
+  import.meta.env.SUPABASE_ANON_KEY || 
   (typeof process !== 'undefined' && process.env?.SUPABASE_ANON_KEY) || 
   '';
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+
+if (typeof window !== 'undefined') {
+  console.log('[Supabase Client] Initializing...', {
+    url: supabaseUrl ? `${supabaseUrl.substring(0, 15)}...` : 'MISSING',
+    hasKey: !!supabaseAnonKey,
+    isConfigured: isSupabaseConfigured
+  });
+}
 
 export const supabase: SupabaseClient = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',

@@ -1,6 +1,12 @@
--- =============================================================================
--- ZAKA+ SUPABASE POSTGRESQL SCHEMA (Phase 2 & Phase 4)
--- =============================================================================
+-- #############################################################################
+-- # ZAKA+ SUPABASE POSTGRESQL SCHEMA
+-- #############################################################################
+-- # INSTRUCTIONS DE MISE À JOUR :
+-- # 1. Copiez l'intégralité de ce fichier (Ctrl+A, Ctrl+C).
+-- # 2. Allez dans votre tableau de bord Supabase -> SQL Editor.
+-- # 3. Créez une nouvelle requête (New Query).
+-- # 4. Collez le contenu et cliquez sur "RUN".
+-- #############################################################################
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -533,4 +539,72 @@ ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "paidAmount" NUMERIC(10, 2);
 ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "changeAmount" NUMERIC(10, 2);
 ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "avoirAmount" NUMERIC(10, 2);
 ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "mobileMoneyCode" TEXT;
+
+-- Enable RLS
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.establishments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.entreprises ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.publications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reservations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.takeaway_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.stories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.live_ambiance ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.loyalty_cards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.relationship_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ad_organizations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ad_campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ad_creatives ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ad_audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ad_rates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ad_support_tickets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ad_statistics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.stocks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ventes ENABLE ROW LEVEL SECURITY;
+
+-- Users policies
+CREATE POLICY "Public profiles are viewable by everyone" ON public.users FOR SELECT USING (true);
+CREATE POLICY "Users can update their own profile" ON public.users FOR UPDATE USING (auth.uid() = id);
+
+-- Establishments policies
+CREATE POLICY "Establishments are viewable by everyone" ON public.establishments FOR SELECT USING (true);
+CREATE POLICY "Owners can insert their own establishments" ON public.establishments FOR INSERT WITH CHECK (auth.uid() = "ownerId");
+CREATE POLICY "Owners can update their own establishments" ON public.establishments FOR UPDATE USING (auth.uid() = "ownerId");
+CREATE POLICY "Owners can delete their own establishments" ON public.establishments FOR DELETE USING (auth.uid() = "ownerId");
+
+-- Entreprises policies
+CREATE POLICY "Entreprises are viewable by everyone" ON public.entreprises FOR SELECT USING (true);
+CREATE POLICY "Owners can insert their own entreprises" ON public.entreprises FOR INSERT WITH CHECK (auth.uid() = "ownerId");
+CREATE POLICY "Owners can update their own entreprises" ON public.entreprises FOR UPDATE USING (auth.uid() = "ownerId");
+CREATE POLICY "Owners can delete their own entreprises" ON public.entreprises FOR DELETE USING (auth.uid() = "ownerId");
+
+-- General Public Read Policies
+CREATE POLICY "Public can view publications" ON public.publications FOR SELECT USING (true);
+CREATE POLICY "Public can view reviews" ON public.reviews FOR SELECT USING (true);
+CREATE POLICY "Public can view stories" ON public.stories FOR SELECT USING (true);
+CREATE POLICY "Public can view ad_campaigns" ON public.ad_campaigns FOR SELECT USING (true);
+CREATE POLICY "Public can view ad_creatives" ON public.ad_creatives FOR SELECT USING (true);
+CREATE POLICY "Public can view ad_rates" ON public.ad_rates FOR SELECT USING (true);
+
+-- Authenticated Policies
+CREATE POLICY "Authenticated users can create reviews" ON public.reviews FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Users can view their own reservations" ON public.reservations FOR SELECT USING (auth.uid() = "clientId");
+CREATE POLICY "Owners can view their establishment reservations" ON public.reservations FOR SELECT USING (EXISTS (SELECT 1 FROM public.establishments WHERE id = "establishmentId" AND "ownerId" = auth.uid()));
+
+CREATE POLICY "Users can view their own conversations" ON public.conversations FOR SELECT USING (auth.uid() = "clientId" OR auth.uid() = "ownerId");
+CREATE POLICY "Users can view their own messages" ON public.messages FOR SELECT USING (EXISTS (SELECT 1 FROM public.conversations WHERE id = "conversationId" AND (auth.uid() = "clientId" OR auth.uid() = "ownerId")));
+
+-- Ad Specific Policies
+CREATE POLICY "Owners can view their ad_organizations" ON public.ad_organizations FOR SELECT USING (auth.uid() = "ownerId");
+CREATE POLICY "Owners can manage their ad_organizations" ON public.ad_organizations FOR ALL USING (auth.uid() = "ownerId");
+
+-- Stock & Sales Policies
+CREATE POLICY "Establishment owners can manage stocks" ON public.stocks FOR ALL USING (EXISTS (SELECT 1 FROM public.establishments WHERE id = "establishmentId" AND "ownerId" = auth.uid()));
+CREATE POLICY "Establishment owners can manage ventes" ON public.ventes FOR ALL USING (EXISTS (SELECT 1 FROM public.establishments WHERE id = "establishmentId" AND "ownerId" = auth.uid()));
+
 
