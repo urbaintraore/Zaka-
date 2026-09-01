@@ -801,8 +801,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   loading: false
                 }));
               } else {
-                // Self-healing: create profile record in Supabase
-                const newProfile: Partial<User> = {
+                // Check if we have a pending registration
+                const pendingStr = localStorage.getItem('zaka_pending_registration');
+                let newProfile: Partial<User> = {
                   id: session.user.id,
                   email: session.user.email || '',
                   name: session.user.user_metadata?.name || (session.user.email ? session.user.email.split('@')[0] : 'Utilisateur'),
@@ -810,6 +811,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   country: 'Burkina Faso',
                   city: 'Ouagadougou'
                 };
+                
+                if (pendingStr) {
+                  try {
+                    const pending = JSON.parse(pendingStr);
+                    if (pending.uid === session.user.id || pending.userData?.email === session.user.email) {
+                      newProfile = { ...pending.userData, id: session.user.id };
+                      // also create establishment if gerant
+                      if (pending.estData) {
+                         const estPayload: any = {
+                           ownerId: session.user.id,
+                           name: pending.estData.name || '',
+                           category: newProfile.role === 'salon_coiffure' ? 'salon_de_coiffure' : (pending.estData.category || 'autre'),
+                           country: newProfile.country || 'Burkina Faso',
+                           city: newProfile.city || 'Ouagadougou',
+                           neighborhood: pending.estData.neighborhood || '',
+                           address: pending.estData.address || '',
+                           phone: newProfile.phone || '',
+                           description: pending.estData.description || '',
+                           photos: pending.estData.photos || [],
+                           tags: pending.estData.tags || [],
+                           geolocation: pending.estData.geolocation || '',
+                           status: 'en_attente',
+                           averageRating: 0
+                         };
+                         if (newProfile.role === 'salon_coiffure' || pending.estData.category === 'salon_de_coiffure') {
+                           estPayload.hairSalonData = { hairdressers: [], hairstyles: [] };
+                         }
+                         await supabase.from('establishments').insert(estPayload);
+                      }
+                      if (pending.entrepriseData && newProfile.role === 'entreprise') {
+                         await supabase.from('entreprises').insert({
+                           id: session.user.id,
+                           name: newProfile.name,
+                           sector: pending.entrepriseData.sector || '',
+                           logo: pending.entrepriseData.logo || '',
+                           description: pending.entrepriseData.description || '',
+                           philosophy: pending.entrepriseData.philosophy || '',
+                           status: 'en_attente'
+                         });
+                      }
+                      localStorage.removeItem('zaka_pending_registration');
+                    }
+                  } catch(e) {
+                     console.error('Error recovering pending registration', e);
+                  }
+                }
+                
                 await supabase.from('users').upsert(newProfile, { onConflict: 'id' });
                 setState(s => ({
                   ...s,
@@ -1587,7 +1635,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.log("[Email Login] Connexion réussie.");
     } catch (error: any) {
       console.error("[Email Login] Échec de la connexion :", error);
-      const friendlyMessage = error.message || "Erreur de connexion";
+      let friendlyMessage = error.message || "Erreur de connexion";
+      if (friendlyMessage.toLowerCase().includes('email not confirmed')) {
+        friendlyMessage = "Veuillez confirmer votre adresse e-mail en cliquant sur le lien que nous vous avons envoyé avant de vous connecter.";
+      } else if (friendlyMessage.toLowerCase().includes('invalid login credentials')) {
+        friendlyMessage = "Adresse e-mail ou mot de passe incorrect.";
+      }
       setGlobalError({
         message: friendlyMessage,
         code: error.code || 'unknown',
@@ -1629,42 +1682,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     referralCodeUsed?: string
   ) => {
     const emailStr = (userData.email || '').trim();
-    if (!emailStr) {
-      throw new Error("L'adresse e-mail est obligatoire.");
-    }
-    if (!pass || pass.length < 6) {
-      throw new Error("Le mot de passe doit contenir au moins 6 caractères.");
-    }
+    if (!emailStr) throw new Error("L'adresse e-mail est obligatoire.");
+    if (!pass || pass.length < 6) throw new Error("Le mot de passe doit contenir au moins 6 caractères.");
 
     try {
       console.log(`[Email Register] Tentative d'inscription pour : [${emailStr}]`);
       const { data, error } = await supabase.auth.signUp({
         email: emailStr,
         password: pass,
-        options: {
-          data: {
-            name: userData.name,
-            role: userData.role
-          }
-        }
+        options: { data: { name: userData.name, role: userData.role } }
       });
-      if (error) throw error;
-      const userObj = data.user;
-      if (!userObj) {
-        throw new Error("Erreur de création de compte.");
-      }
-      const firebaseUser = { ...userObj, uid: userObj.id } as any;
-      console.log("[Email Register] Compte d'authentification créé avec UID :", firebaseUser.id);
-
-      const resolvedCategory = estData?.category || 'maquis';
       
+      if (error) {
+        if (error.status === 429) {
+          throw new Error("Le nombre maximum d'inscriptions a été atteint. Veuillez réessayer plus tard.");
+        }
+        throw error;
+      }
+
+      const userObj = data.user;
+      if (!userObj) throw new Error("Erreur de création de compte.");
+      
+      const firebaseUser = { ...userObj, uid: userObj.id } as any;
+      const isEmailConfirmationPending = !data.session;
+      
+      const resolvedCategory = estData?.category || 'maquis';
       let code_parrainage = '';
       if (userData.role === 'client') {
         const baseName = (userData.name || 'ZAKA').trim().split(' ')[0].replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toUpperCase();
-        const rand = Math.floor(1000 + Math.random() * 9000);
-        code_parrainage = `${baseName}${rand}`;
+        code_parrainage = `${baseName}${Math.floor(1000 + Math.random() * 9000)}`;
       }
-
+      
       const newUserData: any = {
         name: userData.name.trim() || 'Utilisateur',
         email: emailStr,
@@ -1677,65 +1725,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...(code_parrainage ? { code_parrainage, referralCode: code_parrainage } : {})
       };
 
+      if (isEmailConfirmationPending) {
+        console.log("[Email Register] Email confirmation required. Saving pending profile to localStorage.");
+        const pendingRegistration = {
+          userData: newUserData,
+          estData: (userData.role === 'gerant' || userData.role === 'salon_coiffure') ? estData : null,
+          entrepriseData: userData.role === 'entreprise' ? entrepriseData : null,
+          referralCodeUsed,
+          uid: firebaseUser.uid
+        };
+        localStorage.setItem('zaka_pending_registration', JSON.stringify(pendingRegistration));
+        throw new Error("Inscription réussie ! Un email de confirmation vous a été envoyé. Veuillez vérifier votre boîte de réception pour activer votre compte.");
+      }
+
+      // Email confirmation disabled, so we insert directly to Supabase
       try {
-        await setDoc(doc(db, 'users', firebaseUser.uid), newUserData);
-        console.log("[Email Register] Profil Firestore créé avec succès.");
+        const { error: userError } = await supabase.from('users').upsert({ id: firebaseUser.uid, ...newUserData }, { onConflict: 'id' });
+        if (userError) console.warn("Could not insert user profile in Supabase:", userError);
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `users/${firebaseUser.uid}`);
+        console.warn("Could not insert user profile.", error);
       }
-
-      if (userData.role === 'annonceur') {
-        try {
-          await setDoc(doc(db, 'advertisers', firebaseUser.uid), {
-            id: firebaseUser.uid,
-            name: userData.name.trim(),
-            sector: entrepriseData?.sector || 'Autre',
-            logo: entrepriseData?.logo || '',
-            description: entrepriseData?.description || '',
-            phone: userData.phone || '',
-            email: emailStr,
-            status: 'valide',
-            balance: 0,
-            createdAt: new Date().toISOString()
-          });
-          console.log("[Email Register] Profil Annonceur Firestore créé avec succès.");
-        } catch (error) {
-          handleFirestoreError(error, OperationType.WRITE, `advertisers/${firebaseUser.uid}`);
-        }
-      }
-
-      if (referralCodeUsed && userData.role === 'client') {
-        try {
-          const trimmedCode = referralCodeUsed.trim().toUpperCase();
-          const parrainQuery = query(collection(db, 'users'), where('code_parrainage', '==', trimmedCode));
-          const parrainSnap = await getDocs(parrainQuery);
-          let parrainDoc = parrainSnap.docs[0];
-          
-          if (!parrainDoc) {
-            const parrainQueryLegacy = query(collection(db, 'users'), where('referralCode', '==', trimmedCode));
-            const parrainSnapLegacy = await getDocs(parrainQueryLegacy);
-            parrainDoc = parrainSnapLegacy.docs[0];
-          }
-
-          if (parrainDoc && parrainDoc.id !== firebaseUser.uid) {
-            const parrainData = parrainDoc.data();
-            await addDoc(collection(db, 'parrainages'), {
-              parrainId: parrainDoc.id,
-              parrainEmail: parrainData.email || '',
-              parraineId: firebaseUser.uid,
-              parraineEmail: emailStr,
-              date: new Date().toISOString(),
-              status: 'en_attente'
-            });
-            console.log(`[Referral] Referral recorded. Parrain: ${parrainDoc.id}, Parraine: ${firebaseUser.uid}`);
-          }
-        } catch (err) {
-          console.error("Error registering referral connection:", err);
-        }
-      }
-
+      
+      // We don't have an advertisers table in Supabase yet, we skip or you can add if needed.
+      // But for 'gerant' or 'salon_coiffure', insert into establishments
       if ((userData.role === 'gerant' || userData.role === 'salon_coiffure') && estData) {
-        console.log("[Email Register] Rôle gérant détecté. Création de l'établissement...");
         try {
           const estPayload: any = {
             ownerId: firebaseUser.uid,
@@ -1756,34 +1769,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (userData.role === 'salon_coiffure' || estData.category === 'salon_de_coiffure') {
             estPayload.hairSalonData = { hairdressers: [], hairstyles: [] };
           }
-          await addDoc(collection(db, 'establishments'), estPayload);
-          console.log("[Email Register] Établissement créé avec succès dans Firestore.");
+          const { error: estError } = await supabase.from('establishments').insert(estPayload);
+          if (estError) console.warn("Could not insert establishment in Supabase:", estError);
         } catch (error) {
-          handleFirestoreError(error, OperationType.CREATE, 'establishments');
+          console.warn("Could not insert establishment profile.", error);
         }
       }
 
       if (userData.role === 'entreprise' && entrepriseData) {
-        console.log("[Email Register] Rôle entreprise détecté. Création de l'entreprise...");
         try {
-          await setDoc(doc(db, 'entreprises', firebaseUser.uid), {
+          const { error: entError } = await supabase.from('entreprises').insert({
+            ownerId: firebaseUser.uid,
             name: userData.name.trim() || 'Entreprise',
             sector: entrepriseData.sector || '',
             logo: entrepriseData.logo || '',
             description: entrepriseData.description || '',
             philosophy: entrepriseData.philosophy || '',
-            status: 'en_attente',
-            createdAt: new Date().toISOString(),
-            followers: []
+            status: 'en_attente'
           });
-          console.log("[Email Register] Entreprise créée avec succès dans Firestore.");
+          if (entError) console.warn("Could not insert entreprise in Supabase:", entError);
         } catch (error) {
-          handleFirestoreError(error, OperationType.WRITE, `entreprises/${firebaseUser.uid}`);
+          console.warn("Could not insert entreprise profile.", error);
         }
       }
+
     } catch (error: any) {
       console.error("[Email Register] Échec global d'inscription :", error);
-      const friendlyMessage = translateFirebaseError(error);
+      const friendlyMessage = error.message.includes('Inscription réussie') ? error.message : (error.status === 429 ? "Le nombre maximum d'inscriptions a été atteint. Veuillez réessayer plus tard." : translateFirebaseError(error));
       setGlobalError({
         message: friendlyMessage,
         code: error.code || 'unknown',

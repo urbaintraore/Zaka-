@@ -1,0 +1,157 @@
+const fs = require('fs');
+let code = fs.readFileSync('src/store.tsx', 'utf8');
+
+const target = `      if (isEmailConfirmationPending) {
+        console.log("[Email Register] Email confirmation required. Saving pending profile to localStorage.");
+        const pendingRegistration = {
+          userData: newUserData,
+          estData: (userData.role === 'gerant' || userData.role === 'salon_coiffure') ? estData : null,
+          entrepriseData: userData.role === 'entreprise' ? entrepriseData : null,
+          referralCodeUsed,
+          uid: firebaseUser.uid
+        };
+        localStorage.setItem('zaka_pending_registration', JSON.stringify(pendingRegistration));
+        throw new Error("Inscription réussie ! Un email de confirmation vous a été envoyé. Veuillez vérifier votre boîte de réception pour activer votre compte.");
+      }
+
+      try {
+        await setDoc(doc(db, 'users', firebaseUser.uid), newUserData);
+      } catch (error) {
+        console.warn("Could not insert user profile. Assuming RLS or existing profile.", error);
+      }
+      
+      if (userData.role === 'annonceur') {
+        try {
+          await setDoc(doc(db, 'advertisers', firebaseUser.uid), {
+            id: firebaseUser.uid,
+            name: userData.name.trim(),
+            sector: entrepriseData?.sector || 'Autre',
+            logo: entrepriseData?.logo || '',
+            description: entrepriseData?.description || '',
+            phone: userData.phone || '',
+            email: emailStr,
+            status: 'valide',
+            balance: 0,
+            createdAt: new Date().toISOString()
+          });
+        } catch (error) {
+          console.warn("Could not insert advertiser profile.", error);
+        }
+      }
+
+      if ((userData.role === 'gerant' || userData.role === 'salon_coiffure') && estData) {
+        try {
+          const estPayload: any = {
+            ownerId: firebaseUser.uid,
+            name: estData.name || '',
+            category: userData.role === 'salon_coiffure' ? 'salon_de_coiffure' : (estData.category || 'autre'),
+            country: userData.country || 'Burkina Faso',
+            city: userData.city || 'Ouagadougou',
+            neighborhood: estData.neighborhood || '',
+            address: estData.address || '',
+            phone: userData.phone || '',
+            description: estData.description || '',
+            photos: estData.photos || [],
+            tags: estData.tags || [],
+            geolocation: estData.geolocation || '',
+            status: 'en_attente',
+            averageRating: 0
+          };
+          if (userData.role === 'salon_coiffure' || estData.category === 'salon_de_coiffure') {
+            estPayload.hairSalonData = { hairdressers: [], hairstyles: [] };
+          }
+          await addDoc(collection(db, 'establishments'), estPayload);
+        } catch (error) {
+          console.warn("Could not insert establishment profile.", error);
+        }
+      }
+
+      if (userData.role === 'entreprise' && entrepriseData) {
+        try {
+          await setDoc(doc(db, 'entreprises', firebaseUser.uid), {
+            name: userData.name.trim() || 'Entreprise',
+            sector: entrepriseData.sector || '',
+            logo: entrepriseData.logo || '',
+            description: entrepriseData.description || '',
+            philosophy: entrepriseData.philosophy || '',
+            status: 'en_attente',
+            createdAt: new Date().toISOString(),
+            followers: []
+          });
+        } catch (error) {
+          console.warn("Could not insert entreprise profile.", error);
+        }
+      }`;
+
+const replacement = `      if (isEmailConfirmationPending) {
+        console.log("[Email Register] Email confirmation required. Saving pending profile to localStorage.");
+        const pendingRegistration = {
+          userData: newUserData,
+          estData: (userData.role === 'gerant' || userData.role === 'salon_coiffure') ? estData : null,
+          entrepriseData: userData.role === 'entreprise' ? entrepriseData : null,
+          referralCodeUsed,
+          uid: firebaseUser.uid
+        };
+        localStorage.setItem('zaka_pending_registration', JSON.stringify(pendingRegistration));
+        throw new Error("Inscription réussie ! Un email de confirmation vous a été envoyé. Veuillez vérifier votre boîte de réception pour activer votre compte.");
+      }
+
+      // Email confirmation disabled, so we insert directly to Supabase
+      try {
+        const { error: userError } = await supabase.from('users').upsert({ id: firebaseUser.uid, ...newUserData }, { onConflict: 'id' });
+        if (userError) console.warn("Could not insert user profile in Supabase:", userError);
+      } catch (error) {
+        console.warn("Could not insert user profile.", error);
+      }
+      
+      // We don't have an advertisers table in Supabase yet, we skip or you can add if needed.
+      // But for 'gerant' or 'salon_coiffure', insert into establishments
+      if ((userData.role === 'gerant' || userData.role === 'salon_coiffure') && estData) {
+        try {
+          const estPayload: any = {
+            ownerId: firebaseUser.uid,
+            name: estData.name || '',
+            category: userData.role === 'salon_coiffure' ? 'salon_de_coiffure' : (estData.category || 'autre'),
+            country: userData.country || 'Burkina Faso',
+            city: userData.city || 'Ouagadougou',
+            neighborhood: estData.neighborhood || '',
+            address: estData.address || '',
+            phone: userData.phone || '',
+            description: estData.description || '',
+            photos: estData.photos || [],
+            tags: estData.tags || [],
+            geolocation: estData.geolocation || '',
+            status: 'en_attente',
+            averageRating: 0
+          };
+          if (userData.role === 'salon_coiffure' || estData.category === 'salon_de_coiffure') {
+            estPayload.hairSalonData = { hairdressers: [], hairstyles: [] };
+          }
+          const { error: estError } = await supabase.from('establishments').insert(estPayload);
+          if (estError) console.warn("Could not insert establishment in Supabase:", estError);
+        } catch (error) {
+          console.warn("Could not insert establishment profile.", error);
+        }
+      }
+
+      if (userData.role === 'entreprise' && entrepriseData) {
+        try {
+          const { error: entError } = await supabase.from('entreprises').insert({
+            ownerId: firebaseUser.uid,
+            name: userData.name.trim() || 'Entreprise',
+            sector: entrepriseData.sector || '',
+            logo: entrepriseData.logo || '',
+            description: entrepriseData.description || '',
+            philosophy: entrepriseData.philosophy || '',
+            status: 'en_attente'
+          });
+          if (entError) console.warn("Could not insert entreprise in Supabase:", entError);
+        } catch (error) {
+          console.warn("Could not insert entreprise profile.", error);
+        }
+      }`;
+
+code = code.replace(target, replacement);
+
+fs.writeFileSync('src/store.tsx', code);
+console.log('Done!');
