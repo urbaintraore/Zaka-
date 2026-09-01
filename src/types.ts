@@ -670,6 +670,7 @@ export interface StockItem {
   name: string;
   price: number;
   quantity: number;
+  category?: 'boisson' | 'cuisine' | string;
   stock_faible?: boolean;
   createdAt: string;
 }
@@ -679,6 +680,7 @@ export interface SaleItem {
   name: string;
   quantity: number;
   unitPrice: number;
+  category?: 'boisson' | 'cuisine' | string;
 }
 
 export interface SaleRecord {
@@ -686,8 +688,19 @@ export interface SaleRecord {
   establishmentId: string;
   cashierId: string;
   cashierName?: string;
+  serverName?: string;
+  tableNote?: string;
+  clientType?: 'Ordinaire' | 'Abonné' | 'VIP' | string;
   items: SaleItem[];
-  totalAmount: number;
+  subtotalBoissons?: number;
+  subtotalCuisine?: number;
+  totalAchat?: number;
+  discountAmount?: number;
+  totalAmount: number; // Total Net à payer
+  paidAmount?: number;
+  changeAmount?: number;
+  avoirAmount?: number;
+  mobileMoneyCode?: string;
   date: string;
 }
 

@@ -4,7 +4,7 @@ import { StockItem, SaleRecord, SaleItem } from '../types';
 import { 
   ShoppingBag, Plus, Minus, Search, AlertTriangle, CheckCircle, 
   X, Share2, Printer, User, Download, Image as ImageIcon, Sparkles,
-  GlassWater, Flame, RefreshCw
+  GlassWater, Flame, RefreshCw, Percent, Smartphone, Coins
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -34,6 +34,16 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Custom receipt customization states
+  const [tableNote, setTableNote] = useState('');
+  const [clientType, setClientType] = useState<'Ordinaire' | 'Abonné' | 'VIP'>('Ordinaire');
+  const [serverName, setServerName] = useState('');
+  const [discountAmount, setDiscountAmount] = useState<number>(0);
+  const [paidAmount, setPaidAmount] = useState<string>('');
+  const [isNoChangeMode, setIsNoChangeMode] = useState<boolean>(false);
+  const [mobileMoneyCode, setMobileMoneyCode] = useState('');
+  const [showCustomReceiptOptions, setShowCustomReceiptOptions] = useState(false);
 
   // Get active stocks for this establishment
   const estStocks = useMemo(() => {
@@ -154,12 +164,36 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
       unitPrice: ci.item!.price
     }));
 
+    const totalAchat = cartTotal;
+    const totalNet = Math.max(0, totalAchat - discountAmount);
+    
+    const numPaidAmount = Number(paidAmount) || 0;
+    let changeAmount = 0;
+    let avoirAmount = 0;
+    if (numPaidAmount > totalNet) {
+      const diff = numPaidAmount - totalNet;
+      if (isNoChangeMode) {
+        avoirAmount = diff;
+      } else {
+        changeAmount = diff;
+      }
+    }
+
     const salePayload = {
       establishmentId,
       cashierId: currentUser?.id || 'unknown',
       cashierName: currentUser?.name || 'Caissier',
+      serverName: serverName || undefined,
+      tableNote: tableNote || undefined,
+      clientType: clientType,
       items: saleItems,
-      totalAmount: cartTotal
+      totalAchat,
+      discountAmount,
+      totalAmount: totalNet,
+      paidAmount: numPaidAmount || undefined,
+      changeAmount: numPaidAmount > totalNet && !isNoChangeMode ? changeAmount : undefined,
+      avoirAmount: numPaidAmount > totalNet && isNoChangeMode ? avoirAmount : undefined,
+      mobileMoneyCode: mobileMoneyCode || undefined,
     };
 
     try {
@@ -176,6 +210,16 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
       });
 
       setCart({});
+      
+      // Reset receipt options
+      setTableNote('');
+      setClientType('Ordinaire');
+      setServerName('');
+      setDiscountAmount(0);
+      setPaidAmount('');
+      setIsNoChangeMode(false);
+      setMobileMoneyCode('');
+
       setSaleSuccess(true);
       setSuccessMsg("Vente validée et stock décrémenté avec succès !");
       
@@ -556,13 +600,142 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
                   ))}
                 </div>
               )}
+
+              {/* Personnalisation du reçu */}
+              {cartItems.length > 0 && (
+                <div className="mt-4 border-t border-gray-150 dark:border-gray-800 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomReceiptOptions(!showCustomReceiptOptions)}
+                    className="w-full flex items-center justify-between text-xs font-black text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white uppercase tracking-wider py-1 cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span>🧾 Options & Reçu Client</span>
+                    </span>
+                    <span>{showCustomReceiptOptions ? 'Masquer ▲' : 'Personnaliser ▼'}</span>
+                  </button>
+
+                  {showCustomReceiptOptions && (
+                    <div className="mt-3 space-y-3 bg-gray-50 dark:bg-gray-950 p-3 rounded-2xl border border-gray-100 dark:border-gray-850">
+                      {/* Note Client & Serveur */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block mb-1">Note Client (ex: Table 12)</label>
+                          <input
+                            type="text"
+                            value={tableNote}
+                            onChange={e => setTableNote(e.target.value)}
+                            placeholder="Sans note"
+                            className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg outline-none text-gray-800 dark:text-gray-200 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block mb-1">Serveur / Serveuse</label>
+                          <input
+                            type="text"
+                            value={serverName}
+                            onChange={e => setServerName(e.target.value)}
+                            placeholder="Nom"
+                            className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg outline-none text-gray-800 dark:text-gray-200 font-semibold"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Type Client & Code Mobile Money */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block mb-1">Type de Client</label>
+                          <select
+                            value={clientType}
+                            onChange={e => setClientType(e.target.value as any)}
+                            className="w-full px-2 py-1.5 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg outline-none text-gray-800 dark:text-gray-200 font-semibold"
+                          >
+                            <option value="Ordinaire">Ordinaire</option>
+                            <option value="Abonné">Abonné</option>
+                            <option value="VIP">VIP</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block mb-1">Code Mobile Money</label>
+                          <input
+                            type="text"
+                            value={mobileMoneyCode}
+                            onChange={e => setMobileMoneyCode(e.target.value)}
+                            placeholder="*144*4*6*Code#"
+                            className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg outline-none text-gray-800 dark:text-gray-200 font-semibold"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Réduction & Montant payé */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block mb-1">Réduction (F CFA)</label>
+                          <input
+                            type="number"
+                            value={discountAmount || ''}
+                            onChange={e => setDiscountAmount(Math.max(0, parseInt(e.target.value) || 0))}
+                            placeholder="0"
+                            className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg outline-none text-gray-800 dark:text-gray-200 font-bold text-red-600 dark:text-red-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block mb-1">Montant Reçu (F CFA)</label>
+                          <input
+                            type="number"
+                            value={paidAmount}
+                            onChange={e => setPaidAmount(e.target.value)}
+                            placeholder="0"
+                            className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg outline-none text-gray-800 dark:text-gray-200 font-bold text-emerald-600 dark:text-emerald-400"
+                        />
+                        </div>
+                      </div>
+
+                      {/* Change / Avoir indicators & No change toggle */}
+                      {Number(paidAmount) > Math.max(0, cartTotal - discountAmount) && (
+                        <div className="space-y-2 pt-1.5 border-t border-gray-200 dark:border-gray-850">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-gray-500">Différence calculée :</span>
+                            <span className="font-black text-gray-900 dark:text-white">
+                              {formatPrice(Number(paidAmount) - Math.max(0, cartTotal - discountAmount))}
+                            </span>
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-gray-900 p-2 rounded-lg border border-gray-200 dark:border-gray-800 select-none">
+                            <input
+                              type="checkbox"
+                              checked={isNoChangeMode}
+                              onChange={e => setIsNoChangeMode(e.target.checked)}
+                              className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                            />
+                            <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 leading-tight">
+                              Pas de monnaie disponible (remettre sous forme d'AVOIR)
+                            </span>
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {cartItems.length > 0 && (
               <div className="border-t border-gray-150 dark:border-gray-800 pt-4 space-y-4">
-                <div className="flex items-center justify-between text-sm font-black text-gray-900 dark:text-white">
-                  <span>Total à encaisser</span>
-                  <span className="text-orange-600 dark:text-orange-400 text-xl font-black">{formatPrice(cartTotal)}</span>
+                <div className="space-y-1 text-xs">
+                  <div className="flex items-center justify-between text-gray-500">
+                    <span>Total Achat (Brut)</span>
+                    <span className="font-bold">{formatPrice(cartTotal)}</span>
+                  </div>
+                  {discountAmount > 0 && (
+                    <div className="flex items-center justify-between text-red-500 font-bold">
+                      <span>Réduction / Remise</span>
+                      <span>- {formatPrice(discountAmount)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between text-sm font-black text-gray-900 dark:text-white pt-1">
+                    <span>Net à payer</span>
+                    <span className="text-orange-600 dark:text-orange-400 text-xl font-black">{formatPrice(Math.max(0, cartTotal - discountAmount))}</span>
+                  </div>
                 </div>
 
                 <button
