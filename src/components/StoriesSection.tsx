@@ -404,17 +404,40 @@ export function StoriesSection({ onStartChat }: { onStartChat?: (estId: string, 
           ownerId: targetEst.ownerId,
           lastMessage: textPayload,
           lastMessageAt: new Date().toISOString(),
+          lastMessageDate: new Date().toISOString(),
           lastSenderId: currentUser.id,
           unreadByClient: false,
           unreadByGerant: !isDJChat,
           unreadByDj: isDJChat
         };
 
-        const { data: conv } = await supabase
-          .from('conversations')
-          .upsert([convData], { onConflict: 'id' })
-          .select()
-          .single();
+        let convDataClean: any = { ...convData };
+        let conv: any = null;
+        let attempts = 0;
+        while (attempts < 4) {
+          attempts++;
+          const res = await supabase
+            .from('conversations')
+            .upsert([convDataClean])
+            .select()
+            .single();
+          if (!res.error) {
+            conv = res.data;
+            break;
+          }
+          if (res.error.code === '22P02' && convDataClean.id) {
+            delete convDataClean.id;
+            continue;
+          }
+          if (res.error.code === 'PGRST204' || res.error.message?.includes('schema cache')) {
+            const match = res.error.message.match(/Could not find the '([^']+)' column/i);
+            if (match && match[1]) {
+              delete convDataClean[match[1]];
+              continue;
+            }
+          }
+          break;
+        }
 
         if (conv) {
           // 2. Add message

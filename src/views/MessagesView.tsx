@@ -102,7 +102,7 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
           const activeDJReq = relationshipRequests.find(r => r.establishmentId === targetEst.id && r.status === 'acceptee' && r.isDJ);
           const djId = activeDJReq ? (activeDJReq.type === 'client_join' ? activeDJReq.initiatorId : activeDJReq.targetId) : null;
 
-          const newConv = {
+          const newConv: any = {
             clientId: currentUser.id,
             clientName: currentUser.name || currentUser.email || 'Client',
             establishmentId: targetEst.id,
@@ -112,6 +112,7 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
             djId: djId || null,
             lastMessage: 'Discussion démarrée',
             lastMessageAt: new Date().toISOString(),
+            lastMessageDate: new Date().toISOString(),
             lastSenderId: currentUser.id,
             unreadByClient: false,
             unreadByGerant: !isDJChat,
@@ -119,11 +120,36 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
           };
 
           if (isSupabaseConfigured) {
-            const { data, error } = await supabase
-              .from('conversations')
-              .insert([newConv])
-              .select()
-              .single();
+            let convPayload = { ...newConv };
+            let data: any = null;
+            let error: any = null;
+            let attempts = 0;
+
+            while (attempts < 4) {
+              attempts++;
+              const res = await supabase
+                .from('conversations')
+                .insert([convPayload])
+                .select()
+                .single();
+              data = res.data;
+              error = res.error;
+              if (!error) break;
+
+              if (error.code === '22P02' && convPayload.id) {
+                delete convPayload.id;
+                continue;
+              }
+
+              if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
+                const match = error.message.match(/Could not find the '([^']+)' column/i) || error.message.match(/column '([^']+)' does not exist/i);
+                if (match && match[1]) {
+                  delete convPayload[match[1]];
+                  continue;
+                }
+              }
+              break;
+            }
 
             if (!error && data) {
               setActiveConv(data as any);
@@ -313,21 +339,49 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
       };
 
       if (isSupabaseConfigured) {
-        // Add to messages
-        await supabase.from('messages').insert([msgData]);
+        // Add to messages with auto-pruning
+        let msgPayload: any = { ...msgData };
+        let msgAttempts = 0;
+        while (msgAttempts < 3) {
+          msgAttempts++;
+          const { error: mErr } = await supabase.from('messages').insert([msgPayload]);
+          if (!mErr) break;
+          if (mErr.code === 'PGRST204' || mErr.message?.includes('schema cache')) {
+            const match = mErr.message.match(/Could not find the '([^']+)' column/i);
+            if (match && match[1]) {
+              delete msgPayload[match[1]];
+              continue;
+            }
+          }
+          break;
+        }
 
-        // Update conversation summary
+        // Update conversation summary with auto-pruning
         const isDJOfActive = activeConv.djId === currentUser?.id && (activeConv as any).recipientType === 'dj';
-        const updateData = {
+        const updateData: any = {
           lastMessage: fileToSend ? `📎 ${fileToSend.name}` : textToSend,
           lastMessageAt: new Date().toISOString(),
+          lastMessageDate: new Date().toISOString(),
           lastSenderId: currentUser.id,
           unreadByClient: isGerant || isDJOfActive,
           unreadByGerant: !isGerant && !isDJOfActive && (activeConv as any).recipientType !== 'dj',
           unreadByDj: !isDJOfActive && (activeConv as any).recipientType === 'dj'
         };
 
-        await supabase.from('conversations').update(updateData).eq('id', activeConv.id);
+        let convAttempts = 0;
+        while (convAttempts < 4) {
+          convAttempts++;
+          const { error: cErr } = await supabase.from('conversations').update(updateData).eq('id', activeConv.id);
+          if (!cErr) break;
+          if (cErr.code === 'PGRST204' || cErr.message?.includes('schema cache')) {
+            const match = cErr.message.match(/Could not find the '([^']+)' column/i);
+            if (match && match[1]) {
+              delete updateData[match[1]];
+              continue;
+            }
+          }
+          break;
+        }
       }
     } catch (err) {
       console.error("Erreur lors de l'envoi du message:", err);

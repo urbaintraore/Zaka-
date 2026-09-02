@@ -296,14 +296,21 @@ CREATE TABLE IF NOT EXISTS public.group_outings (
 
 -- 9. MESSAGING & SERVICES
 CREATE TABLE IF NOT EXISTS public.conversations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "clientId" UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    "clientName" TEXT NOT NULL,
-    "establishmentId" UUID NOT NULL REFERENCES public.establishments(id) ON DELETE CASCADE,
-    "establishmentName" TEXT NOT NULL,
-    "ownerId" UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    "clientId" UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    "clientName" TEXT,
+    "establishmentId" UUID REFERENCES public.establishments(id) ON DELETE CASCADE,
+    "establishmentName" TEXT,
+    "ownerId" UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    "djId" UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    "recipientType" TEXT DEFAULT 'gerant',
     "lastMessage" TEXT DEFAULT '',
+    "lastMessageAt" TIMESTAMPTZ DEFAULT timezone('utc'::text, now()),
     "lastMessageDate" TIMESTAMPTZ DEFAULT timezone('utc'::text, now()),
+    "lastSenderId" TEXT,
+    "unreadByClient" BOOLEAN DEFAULT false,
+    "unreadByGerant" BOOLEAN DEFAULT false,
+    "unreadByDj" BOOLEAN DEFAULT false,
     "createdAt" TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
@@ -516,6 +523,29 @@ BEGIN
     ALTER TABLE public.relationship_requests ALTER COLUMN "userId" DROP NOT NULL;
     ALTER TABLE public.relationship_requests ALTER COLUMN "userName" DROP NOT NULL;
     ALTER TABLE public.relationship_requests ALTER COLUMN "establishmentName" DROP NOT NULL;
+EXCEPTION 
+    WHEN OTHERS THEN NULL;
+END $$;
+
+ALTER TABLE public.conversations ADD COLUMN IF NOT EXISTS "djId" UUID REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE public.conversations ADD COLUMN IF NOT EXISTS "recipientType" TEXT DEFAULT 'gerant';
+ALTER TABLE public.conversations ADD COLUMN IF NOT EXISTS "lastMessageAt" TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
+ALTER TABLE public.conversations ADD COLUMN IF NOT EXISTS "lastMessageDate" TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
+ALTER TABLE public.conversations ADD COLUMN IF NOT EXISTS "lastSenderId" TEXT;
+ALTER TABLE public.conversations ADD COLUMN IF NOT EXISTS "unreadByClient" BOOLEAN DEFAULT false;
+ALTER TABLE public.conversations ADD COLUMN IF NOT EXISTS "unreadByGerant" BOOLEAN DEFAULT false;
+ALTER TABLE public.conversations ADD COLUMN IF NOT EXISTS "unreadByDj" BOOLEAN DEFAULT false;
+
+DO $$ 
+BEGIN 
+    ALTER TABLE public.conversations ALTER COLUMN id TYPE TEXT;
+    ALTER TABLE public.conversations ALTER COLUMN "clientId" DROP NOT NULL;
+    ALTER TABLE public.conversations ALTER COLUMN "clientName" DROP NOT NULL;
+    ALTER TABLE public.conversations ALTER COLUMN "establishmentId" DROP NOT NULL;
+    ALTER TABLE public.conversations ALTER COLUMN "establishmentName" DROP NOT NULL;
+    ALTER TABLE public.conversations ALTER COLUMN "ownerId" DROP NOT NULL;
+    ALTER TABLE public.messages ALTER COLUMN id TYPE TEXT;
+    ALTER TABLE public.messages ALTER COLUMN "conversationId" TYPE TEXT;
 EXCEPTION 
     WHEN OTHERS THEN NULL;
 END $$;

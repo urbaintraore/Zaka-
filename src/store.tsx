@@ -87,6 +87,15 @@ const cleanPayloadForSupabase = (tableName: string, payload: any) => {
       clean.initiatorId = clean.userId;
     }
   }
+
+  if (tableName === 'conversations') {
+    if (clean.lastMessageAt && !clean.lastMessageDate) {
+      clean.lastMessageDate = clean.lastMessageAt;
+    }
+    if (clean.lastMessageDate && !clean.lastMessageAt) {
+      clean.lastMessageAt = clean.lastMessageDate;
+    }
+  }
   
   Object.keys(clean).forEach(k => {
      if (clean[k] === undefined || clean[k] === null || clean[k] === '') {
@@ -198,16 +207,37 @@ const setDoc = async (docRef: { collectionName: string, docId?: string }, payloa
   const tableName = mapCollectionToTable(docRef.collectionName);
   const cleanPayload = cleanPayloadForSupabase(tableName, payload);
   const id = docRef.docId;
-  let { error } = await supabase.from(tableName).upsert({ id, ...cleanPayload });
 
-  if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache'))) {
-    const match = error.message.match(/Could not find the '([^']+)' column/i);
-    if (match && match[1]) {
-      const pruned = { id, ...cleanPayload };
-      delete pruned[match[1]];
-      const retry = await supabase.from(tableName).upsert(pruned);
-      if (!retry.error) error = null;
+  let currentPayload: any = id ? { id, ...cleanPayload } : { ...cleanPayload };
+  let error: any = null;
+  let attempts = 0;
+
+  while (attempts < 4) {
+    attempts++;
+    const res = await supabase.from(tableName).upsert(currentPayload);
+    error = res.error;
+    if (!error) break;
+
+    // Handle 22P02 (invalid UUID format for id column in DB)
+    if (error.code === '22P02' && currentPayload.id) {
+      delete currentPayload.id;
+      continue;
     }
+
+    // Handle missing column in schema cache
+    if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
+      const match = error.message.match(/Could not find the '([^']+)' column/i) || error.message.match(/column '([^']+)' does not exist/i);
+      if (match && match[1]) {
+        const missingCol = match[1];
+        delete currentPayload[missingCol];
+        if (missingCol === 'lastMessageAt' && cleanPayload.lastMessageAt) {
+          currentPayload.lastMessageDate = cleanPayload.lastMessageAt;
+        }
+        continue;
+      }
+    }
+
+    break;
   }
 
   if (error) {
@@ -231,16 +261,30 @@ const updateDoc = async (docRef: { collectionName: string, docId?: string }, pay
   const tableName = mapCollectionToTable(docRef.collectionName);
   const cleanPayload = cleanPayloadForSupabase(tableName, payload);
   const id = docRef.docId;
-  let { error } = await supabase.from(tableName).update(cleanPayload).eq('id', id);
 
-  if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache'))) {
-    const match = error.message.match(/Could not find the '([^']+)' column/i);
-    if (match && match[1]) {
-      const pruned = { ...cleanPayload };
-      delete pruned[match[1]];
-      const retry = await supabase.from(tableName).update(pruned).eq('id', id);
-      if (!retry.error) error = null;
+  let currentPayload: any = { ...cleanPayload };
+  let error: any = null;
+  let attempts = 0;
+
+  while (attempts < 4) {
+    attempts++;
+    const res = await supabase.from(tableName).update(currentPayload).eq('id', id);
+    error = res.error;
+    if (!error) break;
+
+    if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
+      const match = error.message.match(/Could not find the '([^']+)' column/i) || error.message.match(/column '([^']+)' does not exist/i);
+      if (match && match[1]) {
+        const missingCol = match[1];
+        delete currentPayload[missingCol];
+        if (missingCol === 'lastMessageAt' && cleanPayload.lastMessageAt) {
+          currentPayload.lastMessageDate = cleanPayload.lastMessageAt;
+        }
+        continue;
+      }
     }
+
+    break;
   }
 
   if (error) {
@@ -281,7 +325,9 @@ const getDoc = async (docRef: { collectionName: string, docId?: string }) => {
   const tableName = mapCollectionToTable(docRef.collectionName);
   const { data, error } = await supabase.from(tableName).select('*').eq('id', docRef.docId).maybeSingle();
   if (error) {
-    console.error(`[Supabase getDoc] Error in ${tableName}:`, error);
+    if (error.code !== '22P02') {
+      console.error(`[Supabase getDoc] Error in ${tableName}:`, error);
+    }
     return { exists: () => false, data: () => null };
   }
   return {
