@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { StockItem, SaleRecord, SaleItem } from '../types';
+import { StockItem, SaleRecord, SaleItem, StockReception, StockInventory } from '../types';
 
 /**
  * Service Supabase dédié à la gestion des Stocks et des Ventes (Caisse POS)
@@ -29,6 +29,9 @@ export const stockSalesService = {
       name: row.name,
       price: Number(row.price),
       quantity: Number(row.quantity),
+      volume: row.volume || '66cl',
+      unitsPerCase: Number(row.unitsPerCase || row.unites_par_caisse || 12),
+      unites_par_caisse: Number(row.unites_par_caisse || row.unitsPerCase || 12),
       stock_faible: row.stock_faible ?? (Number(row.quantity) <= 5),
       createdAt: row.createdAt || row.created_at,
       updatedAt: row.updatedAt || row.updated_at
@@ -43,11 +46,15 @@ export const stockSalesService = {
       throw new Error('Supabase non configuré.');
     }
 
+    const unitsPerCase = item.unitsPerCase || 12;
     const payload = {
       establishmentId: item.establishmentId,
       name: item.name.trim(),
       price: item.price,
       quantity: item.quantity,
+      volume: item.volume || '66cl',
+      unitsPerCase: unitsPerCase,
+      unites_par_caisse: unitsPerCase,
       stock_faible: item.stock_faible ?? (item.quantity <= 5),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -70,6 +77,8 @@ export const stockSalesService = {
       name: data.name,
       price: Number(data.price),
       quantity: Number(data.quantity),
+      volume: data.volume || '66cl',
+      unitsPerCase: Number(data.unitsPerCase || data.unites_par_caisse || 12),
       stock_faible: data.stock_faible,
       createdAt: data.createdAt || data.created_at
     };
@@ -85,6 +94,10 @@ export const stockSalesService = {
       ...updates,
       updatedAt: new Date().toISOString()
     };
+
+    if (updates.unitsPerCase) {
+      payload.unites_par_caisse = updates.unitsPerCase;
+    }
 
     if (updates.quantity !== undefined && updates.stock_faible === undefined) {
       payload.stock_faible = updates.quantity <= 5;

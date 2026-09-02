@@ -336,7 +336,7 @@ export function CashierDashboard({ establishmentId: propEstId, onLogout }: Cashi
         )}
 
         {activeTab === 'stocks' && selectedEstId && (
-          <StockManagerView establishmentId={selectedEstId} />
+          <StockManagerView establishmentId={selectedEstId} isGerant={isOwner} />
         )}
 
         {activeTab === 'historique' && (

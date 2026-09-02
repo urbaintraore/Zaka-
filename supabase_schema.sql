@@ -557,9 +557,46 @@ CREATE TABLE IF NOT EXISTS public.stocks (
     category TEXT DEFAULT 'boisson',
     price NUMERIC(10, 2) NOT NULL DEFAULT 0.0,
     quantity INTEGER NOT NULL DEFAULT 0,
+    "volume" TEXT DEFAULT '66cl',
+    "unitsPerCase" INTEGER NOT NULL DEFAULT 12,
+    "unites_par_caisse" INTEGER NOT NULL DEFAULT 12,
     stock_faible BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.stocks ADD COLUMN IF NOT EXISTS "volume" TEXT DEFAULT '66cl';
+ALTER TABLE public.stocks ADD COLUMN IF NOT EXISTS "unitsPerCase" INTEGER DEFAULT 12;
+ALTER TABLE public.stocks ADD COLUMN IF NOT EXISTS "unites_par_caisse" INTEGER DEFAULT 12;
+
+CREATE TABLE IF NOT EXISTS public.receptions_stock (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "establishmentId" UUID NOT NULL REFERENCES public.establishments(id) ON DELETE CASCADE,
+    "stockId" UUID REFERENCES public.stocks(id) ON DELETE CASCADE,
+    "productName" TEXT NOT NULL,
+    "volume" TEXT DEFAULT '66cl',
+    "casesCount" INTEGER NOT NULL DEFAULT 0,
+    "unitsPerCase" INTEGER NOT NULL DEFAULT 12,
+    "unitsAdded" INTEGER NOT NULL DEFAULT 0,
+    "registeredBy" UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    "registeredByName" TEXT,
+    date TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE TABLE IF NOT EXISTS public.inventaires (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "establishmentId" UUID NOT NULL REFERENCES public.establishments(id) ON DELETE CASCADE,
+    "stockId" UUID REFERENCES public.stocks(id) ON DELETE CASCADE,
+    "productName" TEXT NOT NULL,
+    "volume" TEXT DEFAULT '66cl',
+    "stockTheorique" INTEGER NOT NULL DEFAULT 0,
+    "stockPhysiqueCompte" INTEGER NOT NULL DEFAULT 0,
+    "ecart" INTEGER NOT NULL DEFAULT 0,
+    "realisePar" UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    "realiseByName" TEXT,
+    "adjusted" BOOLEAN NOT NULL DEFAULT false,
+    "note" TEXT,
+    date TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
 CREATE TABLE IF NOT EXISTS public.ventes (
@@ -620,7 +657,50 @@ ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ad_statistics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.stocks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.receptions_stock ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventaires ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ventes ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist (to allow re-running script safely)
+DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.users;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
+DROP POLICY IF EXISTS "Admins can manage all users" ON public.users;
+
+DROP POLICY IF EXISTS "Establishments are viewable by everyone" ON public.establishments;
+DROP POLICY IF EXISTS "Owners can insert their own establishments" ON public.establishments;
+DROP POLICY IF EXISTS "Owners can update their own establishments" ON public.establishments;
+DROP POLICY IF EXISTS "Owners can delete their own establishments" ON public.establishments;
+DROP POLICY IF EXISTS "Admins can manage all establishments" ON public.establishments;
+
+DROP POLICY IF EXISTS "Entreprises are viewable by everyone" ON public.entreprises;
+DROP POLICY IF EXISTS "Owners can insert their own entreprises" ON public.entreprises;
+DROP POLICY IF EXISTS "Owners can update their own entreprises" ON public.entreprises;
+DROP POLICY IF EXISTS "Owners can delete their own entreprises" ON public.entreprises;
+DROP POLICY IF EXISTS "Admins can manage all entreprises" ON public.entreprises;
+
+DROP POLICY IF EXISTS "Public can view publications" ON public.publications;
+DROP POLICY IF EXISTS "Owners can manage their publications" ON public.publications;
+DROP POLICY IF EXISTS "Admins can manage all publications" ON public.publications;
+DROP POLICY IF EXISTS "Public can view reviews" ON public.reviews;
+DROP POLICY IF EXISTS "Public can view stories" ON public.stories;
+DROP POLICY IF EXISTS "Public can view ad_campaigns" ON public.ad_campaigns;
+DROP POLICY IF EXISTS "Public can view ad_creatives" ON public.ad_creatives;
+DROP POLICY IF EXISTS "Public can view ad_rates" ON public.ad_rates;
+
+DROP POLICY IF EXISTS "Authenticated users can create reviews" ON public.reviews;
+DROP POLICY IF EXISTS "Users can view their own reservations" ON public.reservations;
+DROP POLICY IF EXISTS "Owners can view their establishment reservations" ON public.reservations;
+
+DROP POLICY IF EXISTS "Users can view their own conversations" ON public.conversations;
+DROP POLICY IF EXISTS "Users can view their own messages" ON public.messages;
+
+DROP POLICY IF EXISTS "Owners can view their ad_organizations" ON public.ad_organizations;
+DROP POLICY IF EXISTS "Owners can manage their ad_organizations" ON public.ad_organizations;
+
+DROP POLICY IF EXISTS "Establishment owners can manage stocks" ON public.stocks;
+DROP POLICY IF EXISTS "Establishment owners can manage receptions_stock" ON public.receptions_stock;
+DROP POLICY IF EXISTS "Establishment owners can manage inventaires" ON public.inventaires;
+DROP POLICY IF EXISTS "Establishment owners can manage ventes" ON public.ventes;
 
 -- Users policies
 CREATE POLICY "Public profiles are viewable by everyone" ON public.users FOR SELECT USING (true);
@@ -675,6 +755,9 @@ CREATE POLICY "Owners can manage their ad_organizations" ON public.ad_organizati
 
 -- Stock & Sales Policies
 CREATE POLICY "Establishment owners can manage stocks" ON public.stocks FOR ALL USING (EXISTS (SELECT 1 FROM public.establishments WHERE id = "establishmentId" AND "ownerId" = auth.uid()));
+CREATE POLICY "Establishment owners can manage receptions_stock" ON public.receptions_stock FOR ALL USING (EXISTS (SELECT 1 FROM public.establishments WHERE id = "establishmentId" AND "ownerId" = auth.uid()));
+CREATE POLICY "Establishment owners can manage inventaires" ON public.inventaires FOR ALL USING (EXISTS (SELECT 1 FROM public.establishments WHERE id = "establishmentId" AND "ownerId" = auth.uid()));
 CREATE POLICY "Establishment owners can manage ventes" ON public.ventes FOR ALL USING (EXISTS (SELECT 1 FROM public.establishments WHERE id = "establishmentId" AND "ownerId" = auth.uid()));
+
 
 

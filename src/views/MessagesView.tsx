@@ -125,7 +125,7 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
             let error: any = null;
             let attempts = 0;
 
-            while (attempts < 4) {
+            while (attempts < 15) {
               attempts++;
               const res = await supabase
                 .from('conversations')
@@ -141,9 +141,12 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
                 continue;
               }
 
-              if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
-                const match = error.message.match(/Could not find the '([^']+)' column/i) || error.message.match(/column '([^']+)' does not exist/i);
-                if (match && match[1]) {
+              if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('does not exist') || error.message?.includes('column')) {
+                const match = error.message.match(/Could not find the '([^']+)' column/i) ||
+                              error.message.match(/column ['"]?([^'"]+)['"]? (?:of relation|does not exist|in the schema cache)/i) ||
+                              error.message.match(/column ['"]?([^'"]+)['"]? does not exist/i) ||
+                              error.message.match(/['"]?([^'"]+)['"]? column/i);
+                if (match && match[1] && convPayload[match[1]] !== undefined) {
                   delete convPayload[match[1]];
                   continue;
                 }
@@ -281,14 +284,31 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
             )
             .subscribe();
 
-          // Mark conversation as read
-          const isDJOfActive = activeConv.djId === currentUser?.id && (activeConv as any).recipientType === 'dj';
-          if (isDJOfActive && (activeConv as any).unreadByDj) {
-            await supabase.from('conversations').update({ unreadByDj: false }).eq('id', activeConv.id);
-          } else if (isGerant && activeConv.unreadByGerant) {
-            await supabase.from('conversations').update({ unreadByGerant: false }).eq('id', activeConv.id);
-          } else if (!isGerant && !isDJOfActive && activeConv.unreadByClient) {
-            await supabase.from('conversations').update({ unreadByClient: false }).eq('id', activeConv.id);
+          // Mark conversation as read safely
+          try {
+            const isDJOfActive = activeConv.djId === currentUser?.id && (activeConv as any).recipientType === 'dj';
+            let markPayload: any = null;
+            if (isDJOfActive && (activeConv as any).unreadByDj) {
+              markPayload = { unreadByDj: false };
+            } else if (isGerant && activeConv.unreadByGerant) {
+              markPayload = { unreadByGerant: false };
+            } else if (!isGerant && !isDJOfActive && activeConv.unreadByClient) {
+              markPayload = { unreadByClient: false };
+            }
+
+            if (markPayload) {
+              let attempts = 0;
+              while (attempts < 5) {
+                attempts++;
+                const { error: readErr } = await supabase.from('conversations').update(markPayload).eq('id', activeConv.id);
+                if (!readErr) break;
+                if (readErr.code === 'PGRST204' || readErr.message?.includes('schema cache') || readErr.message?.includes('does not exist') || readErr.message?.includes('column')) {
+                  break; // Column doesn't exist in DB, skip non-essential read status update
+                }
+              }
+            }
+          } catch (readErr) {
+            // Ignore if unread flags column does not exist in schema
           }
 
         } catch (e) {
@@ -342,13 +362,16 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
         // Add to messages with auto-pruning
         let msgPayload: any = { ...msgData };
         let msgAttempts = 0;
-        while (msgAttempts < 3) {
+        while (msgAttempts < 15) {
           msgAttempts++;
           const { error: mErr } = await supabase.from('messages').insert([msgPayload]);
           if (!mErr) break;
-          if (mErr.code === 'PGRST204' || mErr.message?.includes('schema cache')) {
-            const match = mErr.message.match(/Could not find the '([^']+)' column/i);
-            if (match && match[1]) {
+          if (mErr.code === 'PGRST204' || mErr.message?.includes('schema cache') || mErr.message?.includes('does not exist') || mErr.message?.includes('column')) {
+            const match = mErr.message.match(/Could not find the '([^']+)' column/i) ||
+                          mErr.message.match(/column ['"]?([^'"]+)['"]? (?:of relation|does not exist|in the schema cache)/i) ||
+                          mErr.message.match(/column ['"]?([^'"]+)['"]? does not exist/i) ||
+                          mErr.message.match(/['"]?([^'"]+)['"]? column/i);
+            if (match && match[1] && msgPayload[match[1]] !== undefined) {
               delete msgPayload[match[1]];
               continue;
             }
@@ -369,13 +392,16 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
         };
 
         let convAttempts = 0;
-        while (convAttempts < 4) {
+        while (convAttempts < 15) {
           convAttempts++;
           const { error: cErr } = await supabase.from('conversations').update(updateData).eq('id', activeConv.id);
           if (!cErr) break;
-          if (cErr.code === 'PGRST204' || cErr.message?.includes('schema cache')) {
-            const match = cErr.message.match(/Could not find the '([^']+)' column/i);
-            if (match && match[1]) {
+          if (cErr.code === 'PGRST204' || cErr.message?.includes('schema cache') || cErr.message?.includes('does not exist') || cErr.message?.includes('column')) {
+            const match = cErr.message.match(/Could not find the '([^']+)' column/i) ||
+                          cErr.message.match(/column ['"]?([^'"]+)['"]? (?:of relation|does not exist|in the schema cache)/i) ||
+                          cErr.message.match(/column ['"]?([^'"]+)['"]? does not exist/i) ||
+                          cErr.message.match(/['"]?([^'"]+)['"]? column/i);
+            if (match && match[1] && updateData[match[1]] !== undefined) {
               delete updateData[match[1]];
               continue;
             }

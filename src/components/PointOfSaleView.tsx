@@ -511,9 +511,16 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
                     >
                       <div>
                         <div className="flex items-start justify-between gap-1">
-                          <span className="text-xs font-black text-gray-900 dark:text-white line-clamp-2">
-                            {drink.name}
-                          </span>
+                          <div>
+                            <span className="text-xs font-black text-gray-900 dark:text-white line-clamp-1">
+                              {drink.name}
+                            </span>
+                            {drink.volume && (
+                              <span className="text-[10px] font-bold text-gray-400 block">
+                                {drink.volume}
+                              </span>
+                            )}
+                          </div>
                           {currentCartQty > 0 && (
                             <span className="px-2 py-0.5 bg-orange-600 text-white rounded-full text-[10px] font-black shrink-0">
                               x{currentCartQty}
@@ -533,7 +540,7 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
                             ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 animate-pulse'
                             : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
                         }`}>
-                          {isOutOfStock ? "Rupture" : `${drink.quantity} en stock`}
+                          {isOutOfStock ? "Rupture" : `${drink.quantity} un. (${Math.floor(drink.quantity / (drink.unitsPerCase || drink.unites_par_caisse || 12))} cse${Math.floor(drink.quantity / (drink.unitsPerCase || drink.unites_par_caisse || 12)) > 1 ? 's' : ''})`}
                         </span>
                         
                         <div className="w-7 h-7 rounded-full bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 flex items-center justify-center hover:bg-orange-100 dark:hover:bg-orange-900/30">

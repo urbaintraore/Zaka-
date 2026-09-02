@@ -675,9 +675,42 @@ export interface StockItem {
   name: string;
   price: number;
   quantity: number;
+  volume?: string; // Format / contenance ex: "66cl", "33cl", "50cl"
+  unitsPerCase?: number; // Unités par caisse pour ce format précis (ex: 12, 24)
+  unites_par_caisse?: number; // Aliases pour la BD Supabase
   category?: 'boisson' | 'cuisine' | string;
   stock_faible?: boolean;
   createdAt: string;
+}
+
+export interface StockReception {
+  id: string;
+  establishmentId: string;
+  stockId: string;
+  productName: string;
+  volume?: string;
+  casesCount: number; // Nombre de caisses reçues
+  unitsPerCase: number; // Unités par caisse (ex: 12)
+  unitsAdded: number; // Total unités ajoutées (casesCount * unitsPerCase)
+  date: string;
+  registeredBy: string; // ID du Gérant
+  registeredByName?: string;
+}
+
+export interface StockInventory {
+  id: string;
+  establishmentId: string;
+  stockId: string;
+  productName: string;
+  volume?: string;
+  stockTheorique: number; // Stock calculé en unités
+  stockPhysiqueCompte: number; // Stock compté en unités
+  ecart: number; // stockPhysiqueCompte - stockTheorique (négatif = perte/vol)
+  date: string;
+  realisePar: string; // ID du Gérant
+  realiseByName?: string;
+  adjusted?: boolean; // Vrai si le stock a été réajusté après l'inventaire
+  note?: string;
 }
 
 export interface SaleItem {

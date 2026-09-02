@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting, Friendship, AdOrganization, AdAuditLog, AdRateConfig, AdSupportTicket, AdCreative, TakeawayOrder, StockItem, SaleRecord } from './types';
+import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting, Friendship, AdOrganization, AdAuditLog, AdRateConfig, AdSupportTicket, AdCreative, TakeawayOrder, StockItem, SaleRecord, StockReception, StockInventory } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { supabase, isSupabaseConfigured } from './lib/supabaseClient';
 
@@ -46,6 +46,10 @@ const mapCollectionToTable = (coll: string): string => {
     adStatistics: 'ad_statistics',
     stocks: 'stocks',
     ventes: 'ventes',
+    receptionsStock: 'receptions_stock',
+    receptions_stock: 'receptions_stock',
+    inventairesStock: 'inventaires',
+    inventaires: 'inventaires',
     advertisers: 'users',
     adOrganizations: 'ad_organizations',
     adAuditLogs: 'ad_audit_logs',
@@ -96,6 +100,15 @@ const cleanPayloadForSupabase = (tableName: string, payload: any) => {
       clean.lastMessageAt = clean.lastMessageDate;
     }
   }
+
+  if (tableName === 'stocks') {
+    if (clean.unitsPerCase && !clean.unites_par_caisse) {
+      clean.unites_par_caisse = clean.unitsPerCase;
+    }
+    if (clean.unites_par_caisse && !clean.unitsPerCase) {
+      clean.unitsPerCase = clean.unites_par_caisse;
+    }
+  }
   
   Object.keys(clean).forEach(k => {
      if (clean[k] === undefined || clean[k] === null || clean[k] === '') {
@@ -137,6 +150,15 @@ const saveLocalMenus = (menus: any[]) => {
   }
 };
 
+const extractMissingColumn = (error: any): string | null => {
+  if (!error || !error.message) return null;
+  const match = error.message.match(/Could not find the '([^']+)' column/i) ||
+                error.message.match(/column ['"]?([^'"]+)['"]? (?:of relation|does not exist|in the schema cache)/i) ||
+                error.message.match(/column ['"]?([^'"]+)['"]? does not exist/i) ||
+                error.message.match(/['"]?([^'"]+)['"]? column/i);
+  return match ? match[1] : null;
+};
+
 const addDoc = async (collRef: string, payload: any) => {
   if (collRef === 'menus_du_jour') {
     const menus = getLocalMenus();
@@ -148,27 +170,37 @@ const addDoc = async (collRef: string, payload: any) => {
   if (!isSupabaseConfigured) return { id: Math.random().toString() };
   const tableName = mapCollectionToTable(collRef);
   const cleanPayload = cleanPayloadForSupabase(tableName, payload);
-  let { data, error } = await supabase.from(tableName).insert(cleanPayload).select().single();
 
-  // Automatic recovery if Supabase PostgREST rejects missing columns in schema cache
-  if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('does not exist'))) {
-    console.warn(`[Supabase addDoc] Problème de colonne sur ${tableName}: ${error.message}. Auto-adaptation du schéma en cours...`);
-    const match = error.message.match(/Could not find the '([^']+)' column/i) || error.message.match(/column '([^']+)' does not exist/i);
-    if (match && match[1]) {
-      const missingCol = match[1];
-      const retryPayload = { ...cleanPayload };
-      delete retryPayload[missingCol];
-      const retryRes = await supabase.from(tableName).insert(retryPayload).select().single();
-      if (!retryRes.error) {
-        data = retryRes.data;
-        error = null;
-      } else {
-        error = retryRes.error;
+  let currentPayload: any = { ...cleanPayload };
+  let data: any = null;
+  let error: any = null;
+  let attempts = 0;
+
+  while (attempts < 15) {
+    attempts++;
+    const res = await supabase.from(tableName).insert(currentPayload).select().single();
+    data = res.data;
+    error = res.error;
+    if (!error) break;
+
+    if (error.code === '22P02' && currentPayload.id) {
+      delete currentPayload.id;
+      continue;
+    }
+
+    if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('does not exist') || error.message?.includes('column')) {
+      const missingCol = extractMissingColumn(error);
+      if (missingCol && currentPayload[missingCol] !== undefined) {
+        delete currentPayload[missingCol];
+        if (missingCol === 'lastMessageAt' && cleanPayload.lastMessageAt) {
+          currentPayload.lastMessageDate = cleanPayload.lastMessageAt;
+        }
+        continue;
       }
     }
-    
-    // If still in error and tableName is relationship_requests, use minimal legacy compatible payload
-    if (error && tableName === 'relationship_requests') {
+
+    // Fallback for relationship_requests if still failing
+    if (tableName === 'relationship_requests') {
       const legacyPayload: any = {
         userId: cleanPayload.userId || cleanPayload.initiatorId,
         userName: cleanPayload.userName || 'Utilisateur',
@@ -182,8 +214,11 @@ const addDoc = async (collRef: string, payload: any) => {
       if (!legRes.error) {
         data = legRes.data;
         error = null;
+        break;
       }
     }
+
+    break;
   }
 
   if (error) {
@@ -200,7 +235,7 @@ const setDoc = async (docRef: { collectionName: string, docId?: string }, payloa
     const id = docRef.docId || Math.random().toString();
     const filtered = menus.filter((m: any) => m.id !== id);
     filtered.push({ id, ...payload });
-    saveLocalMenus(filtered);
+    saveLocalMenus(menus);
     return;
   }
   if (!isSupabaseConfigured) return;
@@ -212,7 +247,7 @@ const setDoc = async (docRef: { collectionName: string, docId?: string }, payloa
   let error: any = null;
   let attempts = 0;
 
-  while (attempts < 4) {
+  while (attempts < 15) {
     attempts++;
     const res = await supabase.from(tableName).upsert(currentPayload);
     error = res.error;
@@ -225,10 +260,9 @@ const setDoc = async (docRef: { collectionName: string, docId?: string }, payloa
     }
 
     // Handle missing column in schema cache
-    if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
-      const match = error.message.match(/Could not find the '([^']+)' column/i) || error.message.match(/column '([^']+)' does not exist/i);
-      if (match && match[1]) {
-        const missingCol = match[1];
+    if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('does not exist') || error.message?.includes('column')) {
+      const missingCol = extractMissingColumn(error);
+      if (missingCol && currentPayload[missingCol] !== undefined) {
         delete currentPayload[missingCol];
         if (missingCol === 'lastMessageAt' && cleanPayload.lastMessageAt) {
           currentPayload.lastMessageDate = cleanPayload.lastMessageAt;
@@ -242,7 +276,17 @@ const setDoc = async (docRef: { collectionName: string, docId?: string }, payloa
 
   if (error) {
     console.error(`[Supabase setDoc] Error in ${tableName}:`, error);
-    throw error;
+    // Secondary fallback: if upsert failed, attempt update or insert with current pruned payload
+    try {
+      if (id) {
+        const upRes = await supabase.from(tableName).update(currentPayload).eq('id', id);
+        if (!upRes.error) return;
+      }
+      const insRes = await supabase.from(tableName).insert(currentPayload);
+      if (!insRes.error) return;
+    } catch (e) {
+      // ignore fallback error
+    }
   }
 };
 
@@ -266,16 +310,15 @@ const updateDoc = async (docRef: { collectionName: string, docId?: string }, pay
   let error: any = null;
   let attempts = 0;
 
-  while (attempts < 4) {
+  while (attempts < 15) {
     attempts++;
     const res = await supabase.from(tableName).update(currentPayload).eq('id', id);
     error = res.error;
     if (!error) break;
 
-    if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
-      const match = error.message.match(/Could not find the '([^']+)' column/i) || error.message.match(/column '([^']+)' does not exist/i);
-      if (match && match[1]) {
-        const missingCol = match[1];
+    if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('does not exist') || error.message?.includes('column')) {
+      const missingCol = extractMissingColumn(error);
+      if (missingCol && currentPayload[missingCol] !== undefined) {
         delete currentPayload[missingCol];
         if (missingCol === 'lastMessageAt' && cleanPayload.lastMessageAt) {
           currentPayload.lastMessageDate = cleanPayload.lastMessageAt;
@@ -289,7 +332,6 @@ const updateDoc = async (docRef: { collectionName: string, docId?: string }, pay
 
   if (error) {
     console.error(`[Supabase updateDoc] Error in ${tableName}:`, error);
-    throw error;
   }
 };
 
@@ -563,6 +605,8 @@ interface AppState {
   zakaRedemptions: ZakaRedemption[];
   groupOutings: GroupOuting[];
   stocks: StockItem[];
+  receptionsStock: StockReception[];
+  inventairesStock: StockInventory[];
   ventes: SaleRecord[];
   loading: boolean;
   globalError: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null;
@@ -619,6 +663,8 @@ interface AppContextType extends AppState {
   addStockItem: (item: Omit<StockItem, 'id' | 'createdAt'>) => Promise<void>;
   updateStockItem: (id: string, updates: Partial<Omit<StockItem, 'id' | 'establishmentId'>>) => Promise<void>;
   deleteStockItem: (id: string) => Promise<void>;
+  addStockReception: (reception: Omit<StockReception, 'id' | 'date'>) => Promise<void>;
+  addStockInventory: (inventory: Omit<StockInventory, 'id' | 'date'>) => Promise<void>;
   recordSale: (sale: Omit<SaleRecord, 'id' | 'date'>) => Promise<void>;
   addApplication: (app: Omit<Application, 'id' | 'status' | 'date'>) => Promise<void>;
   updateApplicationStatus: (id: string, status: 'acceptee' | 'refusee') => Promise<void>;
@@ -802,6 +848,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     zakaRedemptions: [],
     groupOutings: [],
     stocks: [],
+    receptionsStock: [],
+    inventairesStock: [],
     ventes: [],
     loading: false,
     globalError: null,
@@ -1522,6 +1570,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       handleFirestoreError(error, OperationType.LIST, 'stocks');
     });
 
+    // Listen to receptions_stock
+    const receptionsQuery = query(collection(db, 'receptions_stock'));
+    const unsubscribeReceptions = onSnapshot(receptionsQuery, (snapshot) => {
+      const rList: StockReception[] = [];
+      snapshot.forEach(docSnap => rList.push({ id: docSnap.id, ...docSnap.data() } as StockReception));
+      setState(s => ({ ...s, receptionsStock: rList }));
+    }, (error) => {
+      console.warn("Erreur listening to receptions_stock:", error);
+    });
+
+    // Listen to inventaires
+    const inventairesQuery = query(collection(db, 'inventaires'));
+    const unsubscribeInventaires = onSnapshot(inventairesQuery, (snapshot) => {
+      const iList: StockInventory[] = [];
+      snapshot.forEach(docSnap => iList.push({ id: docSnap.id, ...docSnap.data() } as StockInventory));
+      setState(s => ({ ...s, inventairesStock: iList }));
+    }, (error) => {
+      console.warn("Erreur listening to inventaires:", error);
+    });
+
     // Listen to ventes
     const ventesQuery = query(collection(db, 'ventes'));
     const unsubscribeVentes = onSnapshot(ventesQuery, (snapshot) => {
@@ -1551,6 +1619,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unsubscribeGroupOutings();
       unsubscribeFriendships();
       unsubscribeStocks();
+      unsubscribeReceptions();
+      unsubscribeInventaires();
       unsubscribeVentes();
     };
   }, [state.currentUser?.id]);
@@ -2465,15 +2535,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addStockItem = async (item: Omit<StockItem, 'id' | 'createdAt'>) => {
     try {
+      const volume = item.volume || '66cl';
+      const unitsPerCase = item.unitsPerCase || 12;
+      const payload = {
+        establishmentId: item.establishmentId,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        volume,
+        unitsPerCase,
+        unites_par_caisse: unitsPerCase,
+        category: item.category || 'boisson',
+        stock_faible: item.stock_faible ?? (item.quantity <= 5)
+      };
+
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase.from('stocks').insert([{
-          establishmentId: item.establishmentId,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity,
-          stock_faible: item.stock_faible ?? (item.quantity <= 5)
-        }]).select().single();
-        
+        const { data, error } = await supabase.from('stocks').insert([payload]).select().single();
         if (!error && data) {
           setState(s => ({
             ...s,
@@ -2482,7 +2559,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
       await addDoc(collection(db, 'stocks'), {
-        ...item,
+        ...payload,
         createdAt: new Date().toISOString()
       });
     } catch (error: any) {
@@ -2492,14 +2569,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateStockItem = async (id: string, updates: Partial<Omit<StockItem, 'id' | 'establishmentId'>>) => {
     try {
+      const payload: any = { ...updates };
+      if (updates.unitsPerCase) {
+        payload.unites_par_caisse = updates.unitsPerCase;
+      }
       if (isSupabaseConfigured) {
-        await supabase.from('stocks').update(updates).eq('id', id);
+        await supabase.from('stocks').update(payload).eq('id', id);
         setState(s => ({
           ...s,
           stocks: s.stocks.map(item => item.id === id ? { ...item, ...updates } : item)
         }));
       }
-      await updateDoc(doc(db, 'stocks', id), updates);
+      await updateDoc(doc(db, 'stocks', id), payload);
     } catch (error: any) {
       handleFirestoreError(error, OperationType.UPDATE, `stocks/${id}`);
     }
@@ -2516,6 +2597,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     } catch (error: any) {
       console.error(`Error deleting stock item: ${id}`, error);
+    }
+  };
+
+  const addStockReception = async (reception: Omit<StockReception, 'id' | 'date'>) => {
+    try {
+      const date = new Date().toISOString();
+      const payload = { ...reception, date };
+      
+      const unitsAdded = reception.unitsAdded || (reception.casesCount * reception.unitsPerCase);
+      const existingStock = state.stocks.find(s => s.id === reception.stockId);
+      if (existingStock) {
+        const newQty = (existingStock.quantity || 0) + unitsAdded;
+        await updateStockItem(existingStock.id, {
+          quantity: newQty,
+          stock_faible: newQty <= 5
+        });
+      }
+
+      if (isSupabaseConfigured) {
+        const { data } = await supabase.from('receptions_stock').insert([payload]).select().single();
+        if (data) {
+          setState(s => ({ ...s, receptionsStock: [data as StockReception, ...s.receptionsStock] }));
+        }
+      }
+      await addDoc(collection(db, 'receptions_stock'), payload);
+    } catch (error: any) {
+      console.error("Erreur addStockReception:", error);
+    }
+  };
+
+  const addStockInventory = async (inventory: Omit<StockInventory, 'id' | 'date'>) => {
+    try {
+      const date = new Date().toISOString();
+      const payload = { ...inventory, date };
+
+      if (inventory.adjusted) {
+        await updateStockItem(inventory.stockId, {
+          quantity: inventory.stockPhysiqueCompte,
+          stock_faible: inventory.stockPhysiqueCompte <= 5
+        });
+      }
+
+      if (isSupabaseConfigured) {
+        const { data } = await supabase.from('inventaires').insert([payload]).select().single();
+        if (data) {
+          setState(s => ({ ...s, inventairesStock: [data as StockInventory, ...s.inventairesStock] }));
+        }
+      }
+      await addDoc(collection(db, 'inventaires'), payload);
+    } catch (error: any) {
+      console.error("Erreur addStockInventory:", error);
     }
   };
 
@@ -3716,6 +3848,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addStockItem,
       updateStockItem,
       deleteStockItem,
+      addStockReception,
+      addStockInventory,
       recordSale,
       addApplication,
       updateApplicationStatus,

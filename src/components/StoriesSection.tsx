@@ -414,7 +414,7 @@ export function StoriesSection({ onStartChat }: { onStartChat?: (estId: string, 
         let convDataClean: any = { ...convData };
         let conv: any = null;
         let attempts = 0;
-        while (attempts < 4) {
+        while (attempts < 15) {
           attempts++;
           const res = await supabase
             .from('conversations')
@@ -429,9 +429,12 @@ export function StoriesSection({ onStartChat }: { onStartChat?: (estId: string, 
             delete convDataClean.id;
             continue;
           }
-          if (res.error.code === 'PGRST204' || res.error.message?.includes('schema cache')) {
-            const match = res.error.message.match(/Could not find the '([^']+)' column/i);
-            if (match && match[1]) {
+          if (res.error.code === 'PGRST204' || res.error.message?.includes('schema cache') || res.error.message?.includes('does not exist') || res.error.message?.includes('column')) {
+            const match = res.error.message.match(/Could not find the '([^']+)' column/i) ||
+                          res.error.message.match(/column ['"]?([^'"]+)['"]? (?:of relation|does not exist|in the schema cache)/i) ||
+                          res.error.message.match(/column ['"]?([^'"]+)['"]? does not exist/i) ||
+                          res.error.message.match(/['"]?([^'"]+)['"]? column/i);
+            if (match && match[1] && convDataClean[match[1]] !== undefined) {
               delete convDataClean[match[1]];
               continue;
             }
