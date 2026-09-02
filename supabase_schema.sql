@@ -570,21 +570,36 @@ ALTER TABLE public.ventes ENABLE ROW LEVEL SECURITY;
 -- Users policies
 CREATE POLICY "Public profiles are viewable by everyone" ON public.users FOR SELECT USING (true);
 CREATE POLICY "Users can update their own profile" ON public.users FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Admins can manage all users" ON public.users FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
+);
 
 -- Establishments policies
 CREATE POLICY "Establishments are viewable by everyone" ON public.establishments FOR SELECT USING (true);
 CREATE POLICY "Owners can insert their own establishments" ON public.establishments FOR INSERT WITH CHECK (auth.uid() = "ownerId");
 CREATE POLICY "Owners can update their own establishments" ON public.establishments FOR UPDATE USING (auth.uid() = "ownerId");
 CREATE POLICY "Owners can delete their own establishments" ON public.establishments FOR DELETE USING (auth.uid() = "ownerId");
+CREATE POLICY "Admins can manage all establishments" ON public.establishments FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
+);
 
 -- Entreprises policies
 CREATE POLICY "Entreprises are viewable by everyone" ON public.entreprises FOR SELECT USING (true);
 CREATE POLICY "Owners can insert their own entreprises" ON public.entreprises FOR INSERT WITH CHECK (auth.uid() = "ownerId");
 CREATE POLICY "Owners can update their own entreprises" ON public.entreprises FOR UPDATE USING (auth.uid() = "ownerId");
 CREATE POLICY "Owners can delete their own entreprises" ON public.entreprises FOR DELETE USING (auth.uid() = "ownerId");
+CREATE POLICY "Admins can manage all entreprises" ON public.entreprises FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
+);
 
 -- General Public Read Policies
 CREATE POLICY "Public can view publications" ON public.publications FOR SELECT USING (true);
+CREATE POLICY "Owners can manage their publications" ON public.publications FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.establishments WHERE id = "establishmentId" AND "ownerId" = auth.uid())
+);
+CREATE POLICY "Admins can manage all publications" ON public.publications FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
+);
 CREATE POLICY "Public can view reviews" ON public.reviews FOR SELECT USING (true);
 CREATE POLICY "Public can view stories" ON public.stories FOR SELECT USING (true);
 CREATE POLICY "Public can view ad_campaigns" ON public.ad_campaigns FOR SELECT USING (true);

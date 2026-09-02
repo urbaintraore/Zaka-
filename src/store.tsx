@@ -466,6 +466,7 @@ interface AppContextType extends AppState {
   }) => Promise<void>;
   addEstablishment: (est: Omit<Establishment, 'id' | 'status' | 'averageRating'>) => Promise<void>;
   updateEstablishment: (id: string, data: Partial<Establishment>) => Promise<void>;
+  deleteEntreprise: (id: string) => Promise<void>;
   deleteEstablishment: (id: string) => Promise<void>;
   addPublication: (pub: Omit<Publication, 'id' | 'views' | 'clicks' | 'createdAt'>) => Promise<void>;
   deletePublication: (id: string) => Promise<void>;
@@ -1966,6 +1967,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Erreur mise à jour etablissement:", error);
       throw error;
+    }
+  };
+
+  const deleteEntreprise = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'entreprises', id));
+    } catch (error: any) {
+      console.error("Erreur suppression entreprise:", error);
+      handleFirestoreError(error, OperationType.DELETE, `entreprises/${id}`);
     }
   };
 
@@ -3528,6 +3538,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       confirmerCodeOtp,
       addEstablishment,
       updateEstablishment,
+      deleteEntreprise,
       deleteEstablishment,
       addPublication,
       deletePublication,

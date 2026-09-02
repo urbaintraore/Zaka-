@@ -31,6 +31,7 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
     entreprises, 
     validateEntreprise, 
     updateEstablishment, 
+    deleteEntreprise,
     deleteEstablishment,
     users 
   } = useAppStore();
@@ -266,11 +267,7 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                         <CheckCircle className="w-3.5 h-3.5" /> Valider
                       </button>
                       <button 
-                        onClick={() => {
-                          if(confirm("Voulez-vous rejeter et supprimer cet établissement ?")) {
-                            deleteEstablishment(est.id);
-                          }
-                        }}
+                        onClick={() => setDeletingEst(est)}
                         className="flex-1 md:flex-none px-4 py-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50 font-extrabold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <XCircle className="w-3.5 h-3.5" /> Rejeter
@@ -325,11 +322,21 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                     </div>
                   )}
 
-                  <div className="flex items-center justify-end gap-2 border-t border-gray-50 dark:border-gray-700 pt-3">
-                    <button onClick={() => validateEntreprise(ent.id)} className="w-full md:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/50 font-bold rounded-xl text-xs transition-colors cursor-pointer">
-                      <CheckCircle className="w-3.5 h-3.5" /> Activer la marque
-                    </button>
-                  </div>
+                    <div className="flex items-center justify-end gap-2 border-t border-gray-50 dark:border-gray-700 pt-3">
+                      <button onClick={() => validateEntreprise(ent.id)} className="w-full md:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/50 font-bold rounded-xl text-xs transition-colors cursor-pointer">
+                        <CheckCircle className="w-3.5 h-3.5" /> Activer la marque
+                      </button>
+                      <button 
+                        onClick={() => {
+                          if(confirm(`Voulez-vous rejeter et supprimer la marque "${ent.name}" ?`)) {
+                            deleteEntreprise(ent.id);
+                          }
+                        }}
+                        className="w-full md:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                      >
+                        <XCircle className="w-3.5 h-3.5" /> Rejeter
+                      </button>
+                    </div>
                 </div>
               ))}
               {pendingEnts.length === 0 && (
