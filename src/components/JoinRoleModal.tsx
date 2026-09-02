@@ -36,13 +36,9 @@ export function JoinRoleModal({ establishment, onClose, onSubmit }: JoinRoleModa
 
   const handleSubmit = async () => {
     setError(null);
-    if (selectedRole !== 'client' && !identityPhotoUrl) {
-      setError("Veuillez joindre votre photo d'identité pour postuler à un poste.");
-      return;
-    }
     setLoading(true);
     try {
-      await onSubmit(selectedRole, identityPhotoUrl);
+      await onSubmit(selectedRole, identityPhotoUrl || undefined);
     } catch (err: any) {
       setError(err.message || "Une erreur est survenue.");
       setLoading(false);
@@ -91,23 +87,33 @@ export function JoinRoleModal({ establishment, onClose, onSubmit }: JoinRoleModa
           {selectedRole !== 'client' && (
             <div className="p-4 bg-orange-50 dark:bg-orange-950/30 rounded-2xl border border-orange-200 dark:border-orange-800 space-y-3">
               <label className="block text-xs font-bold text-orange-900 dark:text-orange-200 uppercase tracking-wide">
-                Photo d'identité requise <span className="text-red-500">*</span>
+                Photo d'identité (Optionnelle)
               </label>
               <div className="flex items-center gap-4">
                 {identityPhotoUrl ? (
-                  <img src={identityPhotoUrl} alt="Identité" className="w-16 h-16 rounded-xl object-cover border-2 border-orange-500 shadow-sm" />
+                  <div className="relative">
+                    <img src={identityPhotoUrl} alt="Identité" className="w-16 h-16 rounded-xl object-cover border-2 border-orange-500 shadow-sm" />
+                    <button
+                      type="button"
+                      onClick={() => setIdentityPhotoUrl('')}
+                      className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 hover:bg-red-700 shadow-sm cursor-pointer"
+                      title="Supprimer la photo"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
                 ) : (
                   <div className="w-16 h-16 rounded-xl bg-orange-100 dark:bg-orange-900/50 flex items-center justify-center text-orange-600">
                     <Camera className="w-6 h-6" />
                   </div>
                 )}
                 <div className="flex-1">
-                  <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-all shadow-sm">
+                  <label className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-all shadow-sm">
                     <Upload className="w-4 h-4" />
-                    <span>Télécharger photo</span>
+                    <span>{identityPhotoUrl ? 'Changer de photo' : 'Ajouter une photo'}</span>
                     <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
                   </label>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Format JPG, PNG ou WEBP</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Facultatif • JPG, PNG ou WEBP</p>
                 </div>
               </div>
             </div>

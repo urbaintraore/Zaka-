@@ -492,8 +492,13 @@ CREATE TABLE IF NOT EXISTS public.staff_attendances (
 -- 15. STOCKS & VENTES (GESTION CAISSE & INVENTAIRE MAQUIS/BARS/CLUBS)
 -- =============================================================================
 
+ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "initiatorId" UUID REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "targetId" UUID REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "type" TEXT DEFAULT 'client_join';
+ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "isDJ" BOOLEAN DEFAULT false;
 ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "isCaissier" BOOLEAN DEFAULT false;
 ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "isServeur" BOOLEAN DEFAULT false;
+ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "identityPhotoUrl" TEXT;
 
 CREATE TABLE IF NOT EXISTS public.stocks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

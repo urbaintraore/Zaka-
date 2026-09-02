@@ -339,44 +339,63 @@ const onSnapshot = (queryObj: any, callback: (snapshot: any) => void, errorCallb
     return () => {};
   }
   
-  supabase.from(tableName).select('*').then(({ data, error }) => {
-    if (error) {
-      if (error?.code === 'PGRST205') {
-        const isAlreadyReported = (window as any)._reportedMissingTables?.has(tableName);
-        if (!isAlreadyReported) {
-          if (!(window as any)._reportedMissingTables) (window as any)._reportedMissingTables = new Set();
-          (window as any)._reportedMissingTables.add(tableName);
-          console.warn(`[Supabase] Table manquante détectée : "${tableName}". L'application continuera de fonctionner mais cette fonctionnalité sera limitée. Veuillez exécuter supabase_schema.sql.`);
-          window.dispatchEvent(new CustomEvent('supabase-missing-table', { detail: tableName }));
+  const fetchSnapshot = async () => {
+    try {
+      let queryBuilder: any = supabase.from(tableName).select('*');
+      
+      // Apply filters if they exist
+      if (queryObj.filters && queryObj.filters.length > 0) {
+        for (const filter of queryObj.filters) {
+          if (filter.op === '==') {
+            queryBuilder = queryBuilder.eq(filter.field, filter.value);
+          }
         }
-        // We resolve with empty data instead of calling errorCallback to avoid console noise
-        callback({
-          forEach: (fn: any) => [],
-          docs: [],
-          empty: true,
-          size: 0,
-          exists: () => false,
-          data: () => null
-        });
-        return;
       }
-      if (errorCallback) errorCallback(error);
-    } else {
-      const docs = (data || []).map(item => ({
-        id: item.id,
-        exists: () => true,
-        data: () => item
-      }));
-      callback({
-        forEach: (fn: any) => docs.forEach(fn),
-        docs,
-        empty: docs.length === 0,
-        size: docs.length,
-        exists: () => docs.length > 0,
-        data: () => docs[0]?.data() || null
-      });
+      
+      const { data, error } = await queryBuilder;
+      
+      if (error) {
+        if (error?.code === 'PGRST205') {
+          const isAlreadyReported = (window as any)._reportedMissingTables?.has(tableName);
+          if (!isAlreadyReported) {
+            if (!(window as any)._reportedMissingTables) (window as any)._reportedMissingTables = new Set();
+            (window as any)._reportedMissingTables.add(tableName);
+            console.warn(`[Supabase] Table manquante détectée : "${tableName}". L'application continuera de fonctionner mais cette fonctionnalité sera limitée. Veuillez exécuter supabase_schema.sql.`);
+            window.dispatchEvent(new CustomEvent('supabase-missing-table', { detail: tableName }));
+          }
+          callback({
+            forEach: (fn: any) => [],
+            docs: [],
+            empty: true,
+            size: 0,
+            exists: () => false,
+            data: () => null
+          });
+          return;
+        }
+        if (errorCallback) errorCallback(error);
+      } else {
+        const docs = (data || []).map(item => ({
+          id: item.id,
+          exists: () => true,
+          data: () => item
+        }));
+        callback({
+          forEach: (fn: any) => docs.forEach(fn),
+          docs,
+          empty: docs.length === 0,
+          size: docs.length,
+          exists: () => docs.length > 0,
+          data: () => docs[0]?.data() || null
+        });
+      }
+    } catch (err) {
+      console.error(`[Supabase onSnapshot] Fatal fetch error in ${tableName}:`, err);
+      if (errorCallback) errorCallback(err);
     }
-  });
+  };
+
+  fetchSnapshot();
 
   return () => {};
 };

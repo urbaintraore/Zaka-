@@ -38,9 +38,25 @@ export async function getCurrentUserLocation(): Promise<{ lat: number, lng: numb
           });
         },
         (error) => {
-          reject(error);
+          // If high-accuracy timed out or failed, try standard accuracy fallback
+          if (error.code === 3 || error.code === 2) {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                resolve({
+                  lat: pos.coords.latitude,
+                  lng: pos.coords.longitude
+                });
+              },
+              (fallbackErr) => {
+                reject(fallbackErr);
+              },
+              { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+            );
+          } else {
+            reject(error);
+          }
         },
-        { enableHighAccuracy: true, timeout: 10000 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
       );
     });
   }

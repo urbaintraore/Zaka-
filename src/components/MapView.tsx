@@ -49,22 +49,37 @@ export function MapView({ establishments, onEstClick, selectedCategory }: MapVie
       return;
     }
     
+    const handleSuccess = (pos: GeolocationPosition) => {
+      setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      setLocationError(null);
+    };
+
+    const handleFallback = () => {
+      navigator.geolocation.getCurrentPosition(
+        handleSuccess,
+        () => {
+          setLocationError("Position par défaut : Ouagadougou");
+        },
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+      );
+    };
+
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setLocationError(null);
-      },
+      handleSuccess,
       (err) => {
-        console.warn("Initial geo error:", err.message);
-        setLocationError("Position par défaut : Ouagadougou");
+        if (err.code === 3 || err.code === 2) {
+          handleFallback();
+        } else {
+          setLocationError("Position par défaut : Ouagadougou");
+        }
       },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
     );
 
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      (err) => console.warn("Watch geo error:", err.message),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
+      () => {},
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 30000 }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
