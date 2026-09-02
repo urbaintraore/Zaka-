@@ -464,6 +464,10 @@ export interface RelationshipRequest {
   isServeur?: boolean; // Waiter/Waitress role flag
   requestedRole?: 'client' | 'dj' | 'serveur' | 'caissier' | 'menage' | 'vigile';
   identityPhotoUrl?: string;
+  userId?: string;
+  userName?: string;
+  userPhone?: string;
+  establishmentName?: string;
 }
 
 export interface StaffReview {

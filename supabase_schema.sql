@@ -208,12 +208,19 @@ CREATE TABLE IF NOT EXISTS public.playlists_dj (
 -- 7. RH & RECRUITMENT
 CREATE TABLE IF NOT EXISTS public.relationship_requests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "userId" UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    "userName" TEXT NOT NULL,
+    "initiatorId" UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    "targetId" UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    "userId" UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    "userName" TEXT,
     "userPhone" TEXT,
     "establishmentId" UUID NOT NULL REFERENCES public.establishments(id) ON DELETE CASCADE,
-    "establishmentName" TEXT NOT NULL,
-    "requestedRole" TEXT NOT NULL,
+    "establishmentName" TEXT,
+    "type" TEXT DEFAULT 'client_join',
+    "requestedRole" TEXT NOT NULL DEFAULT 'client',
+    "isDJ" BOOLEAN DEFAULT false,
+    "isCaissier" BOOLEAN DEFAULT false,
+    "isServeur" BOOLEAN DEFAULT false,
+    "identityPhotoUrl" TEXT,
     status TEXT NOT NULL DEFAULT 'en_attente',
     date TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
@@ -494,11 +501,24 @@ CREATE TABLE IF NOT EXISTS public.staff_attendances (
 
 ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "initiatorId" UUID REFERENCES public.users(id) ON DELETE CASCADE;
 ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "targetId" UUID REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "userId" UUID REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "userName" TEXT;
+ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "userPhone" TEXT;
+ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "establishmentName" TEXT;
 ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "type" TEXT DEFAULT 'client_join';
+ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "requestedRole" TEXT DEFAULT 'client';
 ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "isDJ" BOOLEAN DEFAULT false;
 ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "isCaissier" BOOLEAN DEFAULT false;
 ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "isServeur" BOOLEAN DEFAULT false;
 ALTER TABLE public.relationship_requests ADD COLUMN IF NOT EXISTS "identityPhotoUrl" TEXT;
+DO $$ 
+BEGIN 
+    ALTER TABLE public.relationship_requests ALTER COLUMN "userId" DROP NOT NULL;
+    ALTER TABLE public.relationship_requests ALTER COLUMN "userName" DROP NOT NULL;
+    ALTER TABLE public.relationship_requests ALTER COLUMN "establishmentName" DROP NOT NULL;
+EXCEPTION 
+    WHEN OTHERS THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS public.stocks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

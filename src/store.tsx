@@ -69,8 +69,6 @@ const cleanPayloadForSupabase = (tableName: string, payload: any) => {
         delete clean[k];
       }
     });
-    // Let's ensure default JSONB is handled cleanly if it's missing or empty, although our DB has defaults.
-    // We also make sure camelCase maps properly to quoted camelCase in DB.
   }
   
   if (tableName === 'entreprises') {
@@ -80,17 +78,24 @@ const cleanPayloadForSupabase = (tableName: string, payload: any) => {
       }
     });
   }
+
+  if (tableName === 'relationship_requests') {
+    if (clean.initiatorId && !clean.userId) {
+      clean.userId = clean.initiatorId;
+    }
+    if (clean.userId && !clean.initiatorId) {
+      clean.initiatorId = clean.userId;
+    }
+  }
   
   Object.keys(clean).forEach(k => {
      if (clean[k] === undefined || clean[k] === null || clean[k] === '') {
-       // Optional: We can delete empty strings for numbers but keeping it simple
        if (clean[k] === undefined) {
          delete clean[k];
        }
      }
   });
   
-  // Convert any sub-objects or Date fields if necessary
   return clean;
 };
 
@@ -134,7 +139,44 @@ const addDoc = async (collRef: string, payload: any) => {
   if (!isSupabaseConfigured) return { id: Math.random().toString() };
   const tableName = mapCollectionToTable(collRef);
   const cleanPayload = cleanPayloadForSupabase(tableName, payload);
-  const { data, error } = await supabase.from(tableName).insert(cleanPayload).select().single();
+  let { data, error } = await supabase.from(tableName).insert(cleanPayload).select().single();
+
+  // Automatic recovery if Supabase PostgREST rejects missing columns in schema cache
+  if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('does not exist'))) {
+    console.warn(`[Supabase addDoc] Problème de colonne sur ${tableName}: ${error.message}. Auto-adaptation du schéma en cours...`);
+    const match = error.message.match(/Could not find the '([^']+)' column/i) || error.message.match(/column '([^']+)' does not exist/i);
+    if (match && match[1]) {
+      const missingCol = match[1];
+      const retryPayload = { ...cleanPayload };
+      delete retryPayload[missingCol];
+      const retryRes = await supabase.from(tableName).insert(retryPayload).select().single();
+      if (!retryRes.error) {
+        data = retryRes.data;
+        error = null;
+      } else {
+        error = retryRes.error;
+      }
+    }
+    
+    // If still in error and tableName is relationship_requests, use minimal legacy compatible payload
+    if (error && tableName === 'relationship_requests') {
+      const legacyPayload: any = {
+        userId: cleanPayload.userId || cleanPayload.initiatorId,
+        userName: cleanPayload.userName || 'Utilisateur',
+        establishmentId: cleanPayload.establishmentId,
+        establishmentName: cleanPayload.establishmentName || 'Établissement',
+        requestedRole: cleanPayload.requestedRole || 'client',
+        status: cleanPayload.status || 'en_attente',
+        date: cleanPayload.date || new Date().toISOString()
+      };
+      const legRes = await supabase.from(tableName).insert(legacyPayload).select().single();
+      if (!legRes.error) {
+        data = legRes.data;
+        error = null;
+      }
+    }
+  }
+
   if (error) {
     console.error(`[Supabase addDoc] Error in ${tableName} payload:`, cleanPayload, error);
     console.error(`[Supabase addDoc] Error details:`, error.message, error.details, error.hint);
@@ -156,7 +198,18 @@ const setDoc = async (docRef: { collectionName: string, docId?: string }, payloa
   const tableName = mapCollectionToTable(docRef.collectionName);
   const cleanPayload = cleanPayloadForSupabase(tableName, payload);
   const id = docRef.docId;
-  const { error } = await supabase.from(tableName).upsert({ id, ...cleanPayload });
+  let { error } = await supabase.from(tableName).upsert({ id, ...cleanPayload });
+
+  if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache'))) {
+    const match = error.message.match(/Could not find the '([^']+)' column/i);
+    if (match && match[1]) {
+      const pruned = { id, ...cleanPayload };
+      delete pruned[match[1]];
+      const retry = await supabase.from(tableName).upsert(pruned);
+      if (!retry.error) error = null;
+    }
+  }
+
   if (error) {
     console.error(`[Supabase setDoc] Error in ${tableName}:`, error);
     throw error;
@@ -178,7 +231,18 @@ const updateDoc = async (docRef: { collectionName: string, docId?: string }, pay
   const tableName = mapCollectionToTable(docRef.collectionName);
   const cleanPayload = cleanPayloadForSupabase(tableName, payload);
   const id = docRef.docId;
-  const { error } = await supabase.from(tableName).update(cleanPayload).eq('id', id);
+  let { error } = await supabase.from(tableName).update(cleanPayload).eq('id', id);
+
+  if (error && (error.code === 'PGRST204' || error.message?.includes('schema cache'))) {
+    const match = error.message.match(/Could not find the '([^']+)' column/i);
+    if (match && match[1]) {
+      const pruned = { ...cleanPayload };
+      delete pruned[match[1]];
+      const retry = await supabase.from(tableName).update(pruned).eq('id', id);
+      if (!retry.error) error = null;
+    }
+  }
+
   if (error) {
     console.error(`[Supabase updateDoc] Error in ${tableName}:`, error);
     throw error;
@@ -1254,7 +1318,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const relQuery = query(collection(db, 'relationshipRequests'));
     const unsubscribeRel = onSnapshot(relQuery, (snapshot) => {
       const rels: RelationshipRequest[] = [];
-      snapshot.forEach(doc => rels.push({ id: doc.id, ...doc.data() } as RelationshipRequest));
+      snapshot.forEach(doc => {
+        const d: any = doc.data() || {};
+        rels.push({
+          id: doc.id,
+          ...d,
+          initiatorId: d.initiatorId || d.userId || d.initiator_id || d.user_id || '',
+          targetId: d.targetId || d.target_id || '',
+          userId: d.userId || d.initiatorId || '',
+          establishmentId: d.establishmentId || d.establishment_id || '',
+          type: d.type || 'client_join',
+          requestedRole: d.requestedRole || d.requested_role || 'client',
+          status: d.status || 'en_attente',
+          date: d.date || d.created_at || new Date().toISOString(),
+          isDJ: !!(d.isDJ || d.is_dj),
+          isCaissier: !!(d.isCaissier || d.is_caissier),
+          isServeur: !!(d.isServeur || d.is_serveur),
+          identityPhotoUrl: d.identityPhotoUrl || d.identity_photo_url || ''
+        } as RelationshipRequest);
+      });
       setState(s => ({ ...s, relationshipRequests: rels }));
     }, (error) => {
       console.error("Erreur relationshipRequests:", error);
@@ -2264,7 +2346,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const restrictedRoles = ['serveur', 'caissier', 'menage', 'vigile'];
       if (req.requestedRole && restrictedRoles.includes(req.requestedRole)) {
         const existingRestricted = state.relationshipRequests.find(r => 
-          r.initiatorId === req.initiatorId && 
+          (r.initiatorId === req.initiatorId || r.userId === req.initiatorId) && 
           r.status !== 'refusee' &&
           r.requestedRole && restrictedRoles.includes(r.requestedRole)
         );
@@ -2273,8 +2355,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      const est = state.establishments.find(e => e.id === req.establishmentId);
+      const user = state.currentUser;
+
       await addDoc(collection(db, 'relationshipRequests'), {
         ...req,
+        userId: req.initiatorId,
+        userName: user?.name || user?.email || 'Utilisateur',
+        userPhone: user?.phone || '',
+        establishmentName: est?.name || 'Établissement',
         status: 'en_attente',
         date: new Date().toISOString()
       });
