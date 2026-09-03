@@ -48,6 +48,7 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
 
   // Main View Section State for Managers
   const [activeMainTab, setActiveMainTab] = useState<'etablissements' | 'comptabilite' | 'frequentation' | 'reservations' | 'galerie'>('etablissements');
+  const [selectedEstDashboardId, setSelectedEstDashboardId] = useState<string>('all');
   const [selectedComptaEstId, setSelectedComptaEstId] = useState<string>('all');
   const [galleryActiveEstId, setGalleryActiveEstId] = useState<string | null>(null);
 
@@ -100,10 +101,14 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
     if (!estToDelete) return;
     try {
       await deleteEstablishment(estToDelete.id);
+      if (selectedEstDashboardId === estToDelete.id) {
+        setSelectedEstDashboardId('all');
+      }
       setShowDeleteModal(false);
       setEstToDelete(null);
     } catch (err) {
       console.error("Erreur suppression etablissement:", err);
+      alert("Une erreur est survenue lors de la suppression. Veuillez réessayer.");
     }
   };
 
@@ -553,15 +558,48 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
 
       {activeMainTab === 'etablissements' && (
         <>
-          <div className="mb-6 flex items-center justify-between">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Mes Établissements</h3>
-            <button onClick={() => setIsAdding(true)} className="flex items-center gap-1.5 text-sm font-bold text-orange-600 bg-orange-50 dark:bg-orange-950/40 px-3 py-1.5 rounded-lg hover:bg-orange-100">
-              <Plus className="w-4 h-4" /> Ajouter
-            </button>
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white shrink-0">Mes Établissements</h3>
+            
+            <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 no-scrollbar justify-start sm:justify-end">
+              {myEsts.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedEstDashboardId('all')}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
+                      selectedEstDashboardId === 'all'
+                        ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-md'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                    }`}
+                  >
+                    Tous ({myEsts.length})
+                  </button>
+                  {myEsts.map(est => (
+                    <button
+                      key={est.id}
+                      type="button"
+                      onClick={() => setSelectedEstDashboardId(est.id)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
+                        selectedEstDashboardId === est.id
+                          ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20 ring-2 ring-orange-400/50'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                      }`}
+                    >
+                      <Store className="w-3.5 h-3.5" />
+                      {est.name}
+                    </button>
+                  ))}
+                </>
+              )}
+              <button onClick={() => setIsAdding(true)} className="flex items-center gap-1.5 text-sm font-bold text-orange-600 bg-orange-50 dark:bg-orange-950/40 px-3 py-1.5 rounded-xl hover:bg-orange-100 shrink-0">
+                <Plus className="w-4 h-4" /> Ajouter
+              </button>
+            </div>
           </div>
 
       <div className="flex flex-col gap-5">
-        {myEsts.map(est => {
+        {myEsts.filter(est => selectedEstDashboardId === 'all' || est.id === selectedEstDashboardId).map(est => {
           const estReviews = reviews.filter(r => r.establishmentId === est.id);
           const estReservations = reservations ? reservations.filter(r => r.establishmentId === est.id) : [];
           const avgRating = estReviews.length > 0 
@@ -781,12 +819,7 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
             )}
 
             {(est.category === 'maquis' || est.category === 'boite_de_nuit' || est.category === 'restaurant' || est.category === 'restaurants' || est.category === 'bar' || est.category === 'glacier_pizzeria' || est.category === 'hotel') && (
-              <div className="bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h5 className="text-xs font-black text-amber-900 dark:text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                    <span>📦</span> Inventaire des Stocks & Supervision Caisse
-                  </h5>
-                </div>
+              <div className="pt-2">
                 <CashierDashboard establishmentId={est.id} />
               </div>
             )}

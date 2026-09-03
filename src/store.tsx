@@ -2322,9 +2322,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteEstablishment = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'establishments', id));
+      setState(s => ({ ...s, establishments: s.establishments.filter(e => e.id !== id) }));
     } catch (error: any) {
       console.error("Erreur suppression etablissement:", error);
       handleFirestoreError(error, OperationType.DELETE, `establishments/${id}`);
+      throw error; // Propagate error so UI can handle it
     }
   };
 
