@@ -31,6 +31,7 @@ export function ReservationModal({
   const [guests, setGuests] = useState(2);
   const [details, setDetails] = useState('');
   const [allergiesOrDiet, setAllergiesOrDiet] = useState('');
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
   // Custom interactive calendar states
@@ -139,6 +140,10 @@ export function ReservationModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDate || !selectedTime) return;
+    setShowConfirmModal(true);
+  };
+
+  const handleFinalConfirm = () => {
     onSubmit({ 
       reservationType, 
       date: selectedDate, 
@@ -147,6 +152,7 @@ export function ReservationModal({
       details,
       allergiesOrDiet: allergiesOrDiet.trim() || undefined
     });
+    setShowConfirmModal(false);
     setSubmitted(true);
     setTimeout(() => onClose(), 2000);
   };
@@ -375,9 +381,79 @@ export function ReservationModal({
             className="w-full flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white font-black py-4 rounded-2xl active:scale-[0.98] transition-all disabled:opacity-40 disabled:pointer-events-none shadow-lg shadow-orange-600/10 cursor-pointer"
           >
             <Send className="w-4 h-4" />
-            Confirmer ma réservation
+            Vérifier et Réserver
           </button>
         </form>
+
+        {/* Confirmation Modal */}
+        {showConfirmModal && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-gray-950/70 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-sm p-6 space-y-4 shadow-2xl border border-gray-150 dark:border-gray-800 animate-in zoom-in-95 duration-200">
+              <div className="text-center space-y-1">
+                <div className="w-12 h-12 bg-orange-100 dark:bg-orange-950/50 rounded-2xl flex items-center justify-center mx-auto text-orange-600 dark:text-orange-400 mb-2">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-black text-gray-900 dark:text-white">Confirmer la réservation</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Veuillez vérifier les informations ci-dessous avant d'envoyer votre demande :</p>
+              </div>
+
+              <div className="bg-gray-50 dark:bg-gray-800/60 rounded-2xl p-4 space-y-2.5 text-xs border border-gray-150 dark:border-gray-800">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 dark:text-gray-400 font-bold">Lieu :</span>
+                  <span className="font-black text-gray-900 dark:text-white truncate max-w-[180px]">{establishmentName}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 dark:text-gray-400 font-bold">Date :</span>
+                  <span className="font-extrabold text-orange-600 dark:text-orange-400">
+                    {new Date(selectedDate).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 dark:text-gray-400 font-bold">Heure :</span>
+                  <span className="font-extrabold text-gray-900 dark:text-white">{selectedTime}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 dark:text-gray-400 font-bold">Couverts :</span>
+                  <span className="font-extrabold text-gray-900 dark:text-white">{guests} {guests > 1 ? 'personnes' : 'personne'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 dark:text-gray-400 font-bold">Cadre :</span>
+                  <span className="font-extrabold text-gray-900 dark:text-white capitalize">{reservationType}</span>
+                </div>
+                {allergiesOrDiet && (
+                  <div className="pt-1 border-t border-gray-200 dark:border-gray-700">
+                    <span className="text-amber-700 dark:text-amber-400 font-bold block">Régime/Allergies :</span>
+                    <span className="text-gray-700 dark:text-gray-300 italic">{allergiesOrDiet}</span>
+                  </div>
+                )}
+                {details && (
+                  <div className="pt-1 border-t border-gray-200 dark:border-gray-700">
+                    <span className="text-gray-500 dark:text-gray-400 font-bold block">Notes :</span>
+                    <span className="text-gray-700 dark:text-gray-300 italic line-clamp-2">{details}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmModal(false)}
+                  className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-extrabold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  Modifier
+                </button>
+                <button
+                  type="button"
+                  onClick={handleFinalConfirm}
+                  className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white font-black text-xs rounded-xl transition-all shadow-md shadow-orange-600/20 active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Confirmer</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

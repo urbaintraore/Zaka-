@@ -177,8 +177,10 @@ function AppContent() {
                   </span>
                 </h4>
                 <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5 leading-relaxed">
-                  Certaines tables sont manquantes ({missingTables.slice(0, 4).join(', ')}...). 
-                  Pour activer ces fonctionnalités, copiez et exécutez le script SQL ci-dessous.
+                  {missingTables.some(t => t.includes('RLS')) 
+                    ? "Mise à jour des politiques de sécurité RLS requise. Cliquez ci-contre pour copier le script et l'exécuter dans le SQL Editor de Supabase."
+                    : `Des tables ou colonnes nécessitent une synchronisation (${missingTables.slice(0, 3).join(', ')}...). Copiez et exécutez le script SQL pour synchroniser.`
+                  }
                 </p>
               </div>
             </div>

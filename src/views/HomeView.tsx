@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../store';
 import { Tab } from '../components/BottomNav';
-import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight, Eye, Trophy, TrendingUp, Award, Clock, Share2, AlertCircle, BookOpen, Phone } from 'lucide-react';
+import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight, Eye, Trophy, TrendingUp, Award, Clock, Share2, AlertCircle, BookOpen, Phone, SlidersHorizontal, Navigation, Compass, Loader2, Wine } from 'lucide-react';
 import { stripHtml } from '../utils/htmlHelpers';
 import { ReservationModal } from '../components/ReservationModal';
 import { Publication, Establishment } from '../types';
@@ -21,6 +21,123 @@ import { GroupOutingModal } from '../components/GroupOutingModal';
 import { AdExpressWizard } from '../components/AdExpressWizard';
 import { Rocket, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
+
+// Coordinates for common neighborhoods in Burkina Faso for proximity calculations fallback
+const NEIGHBORHOOD_COORDS: Record<string, { lat: number; lng: number }> = {
+  'ouaga 2000': { lat: 12.3167, lng: -1.4983 },
+  'gounghin': { lat: 12.3533, lng: -1.5544 },
+  'tampouy': { lat: 12.4042, lng: -1.5471 },
+  'zone du bois': { lat: 12.3789, lng: -1.4947 },
+  'centre-ville': { lat: 12.3686, lng: -1.5275 },
+  'koulouba': { lat: 12.3650, lng: -1.5220 },
+  '1200 logements': { lat: 12.3680, lng: -1.4950 },
+  'somgandé': { lat: 12.4100, lng: -1.4800 },
+  'dassasgho': { lat: 12.3700, lng: -1.4700 },
+  "patte d'oie": { lat: 12.3350, lng: -1.5120 },
+  'pissy': { lat: 12.3420, lng: -1.5720 },
+  'saaba': { lat: 12.3750, lng: -1.4150 },
+  'karpala': { lat: 12.3250, lng: -1.4600 },
+  'bobo-dioulasso': { lat: 11.1771, lng: -4.2979 },
+  'koudougou': { lat: 12.2526, lng: -2.3627 }
+};
+
+function getEstCoords(est: Establishment): { lat: number; lng: number } {
+  if (typeof est.lat === 'number' && typeof est.lng === 'number' && !isNaN(est.lat) && !isNaN(est.lng)) {
+    return { lat: est.lat, lng: est.lng };
+  }
+  if (est.geolocation && est.geolocation.includes(',')) {
+    const parts = est.geolocation.split(',').map(s => parseFloat(s.trim()));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      return { lat: parts[0], lng: parts[1] };
+    }
+  }
+  const nKey = (est.neighborhood || est.quarter || '').toLowerCase().trim();
+  if (nKey && NEIGHBORHOOD_COORDS[nKey]) {
+    return NEIGHBORHOOD_COORDS[nKey];
+  }
+  return { lat: 12.3686, lng: -1.5275 };
+}
+
+function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function formatDistance(distKm: number): string {
+  if (distKm < 1) {
+    return `${Math.round(distKm * 1000)} m`;
+  }
+  return `${distKm.toFixed(1)} km`;
+}
+
+export function HomeViewSkeleton() {
+  return (
+    <div className="flex flex-col gap-8 pb-24 max-w-3xl mx-auto animate-pulse">
+      {/* Hero Banner Skeleton */}
+      <div className="bg-gradient-to-br from-orange-400 to-orange-600 px-6 pt-10 pb-12 rounded-b-[2rem] shadow-lg text-white">
+        <div className="h-8 w-48 bg-white/30 rounded-xl mb-3"></div>
+        <div className="h-4 w-72 bg-white/20 rounded-lg mb-6"></div>
+        <div className="flex gap-2">
+          <div className="h-9 w-32 bg-white/30 rounded-full"></div>
+          <div className="h-9 w-36 bg-white/30 rounded-full"></div>
+        </div>
+      </div>
+
+      <div className="px-4 space-y-8">
+        {/* Stories Skeleton */}
+        <div className="flex gap-3 overflow-hidden py-1">
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="flex flex-col items-center gap-1.5 flex-shrink-0">
+              <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-800"></div>
+              <div className="w-12 h-2.5 bg-gray-200 dark:bg-gray-800 rounded"></div>
+            </div>
+          ))}
+        </div>
+
+        {/* Filter bar Skeleton */}
+        <div className="bg-white dark:bg-gray-900 p-4 rounded-3xl border border-gray-100 dark:border-gray-800 space-y-3">
+          <div className="flex gap-2 overflow-hidden">
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="h-8 w-20 bg-gray-200 dark:bg-gray-800 rounded-full flex-shrink-0"></div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-7 w-24 bg-gray-100 dark:bg-gray-800 rounded-xl"></div>
+            ))}
+          </div>
+        </div>
+
+        {/* Establishment cards skeleton */}
+        <div className="space-y-4">
+          <div className="h-6 w-44 bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
+          {[1, 2, 3].map(i => (
+            <div key={i} className="bg-white dark:bg-gray-900 rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-sm">
+              <div className="h-36 bg-gray-200 dark:bg-gray-800 w-full"></div>
+              <div className="p-4 flex justify-between items-center">
+                <div className="space-y-2 flex-1">
+                  <div className="h-4 w-40 bg-gray-200 dark:bg-gray-800 rounded"></div>
+                  <div className="h-3 w-28 bg-gray-100 dark:bg-gray-800 rounded"></div>
+                </div>
+                <div className="flex gap-2">
+                  <div className="w-9 h-9 bg-gray-100 dark:bg-gray-800 rounded-xl"></div>
+                  <div className="w-9 h-9 bg-gray-100 dark:bg-gray-800 rounded-xl"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function EmergencyCountdown({ expiresAt }: { expiresAt: string }) {
   const [timeLeft, setTimeLeft] = useState('');
@@ -71,7 +188,7 @@ interface HomeViewProps {
 }
 
 export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
-  const { publications, establishments, entreprises, currentUser, createServiceRequest, relationshipRequests, setGlobalError, favorites, toggleFavorite, reviews, trackPublicationView, users } = useAppStore();
+  const { publications, establishments, entreprises, currentUser, createServiceRequest, relationshipRequests, setGlobalError, favorites, toggleFavorite, reviews, trackPublicationView, users, loading } = useAppStore();
   const [reservationEst, setReservationEst] = useState<{ id: string, name: string } | null>(null);
   const [selectedPub, setSelectedPub] = useState<Publication | null>(null);
   const [sharingPub, setSharingPub] = useState<Publication | null>(null);
@@ -82,6 +199,31 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
   const [showGroupOutingModal, setShowGroupOutingModal] = useState(false);
   const [activePubTab, setActivePubTab] = useState<'info' | 'photos' | 'wall'>('info');
   const [mapCategory, setMapCategory] = useState<string>('Tous');
+
+  // Establishment Category & Sorting State
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'popular' | 'rating' | 'proximity' | 'now'>('popular');
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+
+  const handleSelectProximity = () => {
+    setSortBy('proximity');
+    if (!userCoords && typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      setIsLocating(true);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          setIsLocating(false);
+        },
+        (err) => {
+          console.warn("Géolocalisation refusée ou non disponible, fallback Ouagadougou", err);
+          setUserCoords({ lat: 12.3686, lng: -1.5275 });
+          setIsLocating(false);
+        },
+        { timeout: 7000 }
+      );
+    }
+  };
 
   useEffect(() => {
     setActivePubTab('info');
@@ -532,18 +674,61 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
     return 10;
   };
 
-  const sortedEstablishments = [...establishments]
-    .filter(e => e.status === 'valide')
-    .sort((a, b) => {
-      if (modeMaintenant) {
-        const weightA = getCrowdWeight(a);
-        const weightB = getCrowdWeight(b);
-        if (weightB !== weightA) return weightB - weightA;
-      }
-      return b.averageRating - a.averageRating;
-    });
+  // Base list of validated establishments
+  const validEstablishments = establishments.filter(e => e.status === 'valide');
 
-  const topEstablishments = sortedEstablishments.slice(0, modeMaintenant ? 12 : 5);
+  // Filter by selected category (Maquis, Restaurant, Bar, Boîte de nuit, etc.)
+  const categoryFilteredEstablishments = validEstablishments.filter(e => {
+    if (selectedCategory === 'all') return true;
+    if (selectedCategory === 'maquis') {
+      return e.category === 'maquis';
+    }
+    if (selectedCategory === 'restaurant') {
+      return e.category === 'restaurant' || e.category === 'restaurants' || e.category === 'glacier_pizzeria';
+    }
+    if (selectedCategory === 'bar') {
+      return e.category === 'bar';
+    }
+    if (selectedCategory === 'boite_de_nuit') {
+      return e.category === 'boite_de_nuit';
+    }
+    return e.category === selectedCategory;
+  });
+
+  // Calculate distance map if userCoords available
+  const establishmentDistances: Record<string, number> = {};
+  if (userCoords) {
+    validEstablishments.forEach(est => {
+      const coords = getEstCoords(est);
+      if (coords) {
+        establishmentDistances[est.id] = calculateDistanceKm(userCoords.lat, userCoords.lng, coords.lat, coords.lng);
+      }
+    });
+  }
+
+  // Sort establishments based on user choice: popular, rating, proximity, now
+  const sortedEstablishments = [...categoryFilteredEstablishments].sort((a, b) => {
+    if (sortBy === 'now' || modeMaintenant) {
+      const weightA = getCrowdWeight(a);
+      const weightB = getCrowdWeight(b);
+      if (weightB !== weightA) return weightB - weightA;
+    }
+    if (sortBy === 'proximity' && userCoords) {
+      const distA = establishmentDistances[a.id] ?? 9999;
+      const distB = establishmentDistances[b.id] ?? 9999;
+      if (distA !== distB) return distA - distB;
+    }
+    if (sortBy === 'rating') {
+      return b.averageRating - a.averageRating;
+    }
+    // Default 'popular': ranking by favorites count or average rating
+    const favA = popularEstsByFavorites.find(p => p.id === a.id)?.favoritesCount || 0;
+    const favB = popularEstsByFavorites.find(p => p.id === b.id)?.favoritesCount || 0;
+    if (favB !== favA) return favB - favA;
+    return b.averageRating - a.averageRating;
+  });
+
+  const topEstablishments = sortedEstablishments;
 
   const filteredEstablishments = filterMemberOnly
     ? sortedEstablishments.filter(e => joinedEstIds.includes(e.id))
@@ -621,6 +806,10 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
   const displayedEvents = viewMode === 'calendar' && selectedDate
     ? getEventsForDate(selectedDate)
     : events;
+
+  if (loading && establishments.length === 0) {
+    return <HomeViewSkeleton />;
+  }
 
   return (
     <div className="flex flex-col gap-8 pb-24 max-w-3xl mx-auto">
@@ -1437,73 +1626,233 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
         )}
 
         <section>
-          <h2 className="text-xl font-black text-gray-900 mb-4 tracking-tight">
-            {filterMemberOnly ? "Mes Clubs Membres" : "Lieux Populaires"}
-          </h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                {filterMemberOnly ? "Mes Clubs Membres" : "Lieux & Établissements"}
+              </h2>
+              <p className="text-xs text-gray-500 font-medium">
+                {filterMemberOnly 
+                  ? "Les lieux dont vous êtes membre vérifié" 
+                  : `${filteredEstablishments.length} lieu(x) disponible(s)`}
+              </p>
+            </div>
+
+            {/* Tri / Sort controls */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+              <button
+                onClick={() => setSortBy('popular')}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 ${
+                  sortBy === 'popular'
+                    ? 'bg-orange-600 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <Flame className="w-3.5 h-3.5" /> Populaires
+              </button>
+              <button
+                onClick={() => setSortBy('rating')}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 ${
+                  sortBy === 'rating'
+                    ? 'bg-orange-600 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <Star className="w-3.5 h-3.5" /> Mieux notés
+              </button>
+              <button
+                onClick={handleSelectProximity}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 ${
+                  sortBy === 'proximity'
+                    ? 'bg-orange-600 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+                title="Trier par proximité géographique"
+              >
+                {isLocating ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Compass className="w-3.5 h-3.5" />
+                )}
+                À proximité
+              </button>
+              <button
+                onClick={() => setSortBy('now')}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 ${
+                  sortBy === 'now'
+                    ? 'bg-amber-400 text-gray-950 font-black shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5" /> En direct
+              </button>
+            </div>
+          </div>
+
+          {/* Type Filter Bar (Maquis, Restaurant, Bar, Boîte de nuit) */}
+          <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm mb-4">
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 px-0.5">
+              {[
+                { id: 'all', label: 'Tous', icon: SlidersHorizontal },
+                { id: 'maquis', label: 'Maquis', icon: Flame },
+                { id: 'restaurant', label: 'Restaurants', icon: Sparkles },
+                { id: 'bar', label: 'Bars', icon: Wine },
+                { id: 'boite_de_nuit', label: 'Boîtes de nuit', icon: Trophy }
+              ].map(cat => {
+                const isSelected = selectedCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex-shrink-0 ${
+                      isSelected
+                        ? 'bg-orange-50 text-orange-700 ring-1 ring-orange-400/40 shadow-xs'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    }`}
+                  >
+                    <span>{cat.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="flex flex-col gap-4">
             {filteredEstablishments.length === 0 ? (
               <div className="bg-white border border-gray-100 rounded-3xl p-8 text-center shadow-sm">
                 <div className="w-12 h-12 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-3 border border-orange-100 animate-bounce">
                   <Users className="w-6 h-6 text-orange-500" />
                 </div>
-                <h3 className="text-sm font-bold text-gray-900 mb-1">Aucun club membre</h3>
+                <h3 className="text-sm font-bold text-gray-900 mb-1">
+                  {filterMemberOnly ? "Aucun club membre" : "Aucun établissement trouvé"}
+                </h3>
                 <p className="text-xs text-gray-500 leading-relaxed max-w-xs mx-auto">
-                  Vous n'avez pas encore rejoint d'établissement. Allez dans l'onglet <strong className="text-orange-600 font-bold">Explorer</strong> pour demander l'adhésion à des établissements !
+                  {filterMemberOnly 
+                    ? "Vous n'avez pas encore rejoint d'établissement. Allez dans l'onglet Explorer pour demander l'adhésion !"
+                    : "Essayez de sélectionner une autre catégorie ou de désactiver les filtres."}
                 </p>
+                {selectedCategory !== 'all' && (
+                  <button
+                    onClick={() => setSelectedCategory('all')}
+                    className="mt-3 px-4 py-1.5 rounded-full bg-orange-600 text-white font-bold text-xs"
+                  >
+                    Voir tous les établissements
+                  </button>
+                )}
               </div>
             ) : (
               filteredEstablishments.map(est => {
                 const imageUrl = est.photos[0] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800';
+                const isFav = currentUser ? (favorites[currentUser.id] || []).includes(est.id) : false;
+                const distKm = establishmentDistances[est.id];
+
                 return (
                   <div key={est.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-                    <div className="h-32 relative">
+                    <div className="h-36 relative">
                        <img src={imageUrl} alt={est.name} className="w-full h-full object-cover" />
-                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
                        <div className="absolute top-3 left-3">
                          <CrowdStatusBadge establishment={est} showControlForOwner={false} />
                        </div>
-                       <div className="absolute bottom-3 right-3 flex items-center gap-1 text-yellow-400 font-bold bg-black/40 backdrop-blur-md px-2.5 py-1 rounded-lg text-sm">
-                         <Star className="w-4 h-4 fill-yellow-400" /> {est.averageRating.toFixed(1)}
+                       <div className="absolute bottom-3 right-3 flex items-center gap-1 text-yellow-400 font-bold bg-black/50 backdrop-blur-md px-2.5 py-1 rounded-lg text-xs border border-white/10">
+                         <Star className="w-3.5 h-3.5 fill-yellow-400" /> {est.averageRating.toFixed(1)}
                        </div>
-                       {currentUser && (
-                         <button
-                           onClick={async (e) => {
-                             e.stopPropagation();
-                             await toggleFavorite(currentUser.id, est.id);
-                           }}
-                           className="absolute top-3 right-3 p-2 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md transition-all active:scale-90 text-white"
-                           title={(favorites[currentUser.id] || []).includes(est.id) ? "Retirer des favoris" : "Ajouter aux favoris"}
-                         >
-                           <Heart className={`w-4 h-4 ${(favorites[currentUser.id] || []).includes(est.id) ? "fill-red-500 text-red-500" : "text-white"}`} />
-                         </button>
+
+                       {/* Proximity badge if available */}
+                       {typeof distKm === 'number' && (
+                         <div className="absolute top-3 left-28 bg-black/50 backdrop-blur-md text-white font-bold text-[11px] px-2.5 py-1 rounded-full flex items-center gap-1 border border-white/10">
+                           <MapPin className="w-3 h-3 text-orange-400" /> {formatDistance(distKm)}
+                         </div>
                        )}
+
+                       {/* Favorite quick toggle on card image */}
+                       <button
+                         onClick={async (e) => {
+                           e.stopPropagation();
+                           if (!currentUser) {
+                             setGlobalError({ message: "Veuillez vous connecter pour sauvegarder vos lieux favoris.", type: "info" });
+                             return;
+                           }
+                           await toggleFavorite(currentUser.id, est.id);
+                         }}
+                         className={`absolute top-3 right-3 p-2 rounded-full backdrop-blur-md transition-all active:scale-90 ${
+                           isFav 
+                             ? "bg-red-500 text-white shadow-md" 
+                             : "bg-black/40 hover:bg-black/60 text-white"
+                         }`}
+                         aria-label={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+                         title={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+                       >
+                         <Heart className={`w-4 h-4 ${isFav ? "fill-white text-white" : "text-white"}`} />
+                       </button>
                     </div>
-                    <div className="p-4 flex gap-4 items-center justify-between">
+                    <div className="p-4 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
                       <div className="flex flex-col justify-center flex-1 min-w-0">
-                        <h3 className="font-bold text-gray-900 text-lg mb-0.5 truncate">{est.name}</h3>
-                        <p className="text-sm text-gray-500 capitalize font-medium truncate">{est.category.replace(/_/g, ' ')} • {est.neighborhood}</p>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-gray-900 text-lg truncate">{est.name}</h3>
+                          {isFav && (
+                            <span className="bg-red-50 text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-red-100 flex items-center gap-0.5">
+                              <Heart className="w-2.5 h-2.5 fill-red-500" /> Favori
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 capitalize font-medium truncate flex items-center gap-1.5 mt-0.5">
+                          <span>{est.category.replace(/_/g, ' ')}</span>
+                          <span>•</span>
+                          <span>{est.neighborhood || est.quarter || 'Ouagadougou'}</span>
+                          {typeof distKm === 'number' && (
+                            <>
+                              <span>•</span>
+                              <span className="text-orange-600 font-bold">à {formatDistance(distKm)}</span>
+                            </>
+                          )}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-1">
+
+                      <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
+                        {/* Explicit 'Ajouter aux favoris' button on each card */}
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (!currentUser) {
+                              setGlobalError({ message: "Veuillez vous connecter pour sauvegarder vos lieux favoris.", type: "info" });
+                              return;
+                            }
+                            await toggleFavorite(currentUser.id, est.id);
+                          }}
+                          className={`flex items-center gap-1.5 font-bold text-xs px-3 py-2 rounded-xl transition-all active:scale-95 flex-shrink-0 ${
+                            isFav
+                              ? "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
+                              : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                          }`}
+                          title={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+                        >
+                          <Heart className={`w-3.5 h-3.5 ${isFav ? "fill-red-500 text-red-500" : "text-gray-500"}`} />
+                          <span>{isFav ? "Favori" : "Favoris"}</span>
+                        </button>
+
                         {onStartChat && (
                           <button 
                             onClick={() => onStartChat(est.id)}
-                            className="flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 active:scale-95 text-orange-600 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all flex-shrink-0"
-                            title="Discuter"
+                            className="flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 active:scale-95 text-orange-600 font-bold text-xs px-3.5 py-2 rounded-xl transition-all flex-shrink-0"
+                            title="Discuter avec l'établissement"
                           >
-                            <MessageSquare className="w-4 h-4" />
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Discuter</span>
                           </button>
                         )}
                         <button 
                           onClick={() => setReservationEst({ id: est.id, name: est.name })}
-                          className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all flex-shrink-0"
-                          title="Réserver"
+                          className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all flex-shrink-0 shadow-sm"
+                          title="Réserver une table"
                         >
-                          <Calendar className="w-4 h-4" />
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>Réserver</span>
                         </button>
                       </div>
                     </div>
                   </div>
-                )
+                );
               })
             )}
           </div>

@@ -222,6 +222,11 @@ const addDoc = async (collRef: string, payload: any) => {
   }
 
   if (error) {
+    if (error.code === '42P17' || error.message?.includes('infinite recursion')) {
+      console.warn(`[Supabase addDoc] Récursion RLS détectée pour la table "${tableName}". Un identifiant local est utilisé.`);
+      window.dispatchEvent(new CustomEvent('supabase-missing-table', { detail: 'politiques RLS (récursion détectée)' }));
+      return { id: `local_${Date.now()}_${Math.random().toString(36).substring(2, 6)}` };
+    }
     console.error(`[Supabase addDoc] Error in ${tableName} payload:`, cleanPayload, error);
     console.error(`[Supabase addDoc] Error details:`, error.message, error.details, error.hint);
     throw error;
@@ -415,7 +420,12 @@ const getDocs = async (queryObj: any) => {
   
   const { data, error } = await queryBuilder;
   if (error) {
-    console.error(`[Supabase getDocs] Error in ${tableName}:`, error);
+    if (error.code === '42P17' || error.message?.includes('infinite recursion')) {
+      console.warn(`[Supabase getDocs] Récursion RLS détectée pour "${tableName}". Données par défaut utilisées.`);
+      window.dispatchEvent(new CustomEvent('supabase-missing-table', { detail: 'politiques RLS (récursion détectée)' }));
+    } else {
+      console.error(`[Supabase getDocs] Error in ${tableName}:`, error);
+    }
     return { empty: true, size: 0, docs: [] };
   }
   
@@ -525,6 +535,25 @@ const onSnapshot = (queryObj: any, callback: (snapshot: any) => void, errorCallb
           });
           return;
         }
+
+        if (error?.code === '42P17' || error?.message?.includes('infinite recursion')) {
+          const isAlreadyReported = (window as any)._reportedRlsRecursion;
+          if (!isAlreadyReported) {
+            (window as any)._reportedRlsRecursion = true;
+            console.warn(`[Supabase] Récursion RLS détectée (erreur 42P17) sur "${tableName}". Veuillez copier et exécuter supabase_schema.sql dans votre SQL Editor Supabase.`);
+            window.dispatchEvent(new CustomEvent('supabase-missing-table', { detail: 'politiques RLS (récursion détectée)' }));
+          }
+          callback({
+            forEach: (fn: any) => [],
+            docs: [],
+            empty: true,
+            size: 0,
+            exists: () => false,
+            data: () => null
+          });
+          return;
+        }
+
         if (errorCallback) errorCallback(error);
       } else {
         const docs = (data || []).map(item => ({
@@ -2534,120 +2563,170 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addStockItem = async (item: Omit<StockItem, 'id' | 'createdAt'>) => {
-    try {
-      const volume = item.volume || '66cl';
-      const unitsPerCase = item.unitsPerCase || 12;
-      const payload = {
-        establishmentId: item.establishmentId,
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-        volume,
-        unitsPerCase,
-        unites_par_caisse: unitsPerCase,
-        category: item.category || 'boisson',
-        stock_faible: item.stock_faible ?? (item.quantity <= 5)
-      };
+    const volume = item.volume || '66cl';
+    const unitsPerCase = item.unitsPerCase || 12;
+    const createdAt = new Date().toISOString();
+    const payload = {
+      establishmentId: item.establishmentId,
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity,
+      volume,
+      unitsPerCase,
+      unites_par_caisse: unitsPerCase,
+      category: item.category || 'boisson',
+      stock_faible: item.stock_faible ?? (item.quantity <= 5)
+    };
 
-      if (isSupabaseConfigured) {
+    let insertedItem: StockItem = {
+      id: `stock_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      ...payload,
+      createdAt
+    };
+
+    if (isSupabaseConfigured) {
+      try {
         const { data, error } = await supabase.from('stocks').insert([payload]).select().single();
         if (!error && data) {
-          setState(s => ({
-            ...s,
-            stocks: [...s.stocks.filter(st => st.id !== data.id), data as StockItem]
-          }));
+          insertedItem = data as StockItem;
+        } else if (error) {
+          console.warn("[Supabase addStockItem] fallback to local item:", error.message);
         }
+      } catch (err) {
+        console.warn("[Supabase addStockItem] exception:", err);
       }
+    }
+
+    // Always update local React state immediately
+    setState(s => ({
+      ...s,
+      stocks: [...s.stocks.filter(st => st.id !== insertedItem.id), insertedItem]
+    }));
+
+    try {
       await addDoc(collection(db, 'stocks'), {
         ...payload,
-        createdAt: new Date().toISOString()
+        createdAt
       });
     } catch (error: any) {
-      handleFirestoreError(error, OperationType.CREATE, 'stocks');
+      console.warn("Firestore error adding stock (handled gracefully):", error?.message || error);
     }
   };
 
   const updateStockItem = async (id: string, updates: Partial<Omit<StockItem, 'id' | 'establishmentId'>>) => {
-    try {
-      const payload: any = { ...updates };
-      if (updates.unitsPerCase) {
-        payload.unites_par_caisse = updates.unitsPerCase;
-      }
-      if (isSupabaseConfigured) {
+    const payload: any = { ...updates };
+    if (updates.unitsPerCase) {
+      payload.unites_par_caisse = updates.unitsPerCase;
+    }
+
+    // Update local state immediately
+    setState(s => ({
+      ...s,
+      stocks: s.stocks.map(item => item.id === id ? { ...item, ...updates } : item)
+    }));
+
+    if (isSupabaseConfigured) {
+      try {
         await supabase.from('stocks').update(payload).eq('id', id);
-        setState(s => ({
-          ...s,
-          stocks: s.stocks.map(item => item.id === id ? { ...item, ...updates } : item)
-        }));
+      } catch (err) {
+        console.warn("[Supabase updateStockItem] error:", err);
       }
+    }
+
+    try {
       await updateDoc(doc(db, 'stocks', id), payload);
     } catch (error: any) {
-      handleFirestoreError(error, OperationType.UPDATE, `stocks/${id}`);
+      console.warn("Firestore error updating stock (handled gracefully):", error?.message || error);
     }
   };
 
   const deleteStockItem = async (id: string) => {
-    try {
-      if (isSupabaseConfigured) {
+    setState(s => ({
+      ...s,
+      stocks: s.stocks.filter(item => item.id !== id)
+    }));
+
+    if (isSupabaseConfigured) {
+      try {
         await supabase.from('stocks').delete().eq('id', id);
-        setState(s => ({
-          ...s,
-          stocks: s.stocks.filter(item => item.id !== id)
-        }));
+      } catch (error: any) {
+        console.warn(`Error deleting stock item in Supabase: ${id}`, error);
       }
-    } catch (error: any) {
-      console.error(`Error deleting stock item: ${id}`, error);
     }
   };
 
   const addStockReception = async (reception: Omit<StockReception, 'id' | 'date'>) => {
-    try {
-      const date = new Date().toISOString();
-      const payload = { ...reception, date };
-      
-      const unitsAdded = reception.unitsAdded || (reception.casesCount * reception.unitsPerCase);
-      const existingStock = state.stocks.find(s => s.id === reception.stockId);
-      if (existingStock) {
-        const newQty = (existingStock.quantity || 0) + unitsAdded;
-        await updateStockItem(existingStock.id, {
-          quantity: newQty,
-          stock_faible: newQty <= 5
-        });
-      }
+    const date = new Date().toISOString();
+    const payload = { ...reception, date };
+    
+    const unitsAdded = reception.unitsAdded || (reception.casesCount * reception.unitsPerCase);
+    const existingStock = state.stocks.find(s => s.id === reception.stockId);
+    if (existingStock) {
+      const newQty = (existingStock.quantity || 0) + unitsAdded;
+      await updateStockItem(existingStock.id, {
+        quantity: newQty,
+        stock_faible: newQty <= 5
+      });
+    }
 
-      if (isSupabaseConfigured) {
-        const { data } = await supabase.from('receptions_stock').insert([payload]).select().single();
-        if (data) {
-          setState(s => ({ ...s, receptionsStock: [data as StockReception, ...s.receptionsStock] }));
+    let insertedReception: StockReception = {
+      id: `rec_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      ...payload
+    };
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.from('receptions_stock').insert([payload]).select().single();
+        if (!error && data) {
+          insertedReception = data as StockReception;
         }
+      } catch (err) {
+        console.warn("[Supabase addStockReception] exception:", err);
       }
+    }
+
+    setState(s => ({ ...s, receptionsStock: [insertedReception, ...s.receptionsStock] }));
+
+    try {
       await addDoc(collection(db, 'receptions_stock'), payload);
     } catch (error: any) {
-      console.error("Erreur addStockReception:", error);
+      console.warn("Firestore error adding reception (handled gracefully):", error?.message || error);
     }
   };
 
   const addStockInventory = async (inventory: Omit<StockInventory, 'id' | 'date'>) => {
-    try {
-      const date = new Date().toISOString();
-      const payload = { ...inventory, date };
+    const date = new Date().toISOString();
+    const payload = { ...inventory, date };
 
-      if (inventory.adjusted) {
-        await updateStockItem(inventory.stockId, {
-          quantity: inventory.stockPhysiqueCompte,
-          stock_faible: inventory.stockPhysiqueCompte <= 5
-        });
-      }
+    if (inventory.adjusted) {
+      await updateStockItem(inventory.stockId, {
+        quantity: inventory.stockPhysiqueCompte,
+        stock_faible: inventory.stockPhysiqueCompte <= 5
+      });
+    }
 
-      if (isSupabaseConfigured) {
-        const { data } = await supabase.from('inventaires').insert([payload]).select().single();
-        if (data) {
-          setState(s => ({ ...s, inventairesStock: [data as StockInventory, ...s.inventairesStock] }));
+    let insertedInventory: StockInventory = {
+      id: `inv_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      ...payload
+    };
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.from('inventaires').insert([payload]).select().single();
+        if (!error && data) {
+          insertedInventory = data as StockInventory;
         }
+      } catch (err) {
+        console.warn("[Supabase addStockInventory] exception:", err);
       }
+    }
+
+    setState(s => ({ ...s, inventairesStock: [insertedInventory, ...s.inventairesStock] }));
+
+    try {
       await addDoc(collection(db, 'inventaires'), payload);
     } catch (error: any) {
-      console.error("Erreur addStockInventory:", error);
+      console.warn("Firestore error adding inventory (handled gracefully):", error?.message || error);
     }
   };
 

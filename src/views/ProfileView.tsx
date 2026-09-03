@@ -1232,41 +1232,39 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
             <Calendar className="w-4 h-4 text-orange-500" />
             Mes réservations de table (Restaurants)
           </h3>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold mb-4">Suivez et gérez vos réservations de table dans les restaurants partenaires.</p>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold mb-4">Suivez vos réservations en cours et consultez l'historique complet de vos visites.</p>
 
-          {myReservations && myReservations.length > 0 && (
-            /* Sub-tabs: Actives vs Historique */
-            <div className="flex bg-gray-50 dark:bg-gray-900 p-1 rounded-xl border border-gray-150 dark:border-gray-800 mb-4">
-              <button
-                type="button"
-                onClick={() => setResActiveTab('current')}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                  resActiveTab === 'current'
-                    ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                }`}
-              >
-                En cours ({myReservations.filter(res => {
-                  const isPassed = !canCancelReservation(res.date, res.time);
-                  return res.status !== 'annulee' && res.status !== 'refusee' && !isPassed;
-                }).length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setResActiveTab('history')}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                  resActiveTab === 'history'
-                    ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                }`}
-              >
-                Historique ({myReservations.filter(res => {
-                  const isPassed = !canCancelReservation(res.date, res.time);
-                  return res.status === 'annulee' || res.status === 'refusee' || isPassed;
-                }).length})
-              </button>
-            </div>
-          )}
+          {/* Sub-tabs: Actives vs Historique */}
+          <div className="flex bg-gray-50 dark:bg-gray-900 p-1 rounded-xl border border-gray-150 dark:border-gray-800 mb-4">
+            <button
+              type="button"
+              onClick={() => setResActiveTab('current')}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                resActiveTab === 'current'
+                  ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              En cours ({myReservations.filter(res => {
+                const isPassed = !canCancelReservation(res.date, res.time);
+                return res.status !== 'annulee' && res.status !== 'refusee' && !isPassed;
+              }).length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setResActiveTab('history')}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                resActiveTab === 'history'
+                  ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              Historique ({myReservations.filter(res => {
+                const isPassed = !canCancelReservation(res.date, res.time);
+                return res.status === 'annulee' || res.status === 'refusee' || isPassed;
+              }).length})
+            </button>
+          </div>
 
           {(() => {
             const displayedReservations = myReservations.filter(res => {

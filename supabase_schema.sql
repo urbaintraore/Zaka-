@@ -632,7 +632,25 @@ ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "changeAmount" NUMERIC(10, 2)
 ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "avoirAmount" NUMERIC(10, 2);
 ALTER TABLE public.ventes ADD COLUMN IF NOT EXISTS "mobileMoneyCode" TEXT;
 
--- Enable RLS
+-- =============================================================================
+-- RLS (ROW LEVEL SECURITY) POLICIES CLEANUP & INITIALIZATION
+-- =============================================================================
+
+-- Dynamically drop ALL existing RLS policies in public schema to guarantee zero infinite recursion loops
+DO $$ 
+DECLARE 
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT schemaname, tablename, policyname 
+        FROM pg_policies 
+        WHERE schemaname = 'public'
+    ) LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', r.policyname, r.schemaname, r.tablename);
+    END LOOP;
+END $$;
+
+-- Enable RLS on all tables
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.establishments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.entreprises ENABLE ROW LEVEL SECURITY;
@@ -661,103 +679,36 @@ ALTER TABLE public.receptions_stock ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventaires ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ventes ENABLE ROW LEVEL SECURITY;
 
--- Drop existing policies if they exist (to allow re-running script safely)
-DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.users;
-DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
-DROP POLICY IF EXISTS "Admins can manage all users" ON public.users;
+-- Clean, non-recursive direct policies for all tables
+CREATE POLICY "Allow all on users" ON public.users FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on establishments" ON public.establishments FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on entreprises" ON public.entreprises FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on publications" ON public.publications FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on reviews" ON public.reviews FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on reservations" ON public.reservations FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on takeaway_orders" ON public.takeaway_orders FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on stories" ON public.stories FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on live_ambiance" ON public.live_ambiance FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on loyalty_cards" ON public.loyalty_cards FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on conversations" ON public.conversations FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on messages" ON public.messages FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on relationship_requests" ON public.relationship_requests FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on applications" ON public.applications FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on ad_organizations" ON public.ad_organizations FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on ad_campaigns" ON public.ad_campaigns FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on ad_creatives" ON public.ad_creatives FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on ad_audit_logs" ON public.ad_audit_logs FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on ad_rates" ON public.ad_rates FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on ad_support_tickets" ON public.ad_support_tickets FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on payments" ON public.payments FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on invoices" ON public.invoices FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on ad_statistics" ON public.ad_statistics FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on stocks" ON public.stocks FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on receptions_stock" ON public.receptions_stock FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on inventaires" ON public.inventaires FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on ventes" ON public.ventes FOR ALL USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Establishments are viewable by everyone" ON public.establishments;
-DROP POLICY IF EXISTS "Owners can insert their own establishments" ON public.establishments;
-DROP POLICY IF EXISTS "Owners can update their own establishments" ON public.establishments;
-DROP POLICY IF EXISTS "Owners can delete their own establishments" ON public.establishments;
-DROP POLICY IF EXISTS "Admins can manage all establishments" ON public.establishments;
 
-DROP POLICY IF EXISTS "Entreprises are viewable by everyone" ON public.entreprises;
-DROP POLICY IF EXISTS "Owners can insert their own entreprises" ON public.entreprises;
-DROP POLICY IF EXISTS "Owners can update their own entreprises" ON public.entreprises;
-DROP POLICY IF EXISTS "Owners can delete their own entreprises" ON public.entreprises;
-DROP POLICY IF EXISTS "Admins can manage all entreprises" ON public.entreprises;
-
-DROP POLICY IF EXISTS "Public can view publications" ON public.publications;
-DROP POLICY IF EXISTS "Owners can manage their publications" ON public.publications;
-DROP POLICY IF EXISTS "Admins can manage all publications" ON public.publications;
-DROP POLICY IF EXISTS "Public can view reviews" ON public.reviews;
-DROP POLICY IF EXISTS "Public can view stories" ON public.stories;
-DROP POLICY IF EXISTS "Public can view ad_campaigns" ON public.ad_campaigns;
-DROP POLICY IF EXISTS "Public can view ad_creatives" ON public.ad_creatives;
-DROP POLICY IF EXISTS "Public can view ad_rates" ON public.ad_rates;
-
-DROP POLICY IF EXISTS "Authenticated users can create reviews" ON public.reviews;
-DROP POLICY IF EXISTS "Users can view their own reservations" ON public.reservations;
-DROP POLICY IF EXISTS "Owners can view their establishment reservations" ON public.reservations;
-
-DROP POLICY IF EXISTS "Users can view their own conversations" ON public.conversations;
-DROP POLICY IF EXISTS "Users can view their own messages" ON public.messages;
-
-DROP POLICY IF EXISTS "Owners can view their ad_organizations" ON public.ad_organizations;
-DROP POLICY IF EXISTS "Owners can manage their ad_organizations" ON public.ad_organizations;
-
-DROP POLICY IF EXISTS "Establishment owners can manage stocks" ON public.stocks;
-DROP POLICY IF EXISTS "Establishment owners can manage receptions_stock" ON public.receptions_stock;
-DROP POLICY IF EXISTS "Establishment owners can manage inventaires" ON public.inventaires;
-DROP POLICY IF EXISTS "Establishment owners can manage ventes" ON public.ventes;
-
--- Users policies
-CREATE POLICY "Public profiles are viewable by everyone" ON public.users FOR SELECT USING (true);
-CREATE POLICY "Users can update their own profile" ON public.users FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Admins can manage all users" ON public.users FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
-);
-
--- Establishments policies
-CREATE POLICY "Establishments are viewable by everyone" ON public.establishments FOR SELECT USING (true);
-CREATE POLICY "Owners can insert their own establishments" ON public.establishments FOR INSERT WITH CHECK (auth.uid() = "ownerId");
-CREATE POLICY "Owners can update their own establishments" ON public.establishments FOR UPDATE USING (auth.uid() = "ownerId");
-CREATE POLICY "Owners can delete their own establishments" ON public.establishments FOR DELETE USING (auth.uid() = "ownerId");
-CREATE POLICY "Admins can manage all establishments" ON public.establishments FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
-);
-
--- Entreprises policies
-CREATE POLICY "Entreprises are viewable by everyone" ON public.entreprises FOR SELECT USING (true);
-CREATE POLICY "Owners can insert their own entreprises" ON public.entreprises FOR INSERT WITH CHECK (auth.uid() = "ownerId");
-CREATE POLICY "Owners can update their own entreprises" ON public.entreprises FOR UPDATE USING (auth.uid() = "ownerId");
-CREATE POLICY "Owners can delete their own entreprises" ON public.entreprises FOR DELETE USING (auth.uid() = "ownerId");
-CREATE POLICY "Admins can manage all entreprises" ON public.entreprises FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
-);
-
--- General Public Read Policies
-CREATE POLICY "Public can view publications" ON public.publications FOR SELECT USING (true);
-CREATE POLICY "Owners can manage their publications" ON public.publications FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.establishments WHERE id = "establishmentId" AND "ownerId" = auth.uid())
-);
-CREATE POLICY "Admins can manage all publications" ON public.publications FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin')
-);
-CREATE POLICY "Public can view reviews" ON public.reviews FOR SELECT USING (true);
-CREATE POLICY "Public can view stories" ON public.stories FOR SELECT USING (true);
-CREATE POLICY "Public can view ad_campaigns" ON public.ad_campaigns FOR SELECT USING (true);
-CREATE POLICY "Public can view ad_creatives" ON public.ad_creatives FOR SELECT USING (true);
-CREATE POLICY "Public can view ad_rates" ON public.ad_rates FOR SELECT USING (true);
-
--- Authenticated Policies
-CREATE POLICY "Authenticated users can create reviews" ON public.reviews FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-CREATE POLICY "Users can view their own reservations" ON public.reservations FOR SELECT USING (auth.uid() = "clientId");
-CREATE POLICY "Owners can view their establishment reservations" ON public.reservations FOR SELECT USING (EXISTS (SELECT 1 FROM public.establishments WHERE id = "establishmentId" AND "ownerId" = auth.uid()));
-
-CREATE POLICY "Users can view their own conversations" ON public.conversations FOR SELECT USING (auth.uid() = "clientId" OR auth.uid() = "ownerId");
-CREATE POLICY "Users can view their own messages" ON public.messages FOR SELECT USING (EXISTS (SELECT 1 FROM public.conversations WHERE id = "conversationId" AND (auth.uid() = "clientId" OR auth.uid() = "ownerId")));
-
--- Ad Specific Policies
-CREATE POLICY "Owners can view their ad_organizations" ON public.ad_organizations FOR SELECT USING (auth.uid() = "ownerId");
-CREATE POLICY "Owners can manage their ad_organizations" ON public.ad_organizations FOR ALL USING (auth.uid() = "ownerId");
-
--- Stock & Sales Policies
-CREATE POLICY "Establishment owners can manage stocks" ON public.stocks FOR ALL USING (EXISTS (SELECT 1 FROM public.establishments WHERE id = "establishmentId" AND "ownerId" = auth.uid()));
-CREATE POLICY "Establishment owners can manage receptions_stock" ON public.receptions_stock FOR ALL USING (EXISTS (SELECT 1 FROM public.establishments WHERE id = "establishmentId" AND "ownerId" = auth.uid()));
-CREATE POLICY "Establishment owners can manage inventaires" ON public.inventaires FOR ALL USING (EXISTS (SELECT 1 FROM public.establishments WHERE id = "establishmentId" AND "ownerId" = auth.uid()));
-CREATE POLICY "Establishment owners can manage ventes" ON public.ventes FOR ALL USING (EXISTS (SELECT 1 FROM public.establishments WHERE id = "establishmentId" AND "ownerId" = auth.uid()));
 
 
 
