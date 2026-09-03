@@ -3,7 +3,7 @@ import { RichTextEditor } from '../components/RichTextEditor';
 import { ClientsAndRequests } from '../components/ClientsAndRequests';
 import { GerantAnalytics } from '../components/GerantAnalytics';
 import { useAppStore } from '../store';
-import { LogOut, Plus, Store, Eye, MousePointerClick, X, Megaphone, Calendar, Users, FileText, Image as ImageIcon, MessageSquare, Download, Settings, ChefHat, Scissors, Trash2, Star, Activity, ArrowRight, BarChart2, Zap, Rocket, ShieldAlert } from 'lucide-react';
+import { LogOut, Plus, Store, Eye, MousePointerClick, X, Megaphone, Calendar, Users, FileText, Image as ImageIcon, MessageSquare, Download, Settings, ChefHat, Scissors, Trash2, Star, Activity, ArrowRight, BarChart2, Zap, Rocket, ShieldAlert, FileSpreadsheet } from 'lucide-react';
 import { Category, PubType, getCategoryLabel, CATEGORIES_LIST } from '../types';
 import { compressImage } from '../utils/imageCompressor';
 import { useInstallApp } from '../hooks/useInstallApp';
@@ -16,6 +16,7 @@ import { EstablishmentPhotoGallery } from '../components/EstablishmentPhotoGalle
 import { CashierDashboard } from '../components/CashierDashboard';
 import { Sparkles, TrendingUp, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { AdExpressWizard } from '../components/AdExpressWizard';
+import { exportReservationsToCSV } from '../utils/exportReservationsCsv';
 
 export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: { onLogout: () => void; onNavigate?: (tab: any) => void; onStartChatWithConv?: (convId: string) => void }) {
   const { 
@@ -1128,15 +1129,29 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
       {/* Réservations en Temps Réel */}
       {activeMainTab === 'reservations' && (
         <div className="space-y-6 animate-in fade-in duration-200">
-          <div className="bg-gradient-to-r from-orange-600 to-amber-600 text-white p-5 rounded-3xl shadow-lg flex items-center justify-between">
+          <div className="bg-gradient-to-r from-orange-600 to-amber-600 text-white p-5 rounded-3xl shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-base font-black flex items-center gap-2">
                 <Calendar className="w-5 h-5" /> Gestion des Réservations en Temps Réel
               </h3>
               <p className="text-xs text-orange-100 font-medium mt-1">
-                Validez instantanément les réservations clients, consultez les motifs et exportez la liste de présence.
+                Validez instantanément les réservations clients, consultez les motifs et exportez vos statistiques.
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => exportReservationsToCSV({
+                reservations,
+                establishments,
+                managerEstablishmentIds: myEsts.map(e => e.id),
+                managerName: currentUser?.name
+              })}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-white hover:bg-orange-50 text-orange-700 font-black text-xs rounded-xl shadow-md transition-all cursor-pointer shrink-0 active:scale-95"
+              title="Télécharger toutes les statistiques de réservations au format CSV"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-orange-600" />
+              <span>Exporter CSV</span>
+            </button>
           </div>
 
           {myEsts.map(est => (

@@ -494,8 +494,17 @@ export interface StaffAttendance {
   staffId: string;
   date: string; // YYYY-MM-DD
   period: 'matinée' | 'soirée';
-  lateMinutes: number; // retard d'arrivée en minutes
-  earlyDepartureMinutes: number; // temps de départ anticipé en minutes
+  officialStartTime?: string; // Heure démarrage officielle du travail (ex: "08:00" ou "20:00")
+  actualArrivalTime?: string; // Heure d'arrivée réelle de l'employé (ex: "08:25")
+  arrivalDelayMinutes?: number; // Retard calculé à l'arrivée
+  officialEndTime?: string; // Heure descente officielle du travail (ex: "17:00" ou "04:00")
+  actualDepartureTime?: string; // Heure descente réelle de l'employé (ex: "16:45")
+  departureDelayMinutes?: number; // Retard calculé à la descente / départ anticipé
+  totalDailyDelayMinutes?: number; // Retard global du jour (arrivée + descente)
+  status?: 'present' | 'absent' | 'retard'; // Statut de présence ou absence
+  absenceReason?: string; // Motif en cas d'absence
+  lateMinutes: number; // retard d'arrivée en minutes (rétrocompatibilité)
+  earlyDepartureMinutes: number; // temps de départ anticipé en minutes (rétrocompatibilité)
   justification?: string; // justificatif s'il y en a
   justificationPhotoUrl?: string; // photo justificative
   createdAt: string;

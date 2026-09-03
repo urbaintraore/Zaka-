@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting, Friendship, AdOrganization, AdAuditLog, AdRateConfig, AdSupportTicket, AdCreative, TakeawayOrder, StockItem, SaleRecord, StockReception, StockInventory } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { supabase, isSupabaseConfigured } from './lib/supabaseClient';
+import { saveEstablishmentsToIndexedDB, getEstablishmentsFromIndexedDB, getOfflineCacheMetadata } from './utils/offlineIndexedDB';
 
 // Firebase-to-Supabase Compatibility Layer
 export const auth: any = {
@@ -641,10 +642,13 @@ interface AppState {
   globalError: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null;
   missingTables: string[];
   theme: 'light' | 'dark';
+  isOffline: boolean;
+  offlineCachedCount: number;
 }
 
 interface AppContextType extends AppState {
   unreadCount: number;
+  refreshOfflineCache: () => Promise<void>;
   login: (email: string, pass: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -753,6 +757,7 @@ interface AppContextType extends AppState {
   removeFriend: (friendshipId: string) => Promise<void>;
   setGlobalError: (err: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null) => void;
   toggleTheme: () => void;
+  setTheme: (theme: 'light' | 'dark') => void;
 }
 
 export enum OperationType {
@@ -883,8 +888,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loading: false,
     globalError: null,
     missingTables: [],
-    theme: getInitialTheme()
+    theme: getInitialTheme(),
+    isOffline: typeof navigator !== 'undefined' ? !navigator.onLine : false,
+    offlineCachedCount: 0
   });
+
+  // IndexedDB offline cache hydration on startup and network status listener
+  useEffect(() => {
+    // 1. Hydrate establishments from IndexedDB cache immediately
+    getEstablishmentsFromIndexedDB().then(cachedEsts => {
+      if (cachedEsts && cachedEsts.length > 0) {
+        setState(s => ({
+          ...s,
+          establishments: s.establishments.length > 0 ? s.establishments : cachedEsts,
+          offlineCachedCount: cachedEsts.length
+        }));
+      }
+    }).catch(err => {
+      console.warn("[IndexedDB] Initial cache read notice:", err);
+    });
+
+    // 2. Track online / offline transitions
+    const handleOnline = () => {
+      setState(s => ({ ...s, isOffline: false }));
+      getOfflineCacheMetadata().then(meta => {
+        setState(s => ({ ...s, offlineCachedCount: meta.count }));
+      });
+    };
+
+    const handleOffline = () => {
+      setState(s => ({ ...s, isOffline: true }));
+      getEstablishmentsFromIndexedDB().then(cachedEsts => {
+        if (cachedEsts && cachedEsts.length > 0) {
+          setState(s => ({ ...s, establishments: cachedEsts, offlineCachedCount: cachedEsts.length }));
+        }
+      });
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const refreshOfflineCache = async () => {
+    try {
+      if (state.establishments && state.establishments.length > 0) {
+        await saveEstablishmentsToIndexedDB(state.establishments);
+        const meta = await getOfflineCacheMetadata();
+        setState(s => ({ ...s, offlineCachedCount: meta.count }));
+      }
+    } catch (e) {
+      console.warn("[IndexedDB] Failed manual refresh:", e);
+    }
+  };
 
   // Safety fallback: ensure loading state resolves even if firebase auth callback is delayed
   useEffect(() => {
@@ -1033,14 +1093,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
     }
   }, [state.publications, state.reviews, state.favorites, state.currentUser, state.establishments, state.reservations]);
-
-  const toggleTheme = () => {
-    setState(s => {
-      const newTheme = s.theme === 'light' ? 'dark' : 'light';
-      localStorage.setItem('app-theme', newTheme);
-      return { ...s, theme: newTheme };
-    });
-  };
 
   const setGlobalError = (err: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null) => {
     setState(s => ({ ...s, globalError: err }));
@@ -1202,10 +1254,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       });
       
-      setState(s => ({ ...s, establishments: mergedEsts }));
-    }, (error) => {
+      // Persist to IndexedDB for offline resilience
+      saveEstablishmentsToIndexedDB(mergedEsts).catch(err => {
+        console.warn("[IndexedDB] Sync notice:", err);
+      });
+
+      setState(s => ({ ...s, establishments: mergedEsts, offlineCachedCount: mergedEsts.length }));
+    }, async (error) => {
       console.error("Erreur establishments:", error);
-      // Fallback to defaults in case of error
+      // Fallback to IndexedDB cached establishments if available
+      try {
+        const cached = await getEstablishmentsFromIndexedDB();
+        if (cached && cached.length > 0) {
+          setState(s => ({ ...s, establishments: cached, offlineCachedCount: cached.length, isOffline: true }));
+          return;
+        }
+      } catch (idbErr) {
+        console.warn("IndexedDB fallback error:", idbErr);
+      }
       setState(s => ({ ...s, establishments: DEFAULT_ESTABLISHMENTS }));
     });
 
@@ -3877,6 +3943,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const setTheme = (newTheme: 'light' | 'dark') => {
+    try {
+      localStorage.setItem('app-theme', newTheme);
+    } catch (e) {
+      console.warn("Could not save theme:", e);
+    }
+    setState(s => ({ ...s, theme: newTheme }));
+  };
+
+  const toggleTheme = () => {
+    const nextTheme = state.theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+  };
+
   const addAdCreativeLibraryItem = async (creative: Omit<AdCreative, 'id' | 'createdAt'>): Promise<string> => {
     try {
       const now = new Date().toISOString();
@@ -3982,7 +4062,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       declineFriendRequest,
       removeFriend,
       setGlobalError,
-      toggleTheme
+      toggleTheme,
+      setTheme,
+      refreshOfflineCache
     }}>
       {children}
     </AppContext.Provider>

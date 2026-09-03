@@ -8,6 +8,34 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 
+// Helper functions for time calculation
+function parseTimeToMinutes(timeStr: string): number {
+  if (!timeStr) return 0;
+  const parts = timeStr.split(':').map(Number);
+  if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return 0;
+  return parts[0] * 60 + parts[1];
+}
+
+function calculateArrivalDelay(officialStart: string, actualArrival: string): number {
+  if (!officialStart || !actualArrival) return 0;
+  const offMins = parseTimeToMinutes(officialStart);
+  let actMins = parseTimeToMinutes(actualArrival);
+  if (actMins < offMins && offMins >= 18 * 60) {
+    actMins += 24 * 60;
+  }
+  return Math.max(0, actMins - offMins);
+}
+
+function calculateDepartureDelay(officialEnd: string, actualDeparture: string): number {
+  if (!officialEnd || !actualDeparture) return 0;
+  let offMins = parseTimeToMinutes(officialEnd);
+  let actMins = parseTimeToMinutes(actualDeparture);
+  if (offMins < 12 * 60 && actMins >= 18 * 60) {
+    offMins += 24 * 60;
+  }
+  return Math.max(0, offMins - actMins);
+}
+
 interface TableauDeBordRHProps {
   establishmentId: string;
   establishmentName: string;
@@ -36,10 +64,22 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
   const [attDate, setAttDate] = useState(new Date().toISOString().split('T')[0]);
   const [attStaffId, setAttStaffId] = useState('');
   const [attPeriod, setAttPeriod] = useState<'matinée' | 'soirée'>('soirée');
-  const [attLateMinutes, setAttLateMinutes] = useState('0');
-  const [attEarlyMinutes, setAttEarlyMinutes] = useState('0');
+  
+  // Absence & Work times
+  const [attIsAbsent, setAttIsAbsent] = useState(false);
+  const [attAbsenceReason, setAttAbsenceReason] = useState('Non justifiée');
+  const [attOfficialStartTime, setAttOfficialStartTime] = useState('20:00');
+  const [attActualArrivalTime, setAttActualArrivalTime] = useState('20:00');
+  const [attOfficialEndTime, setAttOfficialEndTime] = useState('04:00');
+  const [attActualDepartureTime, setAttActualDepartureTime] = useState('04:00');
+
   const [attJustification, setAttJustification] = useState('');
   const [attPhotoUrl, setAttPhotoUrl] = useState('');
+
+  // Live delay computations
+  const liveArrivalDelay = attIsAbsent ? 0 : calculateArrivalDelay(attOfficialStartTime, attActualArrivalTime);
+  const liveDepartureDelay = attIsAbsent ? 0 : calculateDepartureDelay(attOfficialEndTime, attActualDepartureTime);
+  const liveGlobalDelay = attIsAbsent ? 0 : liveArrivalDelay + liveDepartureDelay;
   
   // Photo modal preview
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
@@ -65,7 +105,7 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
 
   // Pending photo justifications for automated manager alerts
   const pendingPhotoJustifications = staffAttendances.filter(a => 
-    a.establishmentId === establishmentId && a.justificationPhotoUrl && (a.lateMinutes > 0 || a.earlyDepartureMinutes > 0)
+    a.establishmentId === establishmentId && a.justificationPhotoUrl && ((a.lateMinutes > 0 || a.earlyDepartureMinutes > 0 || (a.totalDailyDelayMinutes || 0) > 0))
   );
 
   // Available unique months in archives for this establishment
@@ -75,7 +115,9 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
   // Calculate stats per staff for alerts & payroll
   const staffStatsMap: Record<string, { 
     totalLate: number; 
-    totalEarly: number; 
+    totalEarly: number;
+    totalGlobalDelay: number;
+    absencesCount: number;
     incidentsCount: number; 
     shiftsCount: number;
     name: string; 
@@ -88,7 +130,6 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
     const staffId = m.type === 'client_join' ? m.initiatorId : m.targetId;
     const u = users.find(user => user.id === staffId);
     
-    // Calculate worker reviews rating
     const workerReviews = staffReviews.filter(r => r.establishmentId === establishmentId && r.staffId === staffId && r.status === 'valide');
     const avgRating = workerReviews.length > 0
       ? workerReviews.reduce((sum, rev) => sum + rev.rating, 0) / workerReviews.length
@@ -97,6 +138,8 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
     staffStatsMap[staffId] = {
       totalLate: 0,
       totalEarly: 0,
+      totalGlobalDelay: 0,
+      absencesCount: 0,
       incidentsCount: 0,
       shiftsCount: 0,
       name: u?.name || 'Employé',
@@ -112,6 +155,8 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
       staffStatsMap[a.staffId] = {
         totalLate: 0,
         totalEarly: 0,
+        totalGlobalDelay: 0,
+        absencesCount: 0,
         incidentsCount: 0,
         shiftsCount: 0,
         name: u?.name || 'Employé',
@@ -120,22 +165,34 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
         calculatedBonusOrSanction: { type: 'bonus', amount: 0, reason: '' }
       };
     }
-    staffStatsMap[a.staffId].shiftsCount += 1;
-    staffStatsMap[a.staffId].totalLate += a.lateMinutes;
-    staffStatsMap[a.staffId].totalEarly += a.earlyDepartureMinutes;
-    if (a.lateMinutes > 0 || a.earlyDepartureMinutes > 0) {
+
+    if (a.status === 'absent' || a.justification?.startsWith('[ABSENCE]')) {
+      staffStatsMap[a.staffId].absencesCount += 1;
       staffStatsMap[a.staffId].incidentsCount += 1;
+    } else {
+      staffStatsMap[a.staffId].shiftsCount += 1;
+      const arrDelay = a.arrivalDelayMinutes ?? a.lateMinutes ?? 0;
+      const depDelay = a.departureDelayMinutes ?? a.earlyDepartureMinutes ?? 0;
+      const globDelay = a.totalDailyDelayMinutes ?? (arrDelay + depDelay);
+
+      staffStatsMap[a.staffId].totalLate += arrDelay;
+      staffStatsMap[a.staffId].totalEarly += depDelay;
+      staffStatsMap[a.staffId].totalGlobalDelay += globDelay;
+
+      if (globDelay > 0) {
+        staffStatsMap[a.staffId].incidentsCount += 1;
+      }
     }
   });
 
-  // Automatically calculate pecuniary bonus or sanction based on hours/retards and rating
+  // Calculate pecuniary bonus or sanction based on retards and absences
   Object.keys(staffStatsMap).forEach(staffId => {
     const stats = staffStatsMap[staffId];
-    if (stats.totalLate === 0 && stats.totalEarly === 0 && stats.avgRating >= 4.5) {
-      stats.calculatedBonusOrSanction = { type: 'bonus', amount: 25000, reason: 'Prime de ponctualité & excellence (25k FCFA)' };
-    } else if (stats.totalLate > 60 || stats.incidentsCount >= 3 || stats.avgRating < 3.0) {
-      const deduction = Math.min(50000, (stats.totalLate * 500) + (stats.incidentsCount * 2500));
-      stats.calculatedBonusOrSanction = { type: 'sanction', amount: deduction, reason: `Retards cumulés (${stats.totalLate} min) / Incidents (${stats.incidentsCount})` };
+    if (stats.absencesCount === 0 && stats.totalGlobalDelay === 0 && stats.avgRating >= 4.5) {
+      stats.calculatedBonusOrSanction = { type: 'bonus', amount: 25000, reason: 'Prime de ponctualité & assiduité (25k FCFA)' };
+    } else if (stats.absencesCount > 0 || stats.totalGlobalDelay > 60 || stats.incidentsCount >= 3 || stats.avgRating < 3.0) {
+      const deduction = Math.min(50000, (stats.absencesCount * 10000) + (stats.totalGlobalDelay * 500) + (stats.incidentsCount * 2000));
+      stats.calculatedBonusOrSanction = { type: 'sanction', amount: deduction, reason: `${stats.absencesCount} absence(s), Retard global ${stats.totalGlobalDelay} min` };
     } else {
       stats.calculatedBonusOrSanction = { type: 'bonus', amount: 10000, reason: 'Régularité standard (10k FCFA)' };
     }
@@ -143,33 +200,32 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
 
   // Identify staff exceeding thresholds
   const flaggedStaff = Object.entries(staffStatsMap).filter(([_, stats]) => {
-    return stats.totalLate >= lateThresholdMinutes || stats.incidentsCount >= incidentThresholdCount;
+    return stats.totalGlobalDelay >= lateThresholdMinutes || stats.incidentsCount >= incidentThresholdCount || stats.absencesCount > 0;
   });
 
   // Performance indicators
-  const totalLateMinutes = monthAttendances.reduce((acc, curr) => acc + curr.lateMinutes, 0);
-  const totalEarlyMinutes = monthAttendances.reduce((acc, curr) => acc + curr.earlyDepartureMinutes, 0);
-  
-  // Staff reviews for this establishment
-  const estReviews = staffReviews.filter(r => r.establishmentId === establishmentId);
-  const avgStaffRating = estReviews.filter(r => r.status === 'valide').length > 0 
-    ? (estReviews.filter(r => r.status === 'valide').reduce((acc, curr) => acc + curr.rating, 0) / estReviews.filter(r => r.status === 'valide').length).toFixed(1)
-    : '5.0';
+  const totalGlobalLateMinutes = monthAttendances.reduce((acc, curr) => acc + (curr.totalDailyDelayMinutes ?? ((curr.arrivalDelayMinutes ?? curr.lateMinutes ?? 0) + (curr.departureDelayMinutes ?? curr.earlyDepartureMinutes ?? 0))), 0);
+  const totalAbsencesMonth = monthAttendances.filter(a => a.status === 'absent' || a.justification?.startsWith('[ABSENCE]')).length;
 
   const handleExportCSV = () => {
     if (monthAttendances.length === 0) {
-      alert("Aucune donnée de présence pour ce mois à exporter.");
+      alert("Aucune donnée de pointage pour ce mois à exporter.");
       return;
     }
-    let csvContent = "data:text/csv;charset=utf-8,ID Employe;Nom Employe;Date;Periode;Retard (min);Depart Anticipe (min);Justificatif\n";
+    let csvContent = "data:text/csv;charset=utf-8,ID Employe;Nom Employe;Role;Date;Statut;Shift;Heure Demarrage Officielle;Heure Arrivee Reelle;Retard Arrivee (min);Heure Descente Officielle;Heure Descente Reelle;Retard Descente (min);Retard Global Jour (min);Motif Absence / Justificatif\n";
     monthAttendances.forEach(att => {
       const memberUser = users.find(u => u.id === att.staffId);
-      csvContent += `${att.staffId};"${memberUser?.name || 'Inconnu'}";${att.date};${att.period};${att.lateMinutes};${att.earlyDepartureMinutes};"${att.justification || ''}"\n`;
+      const isAbs = att.status === 'absent' || att.justification?.startsWith('[ABSENCE]');
+      const arrD = att.arrivalDelayMinutes ?? att.lateMinutes ?? 0;
+      const depD = att.departureDelayMinutes ?? att.earlyDepartureMinutes ?? 0;
+      const globD = att.totalDailyDelayMinutes ?? (arrD + depD);
+
+      csvContent += `${att.staffId};"${memberUser?.name || 'Inconnu'}";"${staffStatsMap[att.staffId]?.role || 'Employé'}";${att.date};${isAbs ? 'ABSENT' : att.status || 'présent'};${att.period};${att.officialStartTime || '-'};${att.actualArrivalTime || '-'};${arrD};${att.officialEndTime || '-'};${att.actualDepartureTime || '-'};${depD};${globD};"${att.justification || ''}"\n`;
     });
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `tableau_de_bord_rh_${establishmentName.replace(/\s+/g, '_')}_${selectedMonth}.csv`);
+    link.setAttribute("download", `rapport_pointage_${establishmentName.replace(/\s+/g, '_')}_${selectedMonth}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -181,68 +237,69 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
     const pageWidth = doc.internal.pageSize.getWidth();
 
     // Header styling
-    doc.setFillColor(30, 41, 59); // Slate dark
+    doc.setFillColor(30, 41, 59);
     doc.rect(0, 0, pageWidth, 35, 'F');
     
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text(`TABLEAU DE BORD RH & PAIE`, 15, 15);
+    doc.text(`RAPPORT MENSUEL DE POINTAGE & PAIE`, 15, 15);
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Etablissement : ${establishmentName} | Mois : ${targetMonth}`, 15, 25);
+    doc.text(`Établissement : ${establishmentName} | Mois : ${targetMonth}`, 15, 25);
 
     // Summary KPI section
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('1. Indicateurs Globaux de Performance', 15, 48);
+    doc.text('1. Synthèse Globale de Présence & Retards', 15, 48);
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`- Effectif Actif : ${staffMembers.length} employés`, 20, 56);
-    doc.text(`- Total Retards Cumulés : ${totalLateMinutes} minutes`, 20, 63);
-    doc.text(`- Total Départs Anticipés : ${totalEarlyMinutes} minutes`, 20, 70);
-    doc.text(`- Note Moyenne Globale : ${avgStaffRating} / 5 étoiles`, 20, 77);
+    doc.text(`- Effectif total actif : ${staffMembers.length} employés`, 20, 56);
+    doc.text(`- Retard global cumulé du mois : ${totalGlobalLateMinutes} minutes (${(totalGlobalLateMinutes / 60).toFixed(1)} h)`, 20, 63);
+    doc.text(`- Total absences enregistrées : ${totalAbsencesMonth} jour(s)`, 20, 70);
+    doc.text(`- Note moyenne globale personnel : ${avgStaffRating} / 5 étoiles`, 20, 77);
 
     // Staff stats breakdown
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('2. Synthèse par Employé & Paie / Bonus', 15, 92);
+    doc.text('2. Détail par Employé & Calcul de Paie / Sanctions', 15, 92);
 
     let startY = 100;
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setFillColor(241, 245, 249);
     doc.rect(15, startY, pageWidth - 30, 8, 'F');
     doc.setFont('helvetica', 'bold');
     doc.text('Nom / Rôle', 18, startY + 5);
-    doc.text('Shifts', 80, startY + 5);
-    doc.text('Retards', 105, startY + 5);
-    doc.text('Avis / Note', 135, startY + 5);
-    doc.text('Bonus / Sanction Rec.', 165, startY + 5);
+    doc.text('Shifts', 75, startY + 5);
+    doc.text('Absences', 95, startY + 5);
+    doc.text('Retard Global', 120, startY + 5);
+    doc.text('Note', 155, startY + 5);
+    doc.text('Ajustement Paie', 172, startY + 5);
 
     startY += 8;
     doc.setFont('helvetica', 'normal');
 
-    Object.entries(staffStatsMap).forEach(([_, stats], idx) => {
+    Object.entries(staffStatsMap).forEach(([_, stats]) => {
       if (startY > 270) {
         doc.addPage();
         startY = 20;
       }
       doc.text(`${stats.name} (${stats.role})`, 18, startY + 6);
-      doc.text(`${stats.shiftsCount}`, 80, startY + 6);
-      doc.text(`${stats.totalLate} min`, 105, startY + 6);
-      doc.text(`${stats.avgRating.toFixed(1)} / 5`, 135, startY + 6);
+      doc.text(`${stats.shiftsCount}`, 75, startY + 6);
+      doc.text(`${stats.absencesCount} j`, 95, startY + 6);
+      doc.text(`${stats.totalGlobalDelay} min`, 120, startY + 6);
+      doc.text(`${stats.avgRating.toFixed(1)}/5`, 155, startY + 6);
       const bsStr = `${stats.calculatedBonusOrSanction.type === 'bonus' ? '+' : '-'}${stats.calculatedBonusOrSanction.amount}F`;
-      doc.text(bsStr, 165, startY + 6);
+      doc.text(bsStr, 172, startY + 6);
 
       startY += 8;
     });
 
-    // Save PDF
-    doc.save(`Rapport_RH_${establishmentName.replace(/\s+/g, '_')}_${targetMonth}.pdf`);
-    setSuccessMsg(`Rapport PDF (${targetMonth}) généré et téléchargé avec succès !`);
+    doc.save(`Rapport_Pointage_${establishmentName.replace(/\s+/g, '_')}_${targetMonth}.pdf`);
+    setSuccessMsg(`Rapport PDF mensuel (${targetMonth}) généré avec succès !`);
     setTimeout(() => setSuccessMsg(null), 4000);
   };
 
@@ -476,8 +533,9 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
 
         <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-150 dark:border-gray-800 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Retards</span>
-            <p className="text-2xl font-black text-orange-600 mt-1">{totalLateMinutes} min</p>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Retards Globaux</span>
+            <p className="text-2xl font-black text-orange-600 mt-1">{totalGlobalLateMinutes} min</p>
+            <span className="text-[10px] font-medium text-gray-400">Arrivées + Descentes</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 font-black">
             <Clock className="w-5 h-5" />
@@ -486,8 +544,9 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
 
         <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-150 dark:border-gray-800 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Départs Anticipés</span>
-            <p className="text-2xl font-black text-red-600 mt-1">{totalEarlyMinutes} min</p>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Absences Signalées</span>
+            <p className="text-2xl font-black text-red-600 mt-1">{totalAbsencesMonth} jour(s)</p>
+            <span className="text-[10px] font-medium text-gray-400">Pour le mois</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-950/50 flex items-center justify-center text-red-600 font-black">
             <AlertTriangle className="w-5 h-5" />
@@ -513,7 +572,7 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
               <h4 className="font-black text-sm text-gray-900 dark:text-white uppercase tracking-wider">
                 Liste des Pointages ({selectedMonth})
               </h4>
-              <p className="text-xs text-gray-400">Retrouvez le détail des shifts, retards et justificatifs photo.</p>
+              <p className="text-xs text-gray-400">Suivi détaillé des heures d'arrivée, de descente, retards globaux et absences.</p>
             </div>
             <span className="text-xs font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-full">
               {monthAttendances.length} entrée(s)
@@ -539,47 +598,93 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
                   <tr>
                     <th className="p-3">Date</th>
                     <th className="p-3">Employé</th>
-                    <th className="p-3">Période (Shift)</th>
-                    <th className="p-3">Retard (arrivée)</th>
-                    <th className="p-3">Départ anticipé</th>
-                    <th className="p-3">Justificatif & Photo</th>
+                    <th className="p-3">Statut & Shift</th>
+                    <th className="p-3">Début / Arrivée</th>
+                    <th className="p-3">Descente / Départ</th>
+                    <th className="p-3">Retard Global</th>
+                    <th className="p-3">Justificatif / Photo</th>
                     <th className="p-3 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                   {monthAttendances.map(att => {
                     const memberUser = users.find(u => u.id === att.staffId);
+                    const isAbs = att.status === 'absent' || att.justification?.startsWith('[ABSENCE]');
+                    const arrD = att.arrivalDelayMinutes ?? att.lateMinutes ?? 0;
+                    const depD = att.departureDelayMinutes ?? att.earlyDepartureMinutes ?? 0;
+                    const globD = att.totalDailyDelayMinutes ?? (arrD + depD);
+
                     return (
                       <tr key={att.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-all">
                         <td className="p-3 font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
                           <CalendarIcon className="w-3.5 h-3.5 text-orange-500" />
                           {att.date}
                         </td>
-                        <td className="p-3 font-bold text-gray-800 dark:text-gray-200">
-                          {memberUser?.name || 'Employé inconnu'}
+                        <td className="p-3">
+                          <div className="font-bold text-gray-800 dark:text-gray-200">{memberUser?.name || 'Employé inconnu'}</div>
+                          <span className="text-[10px] text-gray-400 font-semibold">{staffStatsMap[att.staffId]?.role || 'Employé'}</span>
                         </td>
                         <td className="p-3">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                            att.period === 'soirée' ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'
-                          }`}>
-                            {att.period === 'soirée' ? '🌙 Soirée' : '☀️ Matinée'}
-                          </span>
+                          {isAbs ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-red-100 text-red-700">
+                              🚫 ABSENT
+                            </span>
+                          ) : (
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              att.period === 'soirée' ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              {att.period === 'soirée' ? '🌙 Soirée' : '☀️ Matinée'}
+                            </span>
+                          )}
                         </td>
-                        <td className="p-3 font-bold text-orange-600">
-                          {att.lateMinutes > 0 ? `+${att.lateMinutes} min` : 'A l\'heure'}
+                        <td className="p-3">
+                          {isAbs ? (
+                            <span className="text-gray-400">-</span>
+                          ) : (
+                            <div>
+                              <div className="font-semibold text-gray-700 dark:text-gray-300">
+                                Off: {att.officialStartTime || '-'} | Arr: {att.actualArrivalTime || '-'}
+                              </div>
+                              <span className={`text-[10px] font-bold ${arrD > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                {arrD > 0 ? `Retard: +${arrD} min` : 'A l\'heure'}
+                              </span>
+                            </div>
+                          )}
                         </td>
-                        <td className="p-3 font-bold text-red-600">
-                          {att.earlyDepartureMinutes > 0 ? `${att.earlyDepartureMinutes} min tôt` : 'Aucun'}
+                        <td className="p-3">
+                          {isAbs ? (
+                            <span className="text-gray-400">-</span>
+                          ) : (
+                            <div>
+                              <div className="font-semibold text-gray-700 dark:text-gray-300">
+                                Off: {att.officialEndTime || '-'} | Dep: {att.actualDepartureTime || '-'}
+                              </div>
+                              <span className={`text-[10px] font-bold ${depD > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                {depD > 0 ? `Retard descente: +${depD} min` : 'Conforme'}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 font-black text-xs">
+                          {isAbs ? (
+                            <span className="text-red-600">Non pointé</span>
+                          ) : globD > 0 ? (
+                            <span className="px-2 py-1 rounded-lg bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300">
+                              ⏱️ {globD} min
+                            </span>
+                          ) : (
+                            <span className="text-emerald-600 font-bold">0 min (Parfait)</span>
+                          )}
                         </td>
                         <td className="p-3 text-gray-500 space-y-1">
-                          <div className="italic">{att.justification || 'Aucun justificatif'}</div>
+                          <div className="italic text-[11px]">{att.justification || 'Aucun'}</div>
                           {att.justificationPhotoUrl && (
                             <button
                               type="button"
                               onClick={() => setPreviewPhoto(att.justificationPhotoUrl!)}
                               className="text-[10px] font-bold text-orange-600 hover:underline flex items-center gap-1 cursor-pointer"
                             >
-                              <ImageIcon className="w-3 h-3" /> Voir la photo justificative
+                              <ImageIcon className="w-3 h-3" /> Photo justificative
                             </button>
                           )}
                         </td>
@@ -941,11 +1046,20 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
       {/* Add Attendance Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/60 z-[120] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg shadow-2xl p-6 space-y-4">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <span>⏱️</span> Enregistrer un pointage journalier
-            </h3>
-            <p className="text-xs text-gray-500">Précisez la période de travail (matinée ou soirée), les retards et la photo justificative.</p>
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <span>⏱️</span> Enregistrer un Pointage ou une Absence
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setShowAddModal(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-400"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-gray-500">Sélectionnez la date, l'employé, les heures de travail officielles et réelles pour calculer le retard global.</p>
 
             {errorMsg && (
               <div className="p-3 bg-red-50 text-red-700 rounded-xl text-xs font-bold">
@@ -954,28 +1068,10 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
             )}
 
             <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Employé</label>
-                <select
-                  value={attStaffId}
-                  onChange={e => setAttStaffId(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white"
-                >
-                  <option value="">Sélectionner un employé</option>
-                  {staffMembers.map(m => {
-                    const u = users.find(user => user.id === (m.type === 'client_join' ? m.initiatorId : m.targetId));
-                    return (
-                      <option key={m.id} value={u?.id || m.targetId}>
-                        {u?.name || 'Employé'} ({m.isDJ ? 'DJ' : m.requestedRole})
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+              {/* Date & Absence toggle */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Date</label>
+                  <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Date du jour</label>
                   <input
                     type="date"
                     value={attDate}
@@ -983,47 +1079,179 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Période (Shift)</label>
+                  <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Employé (Serveur, DJ, Caissier...)</label>
                   <select
-                    value={attPeriod}
-                    onChange={e => setAttPeriod(e.target.value as any)}
+                    value={attStaffId}
+                    onChange={e => setAttStaffId(e.target.value)}
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white"
                   >
-                    <option value="soirée">🌙 Soirée (Boîte / Maquis)</option>
-                    <option value="matinée">☀️ Matinée / Journée</option>
+                    <option value="">-- Choisir un employé --</option>
+                    {staffMembers.map(m => {
+                      const u = users.find(user => user.id === (m.type === 'client_join' ? m.initiatorId : m.targetId));
+                      const roleLabel = m.isDJ ? 'DJ' : m.isCaissier ? 'Caissier' : ((m as any).isServeur || m.requestedRole === 'serveur') ? 'Serveur' : (m.requestedRole || 'Employé');
+                      return (
+                        <option key={m.id} value={u?.id || m.targetId}>
+                          {u?.name || 'Employé'} ({roleLabel})
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Toggle Presence vs Absence */}
+              <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-200 dark:border-gray-700 flex items-center justify-between">
                 <div>
-                  <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Retard d'arrivée (min)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={attLateMinutes}
-                    onChange={e => setAttLateMinutes(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-900 dark:text-white"
-                  />
+                  <span className="text-xs font-black text-gray-900 dark:text-white block">Statut du jour</span>
+                  <span className="text-[10px] text-gray-400">Présence aux heures de travail ou absence</span>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Départ anticipé (min)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={attEarlyMinutes}
-                    onChange={e => setAttEarlyMinutes(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-900 dark:text-white"
-                  />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAttIsAbsent(false)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      !attIsAbsent ? 'bg-emerald-600 text-white shadow-sm' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                    }`}
+                  >
+                    Présent
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAttIsAbsent(true)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      attIsAbsent ? 'bg-red-600 text-white shadow-sm' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                    }`}
+                  >
+                    Signaler Absent
+                  </button>
                 </div>
               </div>
 
+              {attIsAbsent ? (
+                <div className="p-3 bg-red-50 dark:bg-red-950/40 rounded-2xl border border-red-200 dark:border-red-900 space-y-2">
+                  <label className="block text-xs font-bold text-red-800 dark:text-red-200">Motif de l'absence</label>
+                  <select
+                    value={attAbsenceReason}
+                    onChange={e => setAttAbsenceReason(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-red-200 dark:border-red-800 rounded-xl text-xs font-bold text-gray-900 dark:text-white"
+                  >
+                    <option value="Non justifiée">Non justifiée</option>
+                    <option value="Maladie">Maladie / Santé</option>
+                    <option value="Permission">Permission exceptionnelle</option>
+                    <option value="Congé / Repos">Congé / Repos statutaire</option>
+                  </select>
+                </div>
+              ) : (
+                <>
+                  {/* Shift selection */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Période (Shift)</label>
+                    <select
+                      value={attPeriod}
+                      onChange={e => {
+                        const newP = e.target.value as 'matinée' | 'soirée';
+                        setAttPeriod(newP);
+                        if (newP === 'matinée') {
+                          setAttOfficialStartTime('08:00');
+                          setAttActualArrivalTime('08:00');
+                          setAttOfficialEndTime('17:00');
+                          setAttActualDepartureTime('17:00');
+                        } else {
+                          setAttOfficialStartTime('20:00');
+                          setAttActualArrivalTime('20:00');
+                          setAttOfficialEndTime('04:00');
+                          setAttActualDepartureTime('04:00');
+                        }
+                      }}
+                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white"
+                    >
+                      <option value="soirée">🌙 Soirée / Nuit (Boîte / Maquis)</option>
+                      <option value="matinée">☀️ Matinée / Journée</option>
+                    </select>
+                  </div>
+
+                  {/* Arrival calculation section */}
+                  <div className="p-3 bg-amber-50/60 dark:bg-amber-950/30 rounded-2xl border border-amber-200 dark:border-amber-900/50 space-y-2">
+                    <span className="text-xs font-black text-amber-800 dark:text-amber-200 block">1. Pointage de Prise de Service (Arrivée)</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 dark:text-gray-400">Heure démarrage travail</label>
+                        <input
+                          type="time"
+                          value={attOfficialStartTime}
+                          onChange={e => setAttOfficialStartTime(e.target.value)}
+                          className="w-full px-2 py-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 dark:text-gray-400">Heure d'arrivée employé</label>
+                        <input
+                          type="time"
+                          value={attActualArrivalTime}
+                          onChange={e => setAttActualArrivalTime(e.target.value)}
+                          className="w-full px-2 py-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-[11px] font-bold text-amber-700 dark:text-amber-300 flex items-center justify-between pt-1">
+                      <span>Retard à l'arrivée calculé :</span>
+                      <span className="px-2 py-0.5 bg-amber-200 dark:bg-amber-900 rounded-lg">
+                        {liveArrivalDelay > 0 ? `+${liveArrivalDelay} min` : '0 min (À l\'heure)'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Departure calculation section */}
+                  <div className="p-3 bg-purple-50/60 dark:bg-purple-950/30 rounded-2xl border border-purple-200 dark:border-purple-900/50 space-y-2">
+                    <span className="text-xs font-black text-purple-800 dark:text-purple-200 block">2. Pointage de Fin de Service (Descente)</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 dark:text-gray-400">Heure descente travail</label>
+                        <input
+                          type="time"
+                          value={attOfficialEndTime}
+                          onChange={e => setAttOfficialEndTime(e.target.value)}
+                          className="w-full px-2 py-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 dark:text-gray-400">Heure descente employé</label>
+                        <input
+                          type="time"
+                          value={attActualDepartureTime}
+                          onChange={e => setAttActualDepartureTime(e.target.value)}
+                          className="w-full px-2 py-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-[11px] font-bold text-purple-700 dark:text-purple-300 flex items-center justify-between pt-1">
+                      <span>Retard à la descente / Départ précoce :</span>
+                      <span className="px-2 py-0.5 bg-purple-200 dark:bg-purple-900 rounded-lg">
+                        {liveDepartureDelay > 0 ? `+${liveDepartureDelay} min` : '0 min (Conforme)'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Total Daily Delay Summary */}
+                  <div className="p-3 bg-orange-100 dark:bg-orange-950/60 rounded-2xl border border-orange-300 dark:border-orange-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-black text-orange-900 dark:text-orange-200 block">⏱️ Retard Global du Jour</span>
+                      <span className="text-[10px] text-orange-700 dark:text-orange-300">Cumul retard arrivée + descente</span>
+                    </div>
+                    <span className="text-sm font-black px-3 py-1 bg-orange-600 text-white rounded-xl shadow-sm">
+                      {liveGlobalDelay} min
+                    </span>
+                  </div>
+                </>
+              )}
+
               <div>
-                <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Justificatif textuel</label>
+                <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Justificatif / Remarque</label>
                 <input
                   type="text"
-                  placeholder="Ex: Panne de transport, embouteillage..."
+                  placeholder="Ex: Panne de transport, justificatif médical..."
                   value={attJustification}
                   onChange={e => setAttJustification(e.target.value)}
                   className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-900 dark:text-white"
@@ -1034,7 +1262,7 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
                 <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">URL Photo Justificative (Optionnel)</label>
                 <input
                   type="url"
-                  placeholder="https://images.unsplash.com/... (ou lien photo)"
+                  placeholder="https://... (lien photo)"
                   value={attPhotoUrl}
                   onChange={e => setAttPhotoUrl(e.target.value)}
                   className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium text-gray-900 dark:text-white"
@@ -1051,20 +1279,32 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
                     return;
                   }
                   try {
+                    const finalJust = attIsAbsent 
+                      ? `[ABSENCE] Motif: ${attAbsenceReason}${attJustification ? ' - ' + attJustification : ''}`
+                      : attJustification;
+
                     await createStaffAttendance({
                       establishmentId,
                       staffId: attStaffId,
                       date: attDate,
                       period: attPeriod,
-                      lateMinutes: Number(attLateMinutes) || 0,
-                      earlyDepartureMinutes: Number(attEarlyMinutes) || 0,
-                      justification: attJustification,
+                      officialStartTime: attOfficialStartTime,
+                      actualArrivalTime: attActualArrivalTime,
+                      arrivalDelayMinutes: liveArrivalDelay,
+                      officialEndTime: attOfficialEndTime,
+                      actualDepartureTime: attActualDepartureTime,
+                      departureDelayMinutes: liveDepartureDelay,
+                      totalDailyDelayMinutes: liveGlobalDelay,
+                      status: attIsAbsent ? 'absent' : (liveGlobalDelay > 0 ? 'retard' : 'present'),
+                      absenceReason: attIsAbsent ? attAbsenceReason : undefined,
+                      lateMinutes: liveArrivalDelay,
+                      earlyDepartureMinutes: liveDepartureDelay,
+                      justification: finalJust,
                       justificationPhotoUrl: attPhotoUrl
                     });
-                    setSuccessMsg("Pointage journalier et justificatif enregistrés avec succès (Notification envoyée au gérant) !");
+
+                    setSuccessMsg(attIsAbsent ? "Absence enregistrée et comptabilisée !" : `Pointage enregistré ! Retard global du jour : ${liveGlobalDelay} minutes.`);
                     setShowAddModal(false);
-                    setAttLateMinutes('0');
-                    setAttEarlyMinutes('0');
                     setAttJustification('');
                     setAttPhotoUrl('');
                     setErrorMsg(null);
@@ -1076,7 +1316,7 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
                 }}
                 className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl text-xs transition-all cursor-pointer shadow-sm"
               >
-                Enregistrer
+                Valider & Enregistrer
               </button>
               <button
                 type="button"

@@ -7,12 +7,13 @@ import { FavoritesView } from './views/FavoritesView';
 import { RecruitmentsView } from './views/RecruitmentsView';
 import { ProfileView } from './views/ProfileView';
 import { MessagesView } from './views/MessagesView';
+import { HelpView } from './views/HelpView';
 import { AppProvider, useAppStore } from './store';
 import { Toast } from './components/Toast';
 import { BackToTop } from './components/BackToTop';
 import { InstallPrompt } from './components/InstallPrompt';
 import { requestNotificationPermission, sendPushNotification } from './utils/pushNotifications';
-import { Database, Copy, Check, AlertTriangle } from 'lucide-react';
+import { Database, Copy, Check, AlertTriangle, WifiOff, HardDrive } from 'lucide-react';
 
 function AppContent() {
   const [currentTab, setCurrentTab] = useState<Tab>('home');
@@ -21,7 +22,7 @@ function AppContent() {
   const [preselectedConvId, setPreselectedConvId] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
 
-  const { currentUser, loading, reservations, missingTables, setGlobalError } = useAppStore();
+  const { currentUser, loading, reservations, missingTables, setGlobalError, isOffline, offlineCachedCount } = useAppStore();
 
   const handleCopySQL = async () => {
     try {
@@ -160,7 +161,18 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gray-50/50 dark:bg-gray-900 font-sans text-gray-900 dark:text-gray-100 selection:bg-orange-100 selection:text-orange-900 pb-safe">
-      <TopBar />
+      <TopBar onNavigate={setCurrentTab} />
+
+      {isOffline && (
+        <div className="bg-amber-600 text-white px-4 py-2 text-xs font-semibold flex items-center justify-between shadow-sm animate-pulse">
+          <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
+            <WifiOff className="w-4 h-4 shrink-0" />
+            <span>
+              Mode Hors-Ligne actif — Les établissements sont chargés et consultables directement depuis le stockage IndexedDB ({offlineCachedCount} établissements en cache).
+            </span>
+          </div>
+        </div>
+      )}
       
       {missingTables && missingTables.length > 0 && (
         <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-800/50 p-4">
@@ -228,6 +240,7 @@ function AppContent() {
           />
         )}
         {currentTab === 'profile' && <ProfileView onNavigate={setCurrentTab} onStartChatWithConv={handleStartChatWithConv} />}
+        {currentTab === 'help' && <HelpView onNavigate={setCurrentTab} />}
       </main>
 
       <BackToTop />

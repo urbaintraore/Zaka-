@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../store';
 import { Tab } from '../components/BottomNav';
-import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight, Eye, Trophy, TrendingUp, Award, Clock, Share2, AlertCircle, BookOpen, Phone, SlidersHorizontal, Navigation, Compass, Loader2, Wine } from 'lucide-react';
+import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight, Eye, Trophy, TrendingUp, Award, Clock, Share2, AlertCircle, BookOpen, Phone, SlidersHorizontal, Navigation, Compass, Loader2, Wine, Search } from 'lucide-react';
 import { stripHtml } from '../utils/htmlHelpers';
+import { shareContent } from '../utils/platform';
 import { ReservationModal } from '../components/ReservationModal';
 import { Publication, Establishment } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
@@ -200,8 +201,9 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
   const [activePubTab, setActivePubTab] = useState<'info' | 'photos' | 'wall'>('info');
   const [mapCategory, setMapCategory] = useState<string>('Tous');
 
-  // Establishment Category & Sorting State
+  // Establishment Category, Search & Sorting State
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'popular' | 'rating' | 'proximity' | 'now'>('popular');
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [isLocating, setIsLocating] = useState(false);
@@ -730,9 +732,25 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
 
   const topEstablishments = sortedEstablishments;
 
-  const filteredEstablishments = filterMemberOnly
-    ? sortedEstablishments.filter(e => joinedEstIds.includes(e.id))
-    : topEstablishments;
+  const filteredEstablishments = topEstablishments.filter(e => {
+    if (filterMemberOnly && !joinedEstIds.includes(e.id)) {
+      return false;
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const nameMatch = (e.name || '').toLowerCase().includes(q);
+      const descMatch = (e.description || '').toLowerCase().includes(q);
+      const neighborhoodMatch = (e.neighborhood || e.quarter || '').toLowerCase().includes(q);
+      const cityMatch = (e.city || '').toLowerCase().includes(q);
+      const categoryMatch = (e.category || '').toLowerCase().replace(/_/g, ' ').includes(q);
+      const tagMatch = (e.tags || []).some(t => t.toLowerCase().includes(q));
+
+      if (!nameMatch && !descMatch && !neighborhoodMatch && !cityMatch && !categoryMatch && !tagMatch) {
+        return false;
+      }
+    }
+    return true;
+  });
 
   // Calendar helpers
   const MONTHS_FR = [
@@ -1689,6 +1707,29 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
             </div>
           </div>
 
+          {/* Text Search Bar for Establishments */}
+          <div className="relative mb-3">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+              <Search className="w-4 h-4 text-orange-500" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Rechercher par nom, description, quartier, spécialité..."
+              className="w-full pl-10 pr-10 py-3 bg-white rounded-2xl border border-gray-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-xs sm:text-sm font-medium outline-none transition-all shadow-xs placeholder:text-gray-400"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                title="Effacer la recherche"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
           {/* Type Filter Bar (Maquis, Restaurant, Bar, Boîte de nuit) */}
           <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm mb-4">
             <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 px-0.5">
@@ -1724,21 +1765,33 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                   <Users className="w-6 h-6 text-orange-500" />
                 </div>
                 <h3 className="text-sm font-bold text-gray-900 mb-1">
-                  {filterMemberOnly ? "Aucun club membre" : "Aucun établissement trouvé"}
+                  {searchQuery ? `Aucun établissement trouvé pour "${searchQuery}"` : filterMemberOnly ? "Aucun club membre" : "Aucun établissement trouvé"}
                 </h3>
                 <p className="text-xs text-gray-500 leading-relaxed max-w-xs mx-auto">
-                  {filterMemberOnly 
-                    ? "Vous n'avez pas encore rejoint d'établissement. Allez dans l'onglet Explorer pour demander l'adhésion !"
-                    : "Essayez de sélectionner une autre catégorie ou de désactiver les filtres."}
+                  {searchQuery 
+                    ? "Vérifiez l'orthographe ou tentez une recherche plus large."
+                    : filterMemberOnly 
+                      ? "Vous n'avez pas encore rejoint d'établissement. Allez dans l'onglet Explorer pour demander l'adhésion !"
+                      : "Essayez de sélectionner une autre catégorie ou de désactiver les filtres."}
                 </p>
-                {selectedCategory !== 'all' && (
-                  <button
-                    onClick={() => setSelectedCategory('all')}
-                    className="mt-3 px-4 py-1.5 rounded-full bg-orange-600 text-white font-bold text-xs"
-                  >
-                    Voir tous les établissements
-                  </button>
-                )}
+                <div className="flex items-center justify-center gap-2 mt-3">
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="px-4 py-1.5 rounded-full bg-orange-100 text-orange-700 hover:bg-orange-200 font-bold text-xs transition-colors"
+                    >
+                      Effacer la recherche
+                    </button>
+                  )}
+                  {selectedCategory !== 'all' && (
+                    <button
+                      onClick={() => setSelectedCategory('all')}
+                      className="px-4 py-1.5 rounded-full bg-orange-600 text-white font-bold text-xs"
+                    >
+                      Voir tous les établissements
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               filteredEstablishments.map(est => {
@@ -1765,26 +1818,44 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                          </div>
                        )}
 
-                       {/* Favorite quick toggle on card image */}
-                       <button
-                         onClick={async (e) => {
-                           e.stopPropagation();
-                           if (!currentUser) {
-                             setGlobalError({ message: "Veuillez vous connecter pour sauvegarder vos lieux favoris.", type: "info" });
-                             return;
-                           }
-                           await toggleFavorite(currentUser.id, est.id);
-                         }}
-                         className={`absolute top-3 right-3 p-2 rounded-full backdrop-blur-md transition-all active:scale-90 ${
-                           isFav 
-                             ? "bg-red-500 text-white shadow-md" 
-                             : "bg-black/40 hover:bg-black/60 text-white"
-                         }`}
-                         aria-label={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
-                         title={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
-                       >
-                         <Heart className={`w-4 h-4 ${isFav ? "fill-white text-white" : "text-white"}`} />
-                       </button>
+                       {/* Quick action buttons on card image (Share & Favorite) */}
+                       <div className="absolute top-3 right-3 flex items-center gap-2">
+                         <button
+                           onClick={async (e) => {
+                             e.stopPropagation();
+                             await shareContent({
+                               title: `${est.name} - Zaka+`,
+                               text: `Découvrez ${est.name} (${est.neighborhood || est.city || 'Ouagadougou'}) sur Zaka+ !`,
+                               url: `${window.location.origin}/#est-${est.id}`
+                             });
+                           }}
+                           className="p-2 rounded-full backdrop-blur-md bg-black/40 hover:bg-black/60 text-white transition-all active:scale-90"
+                           aria-label="Partager cet établissement"
+                           title="Partager cet établissement"
+                         >
+                           <Share2 className="w-4 h-4 text-white" />
+                         </button>
+
+                         <button
+                           onClick={async (e) => {
+                             e.stopPropagation();
+                             if (!currentUser) {
+                               setGlobalError({ message: "Veuillez vous connecter pour sauvegarder vos lieux favoris.", type: "info" });
+                               return;
+                             }
+                             await toggleFavorite(currentUser.id, est.id);
+                           }}
+                           className={`p-2 rounded-full backdrop-blur-md transition-all active:scale-90 ${
+                             isFav 
+                               ? "bg-red-500 text-white shadow-md" 
+                               : "bg-black/40 hover:bg-black/60 text-white"
+                           }`}
+                           aria-label={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+                           title={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+                         >
+                           <Heart className={`w-4 h-4 ${isFav ? "fill-white text-white" : "text-white"}`} />
+                         </button>
+                       </div>
                     </div>
                     <div className="p-4 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
                       <div className="flex flex-col justify-center flex-1 min-w-0">
@@ -1810,6 +1881,23 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                       </div>
 
                       <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
+                        {/* Explicit 'Partager' button on each card */}
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await shareContent({
+                              title: `${est.name} - Zaka+`,
+                              text: `Découvrez ${est.name} (${est.neighborhood || est.city || 'Ouagadougou'}) sur Zaka+ !`,
+                              url: `${window.location.origin}/#est-${est.id}`
+                            });
+                          }}
+                          className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-700 font-bold text-xs px-3 py-2 rounded-xl transition-all flex-shrink-0"
+                          title="Partager la fiche établissement"
+                        >
+                          <Share2 className="w-3.5 h-3.5 text-gray-500" />
+                          <span>Partager</span>
+                        </button>
+
                         {/* Explicit 'Ajouter aux favoris' button on each card */}
                         <button
                           onClick={async (e) => {

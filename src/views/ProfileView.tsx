@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
 import { Role, Category, CATEGORIES_LIST, getCategoryLabel } from '../types';
-import { LogOut, User, Check, X, MessageSquare, Store, Sparkles, Calendar, Download, Star, Megaphone, ShoppingBag } from 'lucide-react';
+import { LogOut, User, Check, X, MessageSquare, Store, Sparkles, Calendar, Download, Star, Megaphone, ShoppingBag, Sun, Moon, Laptop, FileSpreadsheet } from 'lucide-react';
 import { GerantDashboard } from './GerantDashboard';
 import { AdminDashboard } from './AdminDashboard';
 import { EntrepriseDashboard } from './EntrepriseDashboard';
@@ -11,7 +11,10 @@ import { useInstallApp } from '../hooks/useInstallApp';
 import { PersonalTimelineAndRecs } from '../components/PersonalTimelineAndRecs';
 import { FriendsModule } from '../components/FriendsModule';
 import { AdExpressWizard } from '../components/AdExpressWizard';
+import { ManagerReservationsChart } from '../components/ManagerReservationsChart';
+import { RateVisitedEstablishmentModal } from '../components/RateVisitedEstablishmentModal';
 import { Zap, Rocket } from 'lucide-react';
+import { exportReservationsToCSV } from '../utils/exportReservationsCsv';
 
 interface ProfileViewProps {
   onNavigate?: (tab: any) => void;
@@ -39,6 +42,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
     updateRelationshipRequest,
     createConversation,
     theme,
+    setTheme,
     toggleTheme,
     applications
   } = useAppStore();
@@ -52,6 +56,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   const [showAdsDashboard, setShowAdsDashboard] = useState(false);
   const [showExpressAdsModal, setShowExpressAdsModal] = useState(false);
   const [showCashierTerminal, setShowCashierTerminal] = useState(false);
+  const [ratingModalEst, setRatingModalEst] = useState<{ id: string; name: string } | null>(null);
 
   // Profile editing state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -501,9 +506,84 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                         >
                           Modifier le profil
                         </button>
-                        <button onClick={toggleTheme} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer">
-                          {theme === 'dark' ? '☀️ Mode Clair' : '🌙 Mode Sombre'}
+
+                        {/* Exportation des Statistiques CSV pour Gérant */}
+                        <button
+                          type="button"
+                          onClick={() => exportReservationsToCSV({
+                            reservations,
+                            establishments,
+                            managerEstablishmentIds: establishments.filter(e => e.ownerId === currentUser.id).map(e => e.id),
+                            managerName: currentUser.name
+                          })}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold rounded-xl border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors cursor-pointer shadow-xs active:scale-[0.99]"
+                        >
+                          <FileSpreadsheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                          <span>Exporter les statistiques de réservations (CSV)</span>
                         </button>
+
+                        {/* Paramètres d'Apparence & Forçage Manuel du Thème */}
+                        <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-3.5 flex flex-col gap-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                              {theme === 'dark' ? <Moon className="w-3.5 h-3.5 text-orange-500" /> : <Sun className="w-3.5 h-3.5 text-orange-500" />}
+                              Thème d'affichage
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                              {localStorage.getItem('app-theme') === 'light' ? '☀️ Forcé Clair' : localStorage.getItem('app-theme') === 'dark' ? '🌙 Forcé Sombre' : '⚙️ Auto (Système)'}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-1 bg-gray-200/80 dark:bg-gray-800 p-1 rounded-xl">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                localStorage.setItem('app-theme', 'light');
+                                setTheme('light');
+                              }}
+                              className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                localStorage.getItem('app-theme') === 'light'
+                                  ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                              }`}
+                            >
+                              <Sun className="w-3 h-3" />
+                              <span>Clair</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                localStorage.setItem('app-theme', 'dark');
+                                setTheme('dark');
+                              }}
+                              className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                localStorage.getItem('app-theme') === 'dark'
+                                  ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                              }`}
+                            >
+                              <Moon className="w-3 h-3" />
+                              <span>Sombre</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                localStorage.removeItem('app-theme');
+                                const systemTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                                setTheme(systemTheme);
+                              }}
+                              className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                localStorage.getItem('app-theme') === null
+                                  ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                              }`}
+                            >
+                              <Laptop className="w-3 h-3" />
+                              <span>Auto</span>
+                            </button>
+                          </div>
+                        </div>
+
                         <button onClick={logout} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition-colors cursor-pointer">
                           <LogOut className="w-5 h-5" />
                           Déconnexion
@@ -608,6 +688,8 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                     </form>
                   )}
                 </div>
+                {/* Visualisation Recharts des réservations par mois */}
+                <ManagerReservationsChart />
                 <FriendsModule />
               </div>
             )}
@@ -823,55 +905,85 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                     </ol>
                   </div>
                 )}
-                {/* Thème avec sélection Manuelle / Auto */}
-                <div className="flex flex-col gap-1.5 w-full">
-                  <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-750">
+                {((currentUser.role as any) === 'gerant' || (currentUser.role as any) === 'admin' || (currentUser.role as any) === 'salon_coiffure') && (
+                  <button
+                    type="button"
+                    onClick={() => exportReservationsToCSV({
+                      reservations,
+                      establishments,
+                      managerEstablishmentIds: establishments.filter(e => e.ownerId === currentUser.id).map(e => e.id),
+                      managerName: currentUser.name
+                    })}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold rounded-xl border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors cursor-pointer shadow-xs active:scale-[0.99]"
+                  >
+                    <FileSpreadsheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                    <span>Exporter mes statistiques de réservations (CSV)</span>
+                  </button>
+                )}
+
+                {/* Paramètres d'Apparence & Forçage Manuel du Thème */}
+                <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-3.5 flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                      {theme === 'dark' ? <Moon className="w-3.5 h-3.5 text-orange-500" /> : <Sun className="w-3.5 h-3.5 text-orange-500" />}
+                      Thème d'affichage
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                      {localStorage.getItem('app-theme') === 'light' ? '☀️ Forcé Clair' : localStorage.getItem('app-theme') === 'dark' ? '🌙 Forcé Sombre' : '⚙️ Auto (Système)'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1 bg-gray-200/80 dark:bg-gray-800 p-1 rounded-xl">
                     <button
                       type="button"
                       onClick={() => {
                         localStorage.setItem('app-theme', 'light');
-                        if (theme === 'dark') toggleTheme();
+                        setTheme('light');
                       }}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         localStorage.getItem('app-theme') === 'light'
                           ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
-                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                       }`}
                     >
-                      ☀️ Clair
+                      <Sun className="w-3 h-3" />
+                      <span>Clair</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => {
                         localStorage.setItem('app-theme', 'dark');
-                        if (theme === 'light') toggleTheme();
+                        setTheme('dark');
                       }}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         localStorage.getItem('app-theme') === 'dark'
                           ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
-                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                       }`}
                     >
-                      🌙 Sombre
+                      <Moon className="w-3 h-3" />
+                      <span>Sombre</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => {
                         localStorage.removeItem('app-theme');
                         const systemTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-                        if (theme !== systemTheme) {
-                          toggleTheme();
-                        }
+                        setTheme(systemTheme);
                       }}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         localStorage.getItem('app-theme') === null
                           ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
-                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                       }`}
                     >
-                      ⚙️ Auto
+                      <Laptop className="w-3 h-3" />
+                      <span>Auto</span>
                     </button>
                   </div>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                    Forcer manuellement le thème clair ou sombre indépendamment des réglages de votre système.
+                  </p>
                 </div>
                 <button onClick={logout} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition-colors cursor-pointer">
                   <LogOut className="w-5 h-5" />
@@ -1350,15 +1462,27 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                         </div>
                       )}
 
-                      {clientCanCancel && (
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                        {/* Rating & Review Button */}
                         <button
                           type="button"
-                          onClick={() => updateReservationStatus(res.id, 'annulee')}
-                          className="self-end text-[10px] font-black text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-350 hover:underline uppercase tracking-wide py-1 cursor-pointer"
+                          onClick={() => setRatingModalEst({ id: res.establishmentId, name: estDetail?.name || getEstablishmentName(res.establishmentId) })}
+                          className="flex items-center gap-1.5 text-xs font-bold text-amber-600 hover:text-amber-700 dark:text-amber-400 bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-950/40 px-3 py-1.5 rounded-xl transition-all cursor-pointer"
                         >
-                          Annuler la réservation
+                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                          <span>Noter ce lieu</span>
                         </button>
-                      )}
+
+                        {clientCanCancel && (
+                          <button
+                            type="button"
+                            onClick={() => updateReservationStatus(res.id, 'annulee')}
+                            className="text-[10px] font-black text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-350 hover:underline uppercase tracking-wide py-1 cursor-pointer"
+                          >
+                            Annuler la réservation
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -1533,6 +1657,15 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
           <AdExpressWizard
             isOpen={showExpressAdsModal}
             onClose={() => setShowExpressAdsModal(false)}
+          />
+        )}
+
+        {/* Modal Notation & Avis Visite */}
+        {ratingModalEst && (
+          <RateVisitedEstablishmentModal
+            isOpen={!!ratingModalEst}
+            initialEstablishmentId={ratingModalEst.id}
+            onClose={() => setRatingModalEst(null)}
           />
         )}
 

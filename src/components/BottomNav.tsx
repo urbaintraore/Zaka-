@@ -2,7 +2,7 @@ import { Home, Compass, Heart, Briefcase, User, MessageSquare } from 'lucide-rea
 import { cn } from '../lib/utils';
 import { useAppStore } from '../store';
 
-export type Tab = 'home' | 'explore' | 'favorites' | 'recruitments' | 'messages' | 'profile';
+export type Tab = 'home' | 'explore' | 'favorites' | 'recruitments' | 'messages' | 'profile' | 'help';
 
 interface BottomNavProps {
   currentTab: Tab;
