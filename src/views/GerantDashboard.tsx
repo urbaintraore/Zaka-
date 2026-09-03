@@ -17,6 +17,7 @@ import { CashierDashboard } from '../components/CashierDashboard';
 import { Sparkles, TrendingUp, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { AdExpressWizard } from '../components/AdExpressWizard';
 import { exportReservationsToCSV } from '../utils/exportReservationsCsv';
+import { ComptabiliteMensuelle } from '../components/ComptabiliteMensuelle';
 
 export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: { onLogout: () => void; onNavigate?: (tab: any) => void; onStartChatWithConv?: (convId: string) => void }) {
   const { 
@@ -46,7 +47,8 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
   const [reviewReplies, setReviewReplies] = useState<Record<string, string>>({});
 
   // Main View Section State for Managers
-  const [activeMainTab, setActiveMainTab] = useState<'etablissements' | 'frequentation' | 'reservations' | 'galerie'>('etablissements');
+  const [activeMainTab, setActiveMainTab] = useState<'etablissements' | 'comptabilite' | 'frequentation' | 'reservations' | 'galerie'>('etablissements');
+  const [selectedComptaEstId, setSelectedComptaEstId] = useState<string>('all');
   const [galleryActiveEstId, setGalleryActiveEstId] = useState<string | null>(null);
 
   // Restaurant Menu & Reservations modal states
@@ -522,6 +524,7 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
       <div className="flex bg-white dark:bg-gray-900 rounded-2xl p-1.5 gap-1 border border-gray-200 dark:border-gray-800 shadow-sm mb-6 overflow-x-auto hide-scrollbar">
         {[
           { id: 'etablissements', label: '🏢 Établissements', badge: myEsts.length },
+          { id: 'comptabilite', label: '📊 Comptabilité Simplifiée' },
           { id: 'frequentation', label: '⚡ Fréquentation & Stats' },
           { id: 'reservations', label: '📅 Réservations' },
           { id: 'galerie', label: '📸 Galeries Photos' },
@@ -1222,6 +1225,44 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
               />
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Comptabilité Mensuelle Simplifiée */}
+      {activeMainTab === 'comptabilite' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {myEsts.length > 1 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+              {myEsts.map(est => (
+                <button
+                  key={est.id}
+                  type="button"
+                  onClick={() => setSelectedComptaEstId(est.id)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    (selectedComptaEstId === 'all' ? myEsts[0]?.id : selectedComptaEstId) === est.id
+                      ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
+                      : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-800 hover:bg-gray-50'
+                  }`}
+                >
+                  <Store className="w-3.5 h-3.5" />
+                  <span>{est.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {myEsts
+            .filter(est => (selectedComptaEstId === 'all' ? est.id === myEsts[0]?.id : est.id === selectedComptaEstId))
+            .map(est => (
+              <ComptabiliteMensuelle key={est.id} establishment={est} />
+            ))}
+
+          {myEsts.length === 0 && (
+            <div className="text-center p-8 bg-white dark:bg-gray-950 rounded-3xl border border-gray-100 dark:border-gray-800">
+              <Store className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 font-medium">Vous devez enregistrer au moins un établissement pour utiliser la comptabilité mensuelle.</p>
+            </div>
+          )}
         </div>
       )}
         

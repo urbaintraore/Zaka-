@@ -1,8 +1,10 @@
-import { Establishment } from '../types';
+import { Establishment, User } from '../types';
 
 const DB_NAME = 'zaka_offline_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const ESTABLISHMENTS_STORE = 'establishments';
+const FAVORITES_STORE = 'favorites';
+const PROFILE_STORE = 'user_profile';
 const METADATA_STORE = 'metadata';
 
 /**
@@ -26,6 +28,16 @@ function openDB(): Promise<IDBDatabase> {
         estStore.createIndex('category', 'category', { unique: false });
         estStore.createIndex('status', 'status', { unique: false });
         estStore.createIndex('neighborhood', 'neighborhood', { unique: false });
+      }
+
+      // Create favorites store with 'userId' as keyPath
+      if (!db.objectStoreNames.contains(FAVORITES_STORE)) {
+        db.createObjectStore(FAVORITES_STORE, { keyPath: 'userId' });
+      }
+
+      // Create user profile store with 'id' as keyPath
+      if (!db.objectStoreNames.contains(PROFILE_STORE)) {
+        db.createObjectStore(PROFILE_STORE, { keyPath: 'id' });
       }
 
       // Create metadata store for tracking sync times and status
@@ -113,6 +125,104 @@ export async function getEstablishmentsFromIndexedDB(): Promise<Establishment[]>
 }
 
 /**
+ * Saves favorite establishment IDs for a specific user into IndexedDB.
+ */
+export async function saveFavoritesToIndexedDB(userId: string, favoriteIds: string[]): Promise<void> {
+  if (!userId) return;
+
+  try {
+    const db = await openDB();
+    const tx = db.transaction(FAVORITES_STORE, 'readwrite');
+    const store = tx.objectStore(FAVORITES_STORE);
+    store.put({ userId, favoriteIds, updatedAt: new Date().toISOString() });
+
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn('[IndexedDB] Échec de la sauvegarde des favoris :', err);
+  }
+}
+
+/**
+ * Retrieves cached favorite establishment IDs for a specific user from IndexedDB.
+ */
+export async function getFavoritesFromIndexedDB(userId: string): Promise<string[]> {
+  if (!userId) return [];
+
+  try {
+    const db = await openDB();
+    const tx = db.transaction(FAVORITES_STORE, 'readonly');
+    const store = tx.objectStore(FAVORITES_STORE);
+    const request = store.get(userId);
+
+    return new Promise((resolve) => {
+      request.onsuccess = () => {
+        const result = request.result;
+        resolve(result?.favoriteIds || []);
+      };
+      request.onerror = () => resolve([]);
+    });
+  } catch (err) {
+    console.warn('[IndexedDB] Échec de la lecture des favoris :', err);
+    return [];
+  }
+}
+
+/**
+ * Saves user profile info into IndexedDB for offline access.
+ */
+export async function saveUserProfileToIndexedDB(user: User): Promise<void> {
+  if (!user || !user.id) return;
+
+  try {
+    const db = await openDB();
+    const tx = db.transaction(PROFILE_STORE, 'readwrite');
+    const store = tx.objectStore(PROFILE_STORE);
+    store.put({ ...user, updatedAt: new Date().toISOString() });
+
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn('[IndexedDB] Échec de la sauvegarde du profil :', err);
+  }
+}
+
+/**
+ * Retrieves cached user profile info from IndexedDB by user ID or get latest user.
+ */
+export async function getUserProfileFromIndexedDB(userId?: string): Promise<User | null> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(PROFILE_STORE, 'readonly');
+    const store = tx.objectStore(PROFILE_STORE);
+
+    if (userId) {
+      const request = store.get(userId);
+      return new Promise((resolve) => {
+        request.onsuccess = () => resolve((request.result as User) || null);
+        request.onerror = () => resolve(null);
+      });
+    } else {
+      const request = store.getAll();
+      return new Promise((resolve) => {
+        request.onsuccess = () => {
+          const results = request.result as User[];
+          resolve(results && results.length > 0 ? results[results.length - 1] : null);
+        };
+        request.onerror = () => resolve(null);
+      });
+    }
+  } catch (err) {
+    console.warn('[IndexedDB] Échec de la lecture du profil :', err);
+    return null;
+  }
+}
+
+/**
  * Returns the offline cache status (number of establishments and last sync date).
  */
 export async function getOfflineCacheMetadata(): Promise<{ count: number; lastSyncedAt: string | null }> {
@@ -148,8 +258,10 @@ export async function getOfflineCacheMetadata(): Promise<{ count: number; lastSy
 export async function clearOfflineIndexedDB(): Promise<void> {
   try {
     const db = await openDB();
-    const tx = db.transaction([ESTABLISHMENTS_STORE, METADATA_STORE], 'readwrite');
+    const tx = db.transaction([ESTABLISHMENTS_STORE, FAVORITES_STORE, PROFILE_STORE, METADATA_STORE], 'readwrite');
     tx.objectStore(ESTABLISHMENTS_STORE).clear();
+    tx.objectStore(FAVORITES_STORE).clear();
+    tx.objectStore(PROFILE_STORE).clear();
     tx.objectStore(METADATA_STORE).clear();
 
     return new Promise((resolve, reject) => {
@@ -163,3 +275,4 @@ export async function clearOfflineIndexedDB(): Promise<void> {
     console.warn('[IndexedDB] Erreur lors de la purge du cache :', err);
   }
 }
+

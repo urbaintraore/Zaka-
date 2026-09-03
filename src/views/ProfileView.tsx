@@ -14,6 +14,7 @@ import { AdExpressWizard } from '../components/AdExpressWizard';
 import { ManagerReservationsChart } from '../components/ManagerReservationsChart';
 import { RateVisitedEstablishmentModal } from '../components/RateVisitedEstablishmentModal';
 import { Zap, Rocket } from 'lucide-react';
+import { AccountingView } from '../components/AccountingView';
 import { exportReservationsToCSV } from '../utils/exportReservationsCsv';
 
 interface ProfileViewProps {
@@ -50,7 +51,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [role, setRole] = useState<Role>('client');
   const [isUpgrading, setIsUpgrading] = useState(false);
-  const [subView, setSubView] = useState<'dashboard' | 'profile'>('dashboard');
+  const [subView, setSubView] = useState<'dashboard' | 'profile' | 'accounting'>('dashboard');
   const [resActiveTab, setResActiveTab] = useState<'current' | 'history'>('current');
   const [ordersActiveTab, setOrdersActiveTab] = useState<'current' | 'history'>('current');
   const [showAdsDashboard, setShowAdsDashboard] = useState(false);
@@ -460,6 +461,15 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               </button>
               <button 
                 onClick={() => {
+                  setSubView('accounting');
+                  setIsEditingProfile(false);
+                }}
+                className={`flex-1 py-4 text-center font-bold text-sm border-b-2 transition-all ${subView === 'accounting' ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+              >
+                📊 Comptabilité
+              </button>
+              <button 
+                onClick={() => {
                   setSubView('profile');
                   setEditName(currentUser.name || '');
                   setEditCity(currentUser.city || '');
@@ -483,6 +493,8 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               ) : (
                 <GerantDashboard onLogout={logout} onNavigate={onNavigate} onStartChatWithConv={onStartChatWithConv} />
               )
+            ) : subView === 'accounting' ? (
+              <AccountingView onBack={() => setSubView('dashboard')} />
             ) : (
               <div className="p-4 max-w-lg mx-auto flex flex-col gap-6">
                 {/* Profile Card */}
@@ -505,6 +517,16 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                           className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors cursor-pointer shadow-md shadow-orange-600/10"
                         >
                           Modifier le profil
+                        </button>
+
+                        {/* Accès Direct Vue Comptabilité pour Gérant */}
+                        <button
+                          type="button"
+                          onClick={() => setSubView('accounting')}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 font-bold rounded-xl border border-orange-200 dark:border-orange-800 hover:bg-orange-100 transition-colors cursor-pointer shadow-xs active:scale-[0.99]"
+                        >
+                          <FileSpreadsheet className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                          <span>Consulter la Comptabilité Mensuelle</span>
                         </button>
 
                         {/* Exportation des Statistiques CSV pour Gérant */}

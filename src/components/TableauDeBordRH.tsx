@@ -204,6 +204,10 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
   });
 
   // Performance indicators
+  const estStaffReviews = staffReviews.filter(r => r.establishmentId === establishmentId);
+  const avgStaffRating = estStaffReviews.length > 0 
+    ? (estStaffReviews.reduce((sum, r) => sum + r.rating, 0) / estStaffReviews.length).toFixed(1)
+    : '5.0';
   const totalGlobalLateMinutes = monthAttendances.reduce((acc, curr) => acc + (curr.totalDailyDelayMinutes ?? ((curr.arrivalDelayMinutes ?? curr.lateMinutes ?? 0) + (curr.departureDelayMinutes ?? curr.earlyDepartureMinutes ?? 0))), 0);
   const totalAbsencesMonth = monthAttendances.filter(a => a.status === 'absent' || a.justification?.startsWith('[ABSENCE]')).length;
 
@@ -792,14 +796,14 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
             <p className="text-xs text-gray-400">Validez ou invalidez les avis laissés par les clients et notez directement les employés.</p>
           </div>
 
-          {estReviews.length === 0 ? (
+          {estStaffReviews.length === 0 ? (
             <div className="p-10 bg-gray-50 dark:bg-gray-800/40 rounded-2xl text-center space-y-2">
               <Star className="w-10 h-10 text-gray-300 mx-auto" />
               <p className="text-xs font-bold text-gray-400">Aucun avis client enregistré pour le personnel de cet établissement.</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {estReviews.map(rev => {
+              {estStaffReviews.map(rev => {
                 const clientObj = users.find(u => u.id === rev.clientId);
                 const staffObj = users.find(u => u.id === rev.staffId);
 

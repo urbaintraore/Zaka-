@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting, Friendship, AdOrganization, AdAuditLog, AdRateConfig, AdSupportTicket, AdCreative, TakeawayOrder, StockItem, SaleRecord, StockReception, StockInventory } from './types';
 import { triggerHapticFeedback } from './utils/haptics';
 import { supabase, isSupabaseConfigured } from './lib/supabaseClient';
-import { saveEstablishmentsToIndexedDB, getEstablishmentsFromIndexedDB, getOfflineCacheMetadata } from './utils/offlineIndexedDB';
+import { saveEstablishmentsToIndexedDB, getEstablishmentsFromIndexedDB, getOfflineCacheMetadata, saveFavoritesToIndexedDB, getFavoritesFromIndexedDB, saveUserProfileToIndexedDB, getUserProfileFromIndexedDB } from './utils/offlineIndexedDB';
 
 // Firebase-to-Supabase Compatibility Layer
 export const auth: any = {
@@ -1147,6 +1147,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
               if (profile && !error) {
                 console.log("[Supabase Auth] Profil utilisateur hydraté depuis Supabase :", profile.name, "Rôle:", profile.role);
+                saveUserProfileToIndexedDB(profile as User).catch(e => console.warn('[IndexedDB] Profile save notice:', e));
                 setState(s => ({
                   ...s,
                   currentUser: profile as User,
@@ -1211,6 +1212,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 }
                 
                 await supabase.from('users').upsert(newProfile, { onConflict: 'id' });
+                saveUserProfileToIndexedDB(newProfile as User).catch(e => console.warn('[IndexedDB] Profile save notice:', e));
                 setState(s => ({
                   ...s,
                   currentUser: newProfile as User,
@@ -1219,6 +1221,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
               }
             } catch (err) {
               console.error("[Supabase Auth] Erreur récupération profil :", err);
+              // Fallback to IndexedDB profile
+              try {
+                const cachedUser = await getUserProfileFromIndexedDB(session.user.id);
+                if (cachedUser) {
+                  console.log("[IndexedDB] Profil restauré hors-ligne :", cachedUser.name);
+                  setState(s => ({ ...s, currentUser: cachedUser, loading: false }));
+                  return;
+                }
+              } catch (idbErr) {
+                console.warn("[IndexedDB] Fallback profile error:", idbErr);
+              }
               setState(s => ({ ...s, loading: false }));
             }
           } else {
@@ -1587,6 +1600,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const data = docSnap.data();
         const establishmentIds = data?.establishmentIds || [];
         const tags = data?.tags || {};
+        saveFavoritesToIndexedDB(state.currentUser!.id, establishmentIds).catch(e => console.warn('[IndexedDB] Favorites save notice:', e));
         setState(s => ({
           ...s,
           favorites: {
@@ -1611,8 +1625,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         }));
       }
-    }, (error) => {
+    }, async (error) => {
       console.error("Erreur listening to favorites:", error);
+      try {
+        const cachedFavs = await getFavoritesFromIndexedDB(state.currentUser!.id);
+        if (cachedFavs && cachedFavs.length > 0) {
+          setState(s => ({
+            ...s,
+            favorites: {
+              ...s.favorites,
+              [state.currentUser!.id]: cachedFavs
+            }
+          }));
+        }
+      } catch (idbErr) {
+        console.warn("[IndexedDB] Fallback favorites notice:", idbErr);
+      }
     });
 
     // Listen to carnet_entrees
