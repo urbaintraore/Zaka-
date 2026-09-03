@@ -141,7 +141,37 @@ export const stockSalesService = {
 
     const saleDate = new Date().toISOString();
 
-    // 1. Décrémenter chaque article dans la table stocks
+    // Attempt RPC call first for server-side atomic stock & price validation
+    const itemsJson = sale.items.map(item => ({
+      id: item.stockId,
+      name: item.name,
+      quantity: item.quantity
+    }));
+
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('enregistrer_vente_securisee', {
+      p_establishment_id: sale.establishmentId,
+      p_items: itemsJson,
+      p_cashier_id: sale.cashierId,
+      p_payment_method: sale.mobileMoneyCode ? 'mobile' : 'cash'
+    });
+
+    if (!rpcErr && rpcData?.success) {
+      return {
+        id: rpcData.saleId || `sale-${Date.now()}`,
+        establishmentId: sale.establishmentId,
+        cashierId: sale.cashierId,
+        cashierName: sale.cashierName || 'Caissier',
+        items: sale.items,
+        totalAmount: rpcData.totalAmount || sale.totalAmount,
+        date: saleDate
+      };
+    }
+
+    if (rpcErr) {
+      console.warn('RPC enregistrer_vente_securisee indisponible ou échec, bascule sur la méthode standard :', rpcErr.message);
+    }
+
+    // Fallback standard process
     for (const item of sale.items) {
       const { data: stockRow, error: fetchErr } = await supabase
         .from('stocks')
@@ -170,7 +200,6 @@ export const stockSalesService = {
       }
     }
 
-    // 2. Insérer le reçu de vente dans la table ventes
     const salePayload = {
       establishmentId: sale.establishmentId,
       cashierId: sale.cashierId,
@@ -198,30 +227,11 @@ export const stockSalesService = {
       .single();
 
     if (insertSaleErr) {
-      console.error('Erreur Supabase insertion vente:', insertSaleErr);
+      console.error('Erreur Supabase insert sale:', insertSaleErr);
       throw insertSaleErr;
     }
 
-    return {
-      id: data.id,
-      establishmentId: data.establishmentId,
-      cashierId: data.cashierId,
-      cashierName: data.cashierName,
-      serverName: data.serverName,
-      tableNote: data.tableNote,
-      clientType: data.clientType,
-      items: data.items,
-      subtotalBoissons: data.subtotalBoissons ? Number(data.subtotalBoissons) : undefined,
-      subtotalCuisine: data.subtotalCuisine ? Number(data.subtotalCuisine) : undefined,
-      totalAchat: data.totalAchat ? Number(data.totalAchat) : undefined,
-      discountAmount: data.discountAmount ? Number(data.discountAmount) : 0,
-      totalAmount: Number(data.totalAmount),
-      paidAmount: data.paidAmount ? Number(data.paidAmount) : undefined,
-      changeAmount: data.changeAmount ? Number(data.changeAmount) : undefined,
-      avoirAmount: data.avoirAmount ? Number(data.avoirAmount) : undefined,
-      mobileMoneyCode: data.mobileMoneyCode,
-      date: data.date
-    };
+    return data || { id: `sale-${Date.now()}`, ...salePayload };
   },
 
   /**

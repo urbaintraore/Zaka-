@@ -2050,8 +2050,8 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                   {/* Detailed Description */}
                   <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
                     <h4 className="text-xs font-black uppercase text-gray-500 tracking-wider mb-2">Détails de l'Annonce</h4>
-                    <div className="text-gray-800 text-sm leading-relaxed prose prose-sm max-w-none">
-                      <div dangerouslySetInnerHTML={{ __html: selectedPub.description }} />
+                    <div className="text-gray-800 text-sm leading-relaxed whitespace-pre-line">
+                      {selectedPub.description}
                     </div>
                   </div>
 

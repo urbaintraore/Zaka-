@@ -115,7 +115,7 @@ export function RecruitmentsView({ onNavigate, onStartChatWithConv }: Recruitmen
               </div>
               <h3 className="font-bold text-gray-900 text-lg leading-tight mb-1">{job.title}</h3>
               <div className="font-bold text-orange-600 text-sm mb-3">{est?.name}</div>
-              <div className="text-gray-600 text-sm mb-5 leading-relaxed prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: job.description }}></div>
+              <div className="text-gray-600 text-sm mb-5 leading-relaxed whitespace-pre-line">{job.description}</div>
               
               <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-gray-400">
                 <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4"/> {est?.city}</span>
