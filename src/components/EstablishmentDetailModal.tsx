@@ -441,34 +441,38 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
             </div>
           )}
 
-          {/* Menu Fichiers et Images */}
-          {(establishment.menuPdfUrl || (establishment.menuImages && establishment.menuImages.length > 0)) && (
+          {/* Menu PDF */}
+          {establishment.menuPdfUrl && (
             <div className="p-4 bg-orange-50/20 dark:bg-orange-950/10 rounded-2xl border border-orange-100 dark:border-orange-900/30 space-y-3">
               <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide flex items-center gap-2">
                 <span>📖</span> La Carte & Menu
               </h3>
               
-              {establishment.menuPdfUrl && (
-                <a 
-                  href={establishment.menuPdfUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-xs font-bold text-orange-600 dark:text-orange-400 bg-white dark:bg-gray-900 p-3 rounded-xl border border-orange-200 dark:border-orange-800 shadow-sm hover:bg-orange-50 transition-colors"
-                >
-                  <FileText className="w-4 h-4" />
-                  Voir le Menu complet (PDF)
-                </a>
-              )}
+              <a 
+                href={establishment.menuPdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-xs font-bold text-orange-600 dark:text-orange-400 bg-white dark:bg-gray-900 p-3 rounded-xl border border-orange-200 dark:border-orange-800 shadow-sm hover:bg-orange-50 transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                Voir le Menu complet (PDF)
+              </a>
+            </div>
+          )}
 
-              {establishment.menuImages && establishment.menuImages.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto hide-scrollbar py-2">
-                  {establishment.menuImages.map((img, idx) => (
-                    <a key={idx} href={img} target="_blank" rel="noopener noreferrer" className="shrink-0 w-32 h-40 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800 shadow-sm cursor-pointer hover:opacity-90 transition-opacity">
-                      <img src={img} alt={`Menu ${idx + 1}`} className="w-full h-full object-cover" />
-                    </a>
-                  ))}
-                </div>
-              )}
+          {/* Photos de l'établissement */}
+          {establishment.menuImages && establishment.menuImages.length > 0 && (
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-3">
+              <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide flex items-center gap-2">
+                <span>📸</span> Photos de l'établissement
+              </h3>
+              <div className="flex gap-2 overflow-x-auto hide-scrollbar py-2">
+                {establishment.menuImages.map((img, idx) => (
+                  <a key={idx} href={img} target="_blank" rel="noopener noreferrer" className="shrink-0 w-32 h-32 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm cursor-pointer hover:opacity-90 transition-opacity">
+                    <img src={img} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" />
+                  </a>
+                ))}
+              </div>
             </div>
           )}
 

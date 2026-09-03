@@ -1899,9 +1899,8 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {mode === 'register' && !isOtpSent && (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mb-2 p-1.5 bg-gray-100/80 rounded-xl">
+              <div className="grid grid-cols-2 gap-1.5 mb-2 p-1.5 bg-gray-100/80 rounded-xl">
                 <button type="button" onClick={() => setRole('client')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'client' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>👤 Client</button>
-                <button type="button" onClick={() => setRole('caissier')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'caissier' ? 'bg-white shadow-sm text-orange-600 font-black' : 'text-gray-500 hover:text-gray-700'}`}>🛒 Caissier</button>
                 <button type="button" onClick={() => setRole('gerant')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'gerant' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>🏪 Gérant</button>
                 <button type="button" onClick={() => setRole('annonceur')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'annonceur' ? 'bg-white shadow-sm text-orange-600 font-extrabold' : 'text-gray-500 hover:text-gray-700'}`}>📢 Annonceur</button>
                 <button type="button" onClick={() => setRole('entreprise')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'entreprise' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>🏢 Entreprise</button>

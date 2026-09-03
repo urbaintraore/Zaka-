@@ -409,7 +409,7 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-gray-500 ml-1">Galerie d'images du Menu</label>
+            <label className="text-xs font-bold text-gray-500 ml-1">Photo de l'établissement (optionnel)</label>
             <input 
               type="file" 
               accept="image/*" 

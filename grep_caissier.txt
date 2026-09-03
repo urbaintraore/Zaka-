@@ -1,0 +1,6 @@
+216:      if (!r.isCaissier && r.requestedRole !== 'caissier') return false;
+223:    const isCashierUser = !isOwnerOrGerant && ((currentUser.role as any) === 'caissier' || isAssignedCashier || (currentUser as any).isCaissier === true);
+865:                  : `Compte ${(currentUser.role as any) === 'gerant' ? 'Gérant' : (currentUser.role as any) === 'admin' ? 'Administrateur' : (currentUser.role as any) === 'caissier' ? 'Caissier' : 'Client'}`
+885:                {!isAssignedCashier && (currentUser.role as any) !== 'caissier' && (
+1086:                  value={(currentUser.role as any) === 'gerant' ? 'Gérant' : (currentUser.role as any) === 'caissier' ? 'Caissier' : (currentUser.role as any) === 'admin' ? 'Administrateur' : 'Client'} 
+1904:                <button type="button" onClick={() => setRole('caissier')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'caissier' ? 'bg-white shadow-sm text-orange-600 font-black' : 'text-gray-500 hover:text-gray-700'}`}>🛒 Caissier</button>
