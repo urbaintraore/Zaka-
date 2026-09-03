@@ -528,6 +528,33 @@ export function ComptabiliteMensuelle({ establishment }: { establishment: Establ
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       
+      {/* ESTABLISHMENT LINKING BADGE BANNER */}
+      <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent p-4.5 rounded-3xl border border-orange-200 dark:border-orange-900/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-3.5">
+          <div className="p-3 bg-orange-600 text-white rounded-2xl shadow-sm shrink-0">
+            <Building2 className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 rounded-full text-[10px] font-black uppercase">
+                {establishment.category || 'Établissement'}
+              </span>
+              <span className="text-[11px] text-gray-400 font-medium">ID: {establishment.id}</span>
+            </div>
+            <h3 className="text-xl font-black text-gray-900 dark:text-white">
+              {establishment.name}
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {establishment.address || establishment.city || 'Burkina Faso'}
+            </p>
+          </div>
+        </div>
+        <div className="px-3.5 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl text-xs font-extrabold text-gray-700 dark:text-gray-200 flex items-center gap-2 self-stretch sm:self-auto justify-center shadow-2xs">
+          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+          <span>Comptabilité isolée & liée à cet établissement</span>
+        </div>
+      </div>
+
       {/* DISCLAIMER BANNER (LEGAL NOTICE BURKINA FASO) */}
       <div className="p-4 rounded-3xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 shadow-xs flex items-start gap-3">
         <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />

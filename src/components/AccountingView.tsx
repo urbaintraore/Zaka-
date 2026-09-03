@@ -90,18 +90,21 @@ export function AccountingView({ onBack }: AccountingViewProps) {
         </div>
 
         {/* Multi Establishment Picker if Gerant owns multiple */}
-        {myEsts.length > 1 && (
-          <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 no-scrollbar">
-            <span className="text-xs font-bold text-gray-400 shrink-0">Établissement :</span>
-            <div className="flex gap-1.5">
+        {myEsts.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+            <span className="text-xs font-bold text-gray-400 shrink-0 flex items-center gap-1">
+              <Building2 className="w-3.5 h-3.5 text-orange-500" />
+              Établissement ({myEsts.length}) :
+            </span>
+            <div className="flex gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 no-scrollbar">
               {myEsts.map(est => (
                 <button
                   key={est.id}
                   type="button"
                   onClick={() => setSelectedEstId(est.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                     activeEst?.id === est.id
-                      ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
+                      ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20 ring-2 ring-orange-400/50'
                       : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
                   }`}
                 >

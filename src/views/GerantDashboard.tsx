@@ -3,7 +3,7 @@ import { RichTextEditor } from '../components/RichTextEditor';
 import { ClientsAndRequests } from '../components/ClientsAndRequests';
 import { GerantAnalytics } from '../components/GerantAnalytics';
 import { useAppStore } from '../store';
-import { LogOut, Plus, Store, Eye, MousePointerClick, X, Megaphone, Calendar, Users, FileText, Image as ImageIcon, MessageSquare, Download, Settings, ChefHat, Scissors, Trash2, Star, Activity, ArrowRight, BarChart2, Zap, Rocket, ShieldAlert, FileSpreadsheet } from 'lucide-react';
+import { LogOut, Plus, Store, Eye, MousePointerClick, X, Megaphone, Calendar, Users, FileText, Image as ImageIcon, MessageSquare, Download, Settings, ChefHat, Scissors, Trash2, Star, Activity, ArrowRight, BarChart2, Zap, Rocket, ShieldAlert, FileSpreadsheet, Building2 } from 'lucide-react';
 import { Category, PubType, getCategoryLabel, CATEGORIES_LIST } from '../types';
 import { compressImage } from '../utils/imageCompressor';
 import { useInstallApp } from '../hooks/useInstallApp';
@@ -1231,23 +1231,31 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
       {/* Comptabilité Mensuelle Simplifiée */}
       {activeMainTab === 'comptabilite' && (
         <div className="space-y-6 animate-in fade-in duration-200">
-          {myEsts.length > 1 && (
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-              {myEsts.map(est => (
-                <button
-                  key={est.id}
-                  type="button"
-                  onClick={() => setSelectedComptaEstId(est.id)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-                    (selectedComptaEstId === 'all' ? myEsts[0]?.id : selectedComptaEstId) === est.id
-                      ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
-                      : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-800 hover:bg-gray-50'
-                  }`}
-                >
-                  <Store className="w-3.5 h-3.5" />
-                  <span>{est.name}</span>
-                </button>
-              ))}
+          {myEsts.length > 0 && (
+            <div className="bg-white dark:bg-gray-900 p-4 rounded-3xl border border-gray-200 dark:border-gray-800 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-orange-500" />
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                  Sélectionner un établissement ({myEsts.length}) :
+                </span>
+              </div>
+              <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 no-scrollbar">
+                {myEsts.map(est => (
+                  <button
+                    key={est.id}
+                    type="button"
+                    onClick={() => setSelectedComptaEstId(est.id)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                      (selectedComptaEstId === 'all' ? myEsts[0]?.id : selectedComptaEstId) === est.id
+                        ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20 ring-2 ring-orange-400/50'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Store className="w-3.5 h-3.5" />
+                    <span>{est.name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
