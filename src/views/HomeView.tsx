@@ -20,6 +20,7 @@ import { UserGuideModal } from '../components/UserGuideModal';
 import { CrowdStatusBadge } from '../components/CrowdStatusBadge';
 import { GroupOutingModal } from '../components/GroupOutingModal';
 import { AdExpressWizard } from '../components/AdExpressWizard';
+import { ImageChargementProgressif } from '../components/ImageChargementProgressif';
 import { Rocket, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -1420,8 +1421,8 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                   const imageUrl = event.imageUrl || 'https://images.unsplash.com/photo-1470229722913-7c090be5c520?auto=format&fit=crop&q=80&w=800';
                   return (
                     <div key={event.id} onClick={() => setSelectedPub(event)} className="min-w-[280px] w-[280px] snap-start bg-white rounded-3xl shadow-xs border border-gray-100 overflow-hidden group cursor-pointer hover:shadow-md hover:border-gray-200 transition-all">
-                      <div className="h-48 bg-gray-200 relative overflow-hidden">
-                        <img src={imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <div className="h-48 relative overflow-hidden">
+                        <ImageChargementProgressif src={imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                         <div className="absolute top-3 left-3 flex gap-1.5 items-center flex-wrap max-w-[90%]">
                           <span className="bg-red-500 text-white text-[10px] uppercase tracking-wider font-black px-3 py-1.5 rounded-lg shadow-xs">
@@ -1475,8 +1476,8 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                     const imageUrl = event.imageUrl || 'https://images.unsplash.com/photo-1470229722913-7c090be5c520?auto=format&fit=crop&q=80&w=800';
                     return (
                       <div key={event.id} onClick={() => setSelectedPub(event)} className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden group cursor-pointer hover:shadow-md hover:border-gray-200 transition-all flex flex-col">
-                        <div className="h-36 bg-gray-200 relative overflow-hidden flex-shrink-0">
-                          <img src={imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <div className="h-36 relative overflow-hidden flex-shrink-0">
+                          <ImageChargementProgressif src={imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                           <div className="absolute top-2.5 left-2.5 flex gap-1 items-center flex-wrap max-w-[90%]">
                             <span className="bg-red-500 text-white text-[9px] uppercase tracking-wider font-black px-2 py-1 rounded-md shadow-xs">
@@ -1802,7 +1803,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                 return (
                   <div key={est.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
                     <div className="h-36 relative">
-                       <img src={imageUrl} alt={est.name} className="w-full h-full object-cover" />
+                       <ImageChargementProgressif src={imageUrl} alt={est.name} className="w-full h-full object-cover" />
                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
                        <div className="absolute top-3 left-3">
                          <CrowdStatusBadge establishment={est} showControlForOwner={false} />
