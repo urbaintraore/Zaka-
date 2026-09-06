@@ -1,8 +1,10 @@
 import { useState, FormEvent } from 'react';
 import { useAppStore } from '../store';
-import { Heart, MapPin, MessageSquare, Calendar, Tag, Plus, X, Filter, Edit2, Trash2, Check } from 'lucide-react';
+import { Heart, MapPin, MessageSquare, Calendar, Tag, Plus, X, Filter, Edit2, Trash2, Check, Sparkles, Share2 } from 'lucide-react';
 import { ReservationModal } from '../components/ReservationModal';
+import { ShareFavoritesModal } from '../components/ShareFavoritesModal';
 import { AnimatePresence, motion } from 'motion/react';
+import { triggerHaptic } from '../utils/haptics';
 
 interface FavoritesViewProps {
   onStartChat?: (estId: string) => void;
@@ -48,24 +50,26 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
 
   // New Tag management states
   const [isManagingAllTags, setIsManagingAllTags] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [renamingTag, setRenamingTag] = useState<string | null>(null);
   const [renamedTagValue, setRenamedTagValue] = useState('');
 
-  if (!currentUser) {
+  const effectiveUserId = currentUser ? currentUser.id : 'guest';
+  const myFavIds = favorites[effectiveUserId] || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem(currentUser ? `zaka_favorites_${currentUser.id}` : 'zaka_local_favorites') || '[]') : []);
+  const myFavs = establishments.filter(e => myFavIds.includes(e.id));
+  const myTagsMap = favoriteTags[effectiveUserId] || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem(currentUser ? `zaka_favorite_tags_${currentUser.id}` : 'zaka_local_favorite_tags') || '{}') : {});
+
+  if (!currentUser && myFavs.length === 0) {
     return (
       <div className="p-4 text-center mt-12 max-w-sm mx-auto">
         <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
           <Heart className="w-10 h-10 text-gray-300 dark:text-gray-650" />
         </div>
-        <h2 className="text-xl font-black text-gray-900 dark:text-white mb-2">Connectez-vous</h2>
-        <p className="text-gray-500 dark:text-gray-400 font-medium">Pour sauvegarder vos établissements favoris et les retrouver facilement.</p>
+        <h2 className="text-xl font-black text-gray-900 dark:text-white mb-2">Aucun favori enregistré</h2>
+        <p className="text-gray-500 dark:text-gray-400 font-medium">Explorez les établissements et cliquez sur le cœur pour les sauvegarder même hors connexion.</p>
       </div>
     );
   }
-
-  const myFavIds = favorites[currentUser.id] || [];
-  const myFavs = establishments.filter(e => myFavIds.includes(e.id));
-  const myTagsMap = favoriteTags[currentUser.id] || {};
 
   // Find all unique tags used by this user to populate the filter row and suggestions
   const allUserTags = Array.from(
@@ -85,7 +89,11 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
   });
 
   const handleReservationSubmit = (data: { reservationType: string, date: string, time: string, guests: number, details: string }) => {
-    if (!currentUser || !reservationEst) return;
+    if (!reservationEst) return;
+    if (!currentUser) {
+      alert("Veuillez vous connecter pour envoyer une demande de réservation.");
+      return;
+    }
     const isAnniv = data.reservationType === 'anniversaire';
     createServiceRequest({
       clientId: currentUser.id,
@@ -100,7 +108,7 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
     const updatedTags = currentTags.includes(tag)
       ? currentTags.filter(t => t !== tag)
       : [...currentTags, tag];
-    updateFavoriteTags(currentUser.id, estId, updatedTags);
+    updateFavoriteTags(effectiveUserId, estId, updatedTags);
   };
 
   const handleAddCustomTag = (e: FormEvent) => {
@@ -111,7 +119,7 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
 
     const currentTags = myTagsMap[editingTagsEst.id] || [];
     if (!currentTags.includes(tag)) {
-      updateFavoriteTags(currentUser.id, editingTagsEst.id, [...currentTags, tag]);
+      updateFavoriteTags(effectiveUserId, editingTagsEst.id, [...currentTags, tag]);
     }
     setNewCustomTag('');
   };
@@ -119,7 +127,7 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
   const handleRemoveTag = (estId: string, tag: string) => {
     const currentTags = myTagsMap[estId] || [];
     const updatedTags = currentTags.filter(t => t !== tag);
-    updateFavoriteTags(currentUser.id, estId, updatedTags);
+    updateFavoriteTags(effectiveUserId, estId, updatedTags);
   };
 
   // Global rename of a tag across all favorites
@@ -139,7 +147,7 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
       }
     });
     
-    saveAllFavoriteTags(currentUser.id, updatedTagsMap);
+    saveAllFavoriteTags(effectiveUserId, updatedTagsMap);
     
     if (selectedTagFilter === oldTag) {
       setSelectedTagFilter(trimmedNew);
@@ -159,7 +167,7 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
       }
     });
     
-    saveAllFavoriteTags(currentUser.id, updatedTagsMap);
+    saveAllFavoriteTags(effectiveUserId, updatedTagsMap);
     
     if (selectedTagFilter === tagToDelete) {
       setSelectedTagFilter(null);
@@ -168,7 +176,37 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
 
   return (
     <div className="p-4 max-w-3xl mx-auto pb-24">
-      <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-4">Mes Favoris</h2>
+      {!currentUser && (
+        <div className="mb-4 p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-850 rounded-2xl flex items-center gap-3 text-amber-800 dark:text-amber-200 text-xs">
+          <Sparkles className="w-5 h-5 flex-shrink-0 text-amber-500" />
+          <div className="flex-1">
+            <span className="font-bold">Favoris locaux hors-ligne :</span> Vos établissements favoris sont sauvegardés sur cet appareil et restent accessibles à tout moment.
+          </div>
+        </div>
+      )}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-2xl font-black text-gray-900 dark:text-white">Mes Favoris</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">
+            {myFavs.length} lieu{myFavs.length > 1 ? 'x' : ''} enregistré{myFavs.length > 1 ? 's' : ''}
+          </p>
+        </div>
+
+        {myFavs.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic('light');
+              setIsShareModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs rounded-xl shadow-sm shadow-orange-500/20 transition-all cursor-pointer active:scale-95"
+            title="Partager toute ma liste de favoris"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>Partager la liste</span>
+          </button>
+        )}
+      </div>
       
       {/* Filters bar */}
       {myFavs.length > 0 && (
@@ -596,6 +634,14 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal Partage de tous les favoris */}
+      <ShareFavoritesModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        favorites={myFavs}
+        userName={currentUser?.name}
+      />
     </div>
   );
 }

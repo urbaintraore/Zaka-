@@ -1,15 +1,66 @@
 /**
- * Safe, cross-platform utility to trigger a tactile vibration (haptic feedback).
- * Wraps navigator.vibrate with error boundaries and feature detection.
- * 
- * @param pattern duration in ms (e.g. 50) or sequence of vibrations/pauses (e.g. [50, 30, 50])
+ * Haptic Feedback utility using Web Vibration API
  */
-export function triggerHapticFeedback(pattern: number | number[] = 50) {
-  if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    try {
-      navigator.vibrate(pattern);
-    } catch (e) {
-      console.warn('Haptic feedback not supported or blocked in this environment:', e);
+export type HapticType = 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error';
+
+export function triggerHaptic(type: HapticType = 'light'): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return false;
+  }
+
+  // Check for Vibration API support
+  if (!('vibrate' in navigator)) {
+    return false;
+  }
+
+  try {
+    switch (type) {
+      case 'light':
+        // Short subtle tap (15ms)
+        navigator.vibrate(15);
+        break;
+      case 'medium':
+        // Distinct standard tap (30ms)
+        navigator.vibrate(30);
+        break;
+      case 'heavy':
+        // Strong tactile pulse (60ms)
+        navigator.vibrate(60);
+        break;
+      case 'success':
+        // Positive double-tap confirmation pattern: tap - pause - stronger tap
+        navigator.vibrate([20, 60, 40]);
+        break;
+      case 'warning':
+        // Warning alert pattern: double pulse
+        navigator.vibrate([40, 50, 40]);
+        break;
+      case 'error':
+        // Error pattern: triple buzz
+        navigator.vibrate([60, 40, 60, 40, 80]);
+        break;
+      default:
+        navigator.vibrate(20);
     }
+    return true;
+  } catch (err) {
+    // Gracefully ignore devices that reject or throw on vibrate
+    return false;
   }
 }
+
+export function triggerHapticFeedback(pattern: number | number[] = 30): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return false;
+  }
+  if (!('vibrate' in navigator)) {
+    return false;
+  }
+  try {
+    navigator.vibrate(pattern);
+    return true;
+  } catch {
+    return false;
+  }
+}
+

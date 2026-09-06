@@ -16,6 +16,9 @@ import { RateVisitedEstablishmentModal } from '../components/RateVisitedEstablis
 import { Zap, Rocket } from 'lucide-react';
 import { AccountingView } from '../components/AccountingView';
 import { exportReservationsToCSV } from '../utils/exportReservationsCsv';
+import { UserReservationsCalendar } from '../components/UserReservationsCalendar';
+import { ThemeModeSelector } from '../components/ThemeModeSelector';
+import { UserEstablishmentPreferencesChart } from '../components/UserEstablishmentPreferencesChart';
 
 interface ProfileViewProps {
   onNavigate?: (tab: any) => void;
@@ -45,7 +48,8 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
     theme,
     setTheme,
     toggleTheme,
-    applications
+    applications,
+    favorites
   } = useAppStore();
   const { isInstallable, promptInstall } = useInstallApp();
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -53,6 +57,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [subView, setSubView] = useState<'dashboard' | 'profile' | 'accounting'>('dashboard');
   const [resActiveTab, setResActiveTab] = useState<'current' | 'history'>('current');
+  const [reservationViewMode, setReservationViewMode] = useState<'calendar' | 'list'>('calendar');
   const [ordersActiveTab, setOrdersActiveTab] = useState<'current' | 'history'>('current');
   const [showAdsDashboard, setShowAdsDashboard] = useState(false);
   const [showExpressAdsModal, setShowExpressAdsModal] = useState(false);
@@ -299,12 +304,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                         >
                           Modifier mes coordonnées
                         </button>
-                        <button 
-                          onClick={toggleTheme} 
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold rounded-xl hover:bg-gray-200 dark:hover:bg-gray-750 transition-colors cursor-pointer"
-                        >
-                          {theme === 'dark' ? '☀️ Mode Clair' : '🌙 Mode Sombre'}
-                        </button>
+                        <ThemeModeSelector className="w-full" showDescription={false} />
                         <button 
                           onClick={async () => { await logout(); }} 
                           className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 font-bold rounded-xl transition-colors cursor-pointer border border-red-200/60 dark:border-red-900/60"
@@ -545,62 +545,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                         </button>
 
                         {/* Paramètres d'Apparence & Forçage Manuel du Thème */}
-                        <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-3.5 flex flex-col gap-2.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
-                              {theme === 'dark' ? <Moon className="w-3.5 h-3.5 text-orange-500" /> : <Sun className="w-3.5 h-3.5 text-orange-500" />}
-                              Thème d'affichage
-                            </span>
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
-                              {localStorage.getItem('app-theme') === 'light' ? '☀️ Forcé Clair' : localStorage.getItem('app-theme') === 'dark' ? '🌙 Forcé Sombre' : '⚙️ Auto (Système)'}
-                            </span>
-                          </div>
-
-                          <div className="grid grid-cols-3 gap-1 bg-gray-200/80 dark:bg-gray-800 p-1 rounded-xl">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                localStorage.setItem('app-theme', 'light');
-                                setTheme('light');
-                              }}
-                              className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                localStorage.getItem('app-theme') === 'light'
-                                  ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
-                                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                              }`}
-                            >
-                              <Sun className="w-3 h-3" />
-                              <span>Clair</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                localStorage.setItem('app-theme', 'dark');
-                                setTheme('dark');
-                              }}
-                              className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                localStorage.getItem('app-theme') === 'dark'
-                                  ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
-                                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                              }`}
-                            >
-                              <Moon className="w-3 h-3" />
-                              <span>Sombre</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setTheme('auto')}
-                              className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                localStorage.getItem('app-theme') === null
-                                  ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
-                                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                              }`}
-                            >
-                              <Laptop className="w-3 h-3" />
-                              <span>Auto</span>
-                            </button>
-                          </div>
-                        </div>
+                        <ThemeModeSelector />
 
                         <button onClick={logout} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition-colors cursor-pointer">
                           <LogOut className="w-5 h-5" />
@@ -940,65 +885,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 )}
 
                 {/* Paramètres d'Apparence & Forçage Manuel du Thème */}
-                <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-3.5 flex flex-col gap-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
-                      {theme === 'dark' ? <Moon className="w-3.5 h-3.5 text-orange-500" /> : <Sun className="w-3.5 h-3.5 text-orange-500" />}
-                      Thème d'affichage
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
-                      {localStorage.getItem('app-theme') === 'light' ? '☀️ Forcé Clair' : localStorage.getItem('app-theme') === 'dark' ? '🌙 Forcé Sombre' : '⚙️ Auto (Système)'}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-1 bg-gray-200/80 dark:bg-gray-800 p-1 rounded-xl">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        localStorage.setItem('app-theme', 'light');
-                        setTheme('light');
-                      }}
-                      className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        localStorage.getItem('app-theme') === 'light'
-                          ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
-                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <Sun className="w-3 h-3" />
-                      <span>Clair</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        localStorage.setItem('app-theme', 'dark');
-                        setTheme('dark');
-                      }}
-                      className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        localStorage.getItem('app-theme') === 'dark'
-                          ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
-                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <Moon className="w-3 h-3" />
-                      <span>Sombre</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTheme('auto')}
-                      className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        localStorage.getItem('app-theme') === null
-                          ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
-                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <Laptop className="w-3 h-3" />
-                      <span>Auto</span>
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">
-                    Forcer manuellement le thème clair ou sombre indépendamment des réglages de votre système.
-                  </p>
-                </div>
+                <ThemeModeSelector />
                 <button onClick={logout} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition-colors cursor-pointer">
                   <LogOut className="w-5 h-5" />
                   Déconnexion
@@ -1166,6 +1053,14 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
             </div>
           </div>
         </div>
+
+        {/* Graphique des préférences & habitudes d'établissements de l'utilisateur (Recharts) */}
+        <UserEstablishmentPreferencesChart
+          currentUser={currentUser}
+          establishments={establishments}
+          favorites={favorites}
+          reservations={reservations}
+        />
 
         {/* Mes Ami(e)s ZAKA */}
         <FriendsModule />
@@ -1354,155 +1249,202 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
 
         {/* Mes réservations de table (Restaurants) */}
         <div className="bg-white dark:bg-gray-950 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-900">
-          <h3 className="text-sm font-black text-gray-900 dark:text-white mb-1 flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-orange-500" />
-            Mes réservations de table (Restaurants)
-          </h3>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold mb-4">Suivez vos réservations en cours et consultez l'historique complet de vos visites.</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-sm font-black text-gray-900 dark:text-white mb-0.5 flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-orange-500" />
+                Mes réservations de table (Restaurants)
+              </h3>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold">
+                Visualisez vos réservations passées et futures dans le calendrier ou la liste.
+              </p>
+            </div>
 
-          {/* Sub-tabs: Actives vs Historique */}
-          <div className="flex bg-gray-50 dark:bg-gray-900 p-1 rounded-xl border border-gray-150 dark:border-gray-800 mb-4">
-            <button
-              type="button"
-              onClick={() => setResActiveTab('current')}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                resActiveTab === 'current'
-                  ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              En cours ({myReservations.filter(res => {
-                const isPassed = !canCancelReservation(res.date, res.time);
-                return res.status !== 'annulee' && res.status !== 'refusee' && !isPassed;
-              }).length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setResActiveTab('history')}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                resActiveTab === 'history'
-                  ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              Historique ({myReservations.filter(res => {
-                const isPassed = !canCancelReservation(res.date, res.time);
-                return res.status === 'annulee' || res.status === 'refusee' || isPassed;
-              }).length})
-            </button>
+            {/* Mode switch: Calendar vs List */}
+            <div className="flex bg-gray-100 dark:bg-gray-900 p-1 rounded-xl border border-gray-150 dark:border-gray-800 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setReservationViewMode('calendar')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  reservationViewMode === 'calendar'
+                    ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Calendrier</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setReservationViewMode('list')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  reservationViewMode === 'list'
+                    ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                <span>Liste ({myReservations.length})</span>
+              </button>
+            </div>
           </div>
 
-          {(() => {
-            const displayedReservations = myReservations.filter(res => {
-              const isPassed = !canCancelReservation(res.date, res.time);
-              const isHistory = res.status === 'annulee' || res.status === 'refusee' || isPassed;
-              return resActiveTab === 'history' ? isHistory : !isHistory;
-            });
+          {reservationViewMode === 'calendar' ? (
+            <UserReservationsCalendar
+              reservations={myReservations}
+              establishments={establishments}
+              onStartChat={handleStartChat}
+              onCancelReservation={async (id) => {
+                await updateReservationStatus(id, 'annulee');
+              }}
+              onExplore={() => onNavigate && onNavigate('home')}
+            />
+          ) : (
+            <>
+              {/* Sub-tabs: Actives vs Historique */}
+              <div className="flex bg-gray-50 dark:bg-gray-900 p-1 rounded-xl border border-gray-150 dark:border-gray-800 mb-4">
+                <button
+                  type="button"
+                  onClick={() => setResActiveTab('current')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    resActiveTab === 'current'
+                      ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  }`}
+                >
+                  En cours ({myReservations.filter(res => {
+                    const isPassed = !canCancelReservation(res.date, res.time);
+                    return res.status !== 'annulee' && res.status !== 'refusee' && !isPassed;
+                  }).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResActiveTab('history')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    resActiveTab === 'history'
+                      ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Historique ({myReservations.filter(res => {
+                    const isPassed = !canCancelReservation(res.date, res.time);
+                    return res.status === 'annulee' || res.status === 'refusee' || isPassed;
+                  }).length})
+                </button>
+              </div>
 
-            if (displayedReservations.length === 0) {
-              return (
-                <p className="text-xs text-gray-400 font-bold py-3 text-center bg-gray-50 dark:bg-gray-900/40 rounded-2xl">
-                  {resActiveTab === 'history' 
-                    ? "Aucun historique de réservation." 
-                    : "Aucune réservation en cours."}
-                </p>
-              );
-            }
-
-            return (
-              <div className="flex flex-col gap-3">
-                {displayedReservations.map(res => {
-                  const estDetail = establishments.find(e => e.id === res.establishmentId);
+              {(() => {
+                const displayedReservations = myReservations.filter(res => {
                   const isPassed = !canCancelReservation(res.date, res.time);
-                  const clientCanCancel = res.status !== 'annulee' && res.status !== 'refusee' && !isPassed;
+                  const isHistory = res.status === 'annulee' || res.status === 'refusee' || isPassed;
+                  return resActiveTab === 'history' ? isHistory : !isHistory;
+                });
 
+                if (displayedReservations.length === 0) {
                   return (
-                    <div key={res.id} className="p-4 bg-gray-50 dark:bg-gray-900/30 rounded-2xl border border-gray-100 dark:border-gray-800/60 flex flex-col gap-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center font-bold text-sm flex-shrink-0">
-                            <span>🍽️</span>
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="font-bold text-xs text-gray-900 dark:text-white truncate">{res.establishmentName}</h4>
-                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                              <span className="text-[9px] font-black uppercase tracking-wide bg-orange-100/50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-400 px-1.5 py-0.5 rounded">
-                                {res.guestsCount} pers.
+                    <p className="text-xs text-gray-400 font-bold py-3 text-center bg-gray-50 dark:bg-gray-900/40 rounded-2xl">
+                      {resActiveTab === 'history' 
+                        ? "Aucun historique de réservation." 
+                        : "Aucune réservation en cours."}
+                    </p>
+                  );
+                }
+
+                return (
+                  <div className="flex flex-col gap-3">
+                    {displayedReservations.map(res => {
+                      const estDetail = establishments.find(e => e.id === res.establishmentId);
+                      const isPassed = !canCancelReservation(res.date, res.time);
+                      const clientCanCancel = res.status !== 'annulee' && res.status !== 'refusee' && !isPassed;
+
+                      return (
+                        <div key={res.id} className="p-4 bg-gray-50 dark:bg-gray-900/30 rounded-2xl border border-gray-100 dark:border-gray-800/60 flex flex-col gap-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                                <span>🍽️</span>
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="font-bold text-xs text-gray-900 dark:text-white truncate">{res.establishmentName}</h4>
+                                <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                                  <span className="text-[9px] font-black uppercase tracking-wide bg-orange-100/50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-400 px-1.5 py-0.5 rounded">
+                                    {res.guestsCount} pers.
+                                  </span>
+                                  <span className="text-[9px] text-gray-500 dark:text-gray-400 font-bold">
+                                    {new Date(res.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à {res.time}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${
+                                isPassed && res.status === 'confirmee' ? 'bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-350 border-blue-200 dark:border-blue-900/50' :
+                                res.status === 'en_attente' ? 'bg-yellow-100 dark:bg-yellow-950/40 text-yellow-800 dark:text-yellow-350 border-yellow-200 dark:border-yellow-900/50' :
+                                res.status === 'confirmee' ? 'bg-green-100 dark:bg-green-950/40 text-green-800 dark:text-green-350 border-green-200 dark:border-green-900/50' :
+                                res.status === 'refusee' ? 'bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-350 border-red-200 dark:border-red-900/50' :
+                                'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
+                              }`}>
+                                {isPassed && res.status === 'confirmee' ? 'Terminée' :
+                                 res.status === 'en_attente' ? 'En attente' : 
+                                 res.status === 'confirmee' ? 'Confirmée' : 
+                                 res.status === 'refusee' ? 'Refusée' : 'Annulée'}
                               </span>
-                              <span className="text-[9px] text-gray-500 dark:text-gray-400 font-bold">
-                                {new Date(res.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à {res.time}
-                              </span>
+                              {estDetail && (
+                                <button 
+                                  type="button"
+                                  onClick={() => handleStartChat(res.establishmentId, estDetail.name, estDetail.ownerId)}
+                                  className="p-1.5 bg-orange-50 hover:bg-orange-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-orange-600 dark:text-orange-400 rounded-lg transition-colors cursor-pointer"
+                                  title="Discuter avec l'établissement"
+                                >
+                                  <MessageSquare className="w-4 h-4" />
+                                </button>
+                              )}
                             </div>
                           </div>
-                        </div>
 
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${
-                            isPassed && res.status === 'confirmee' ? 'bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-350 border-blue-200 dark:border-blue-900/50' :
-                            res.status === 'en_attente' ? 'bg-yellow-100 dark:bg-yellow-950/40 text-yellow-800 dark:text-yellow-350 border-yellow-200 dark:border-yellow-900/50' :
-                            res.status === 'confirmee' ? 'bg-green-100 dark:bg-green-950/40 text-green-800 dark:text-green-350 border-green-200 dark:border-green-900/50' :
-                            res.status === 'refusee' ? 'bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-350 border-red-200 dark:border-red-900/50' :
-                            'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
-                          }`}>
-                            {isPassed && res.status === 'confirmee' ? 'Terminée' :
-                             res.status === 'en_attente' ? 'En attente' : 
-                             res.status === 'confirmee' ? 'Confirmée' : 
-                             res.status === 'refusee' ? 'Refusée' : 'Annulée'}
-                          </span>
-                          {estDetail && (
-                            <button 
-                              type="button"
-                              onClick={() => handleStartChat(res.establishmentId, estDetail.name, estDetail.ownerId)}
-                              className="p-1.5 bg-orange-50 hover:bg-orange-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-orange-600 dark:text-orange-400 rounded-lg transition-colors cursor-pointer"
-                              title="Discuter avec l'établissement"
-                            >
-                              <MessageSquare className="w-4 h-4" />
-                            </button>
+                          {res.note && (
+                            <div className="text-xs text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-900 p-2.5 rounded-lg border border-gray-100 dark:border-gray-800 font-medium">
+                              <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 block uppercase mb-0.5">Votre note :</span>
+                              {res.note}
+                            </div>
                           )}
+
+                          {res.managerMessage && (
+                            <div className="text-xs text-amber-900 dark:text-amber-300 bg-amber-50/50 dark:bg-amber-955/20 p-2.5 rounded-lg border border-amber-100 dark:border-amber-900/40 font-medium">
+                              <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 block uppercase mb-0.5">Message du gérant :</span>
+                              {res.managerMessage}
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                            {/* Rating & Review Button */}
+                            <button
+                              type="button"
+                              onClick={() => setRatingModalEst({ id: res.establishmentId, name: estDetail?.name || getEstablishmentName(res.establishmentId) })}
+                              className="flex items-center gap-1.5 text-xs font-bold text-amber-600 hover:text-amber-700 dark:text-amber-400 bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-950/40 px-3 py-1.5 rounded-xl transition-all cursor-pointer"
+                            >
+                              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                              <span>Noter ce lieu</span>
+                            </button>
+
+                            {clientCanCancel && (
+                              <button
+                                type="button"
+                                onClick={() => updateReservationStatus(res.id, 'annulee')}
+                                className="text-[10px] font-black text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-350 hover:underline uppercase tracking-wide py-1 cursor-pointer"
+                              >
+                                Annuler la réservation
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-
-                      {res.note && (
-                        <div className="text-xs text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-900 p-2.5 rounded-lg border border-gray-100 dark:border-gray-800 font-medium">
-                          <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 block uppercase mb-0.5">Votre note :</span>
-                          {res.note}
-                        </div>
-                      )}
-
-                      {res.managerMessage && (
-                        <div className="text-xs text-amber-900 dark:text-amber-300 bg-amber-50/50 dark:bg-amber-955/20 p-2.5 rounded-lg border border-amber-100 dark:border-amber-900/40 font-medium">
-                          <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 block uppercase mb-0.5">Message du gérant :</span>
-                          {res.managerMessage}
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-                        {/* Rating & Review Button */}
-                        <button
-                          type="button"
-                          onClick={() => setRatingModalEst({ id: res.establishmentId, name: estDetail?.name || getEstablishmentName(res.establishmentId) })}
-                          className="flex items-center gap-1.5 text-xs font-bold text-amber-600 hover:text-amber-700 dark:text-amber-400 bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-950/40 px-3 py-1.5 rounded-xl transition-all cursor-pointer"
-                        >
-                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
-                          <span>Noter ce lieu</span>
-                        </button>
-
-                        {clientCanCancel && (
-                          <button
-                            type="button"
-                            onClick={() => updateReservationStatus(res.id, 'annulee')}
-                            className="text-[10px] font-black text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-350 hover:underline uppercase tracking-wide py-1 cursor-pointer"
-                          >
-                            Annuler la réservation
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </>
+          )}
         </div>
 
         {/* Mes commandes à emporter */}
@@ -2158,6 +2100,8 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
         >
           {mode === 'login' ? "Pas encore de compte ? S'inscrire" : "Déjà un compte ? Se connecter"}
         </button>
+
+        <ThemeModeSelector className="mt-6" />
       </div>
     </div>
   );

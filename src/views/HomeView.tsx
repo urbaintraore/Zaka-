@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../store';
 import { Tab } from '../components/BottomNav';
-import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight, Eye, Trophy, TrendingUp, Award, Clock, Share2, AlertCircle, BookOpen, Phone, SlidersHorizontal, Navigation, Compass, Loader2, Wine, Search } from 'lucide-react';
+import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight, Eye, Trophy, TrendingUp, Award, Clock, Share2, AlertCircle, BookOpen, Phone, SlidersHorizontal, Navigation, Compass, Loader2, Wine, Search, RefreshCw, Mic, MicOff, Coins, ArrowUpDown, History, Trash2 } from 'lucide-react';
+import { useVoiceSearch } from '../hooks/useVoiceSearch';
+import { useSearchHistory } from '../hooks/useSearchHistory';
+import { triggerHaptic } from '../utils/haptics';
 import { stripHtml } from '../utils/htmlHelpers';
 import { shareContent } from '../utils/platform';
 import { ReservationModal } from '../components/ReservationModal';
@@ -141,6 +144,39 @@ export function HomeViewSkeleton() {
   );
 }
 
+export function EstablishmentCardSkeleton() {
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-sm animate-pulse transition-all">
+      {/* Photo banner skeleton with shimmer */}
+      <div className="h-44 sm:h-52 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 dark:from-gray-850 dark:via-gray-800 dark:to-gray-850 relative p-4 flex flex-col justify-between">
+        <div className="flex items-center justify-between">
+          <div className="h-6 w-24 bg-white/70 dark:bg-gray-700/70 backdrop-blur-md rounded-full"></div>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-white/70 dark:bg-gray-700/70 backdrop-blur-md"></div>
+            <div className="w-8 h-8 rounded-full bg-white/70 dark:bg-gray-700/70 backdrop-blur-md"></div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="h-5 w-24 bg-white/70 dark:bg-gray-700/70 backdrop-blur-md rounded-full"></div>
+          <div className="h-6 w-16 bg-white/70 dark:bg-gray-700/70 backdrop-blur-md rounded-lg"></div>
+        </div>
+      </div>
+
+      {/* Content body skeleton */}
+      <div className="p-4 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+        <div className="space-y-2 flex-1 min-w-0">
+          <div className="h-5 w-44 bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
+          <div className="h-3.5 w-60 bg-gray-100 dark:bg-gray-800/60 rounded-md"></div>
+        </div>
+        <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100 dark:border-gray-800">
+          <div className="h-8 w-20 bg-gray-100 dark:bg-gray-850 rounded-xl"></div>
+          <div className="h-8 w-24 bg-gray-100 dark:bg-gray-850 rounded-xl"></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function EmergencyCountdown({ expiresAt }: { expiresAt: string }) {
   const [timeLeft, setTimeLeft] = useState('');
 
@@ -205,26 +241,67 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
   // Establishment Category, Search & Sorting State
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [sortBy, setSortBy] = useState<'popular' | 'rating' | 'proximity' | 'now'>('popular');
+  const [sortBy, setSortBy] = useState<'popular' | 'rating' | 'price_asc' | 'price_desc' | 'proximity' | 'now'>('popular');
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  // Search History via localStorage
+  const { 
+    history: searchHistory, 
+    addSearchTerm, 
+    removeSearchTerm, 
+    clearHistory: clearSearchHistory 
+  } = useSearchHistory();
+
+  // Web Speech API Voice Search
+  const {
+    isListening: isVoiceListening,
+    isSupported: isVoiceSupported,
+    toggleListening: toggleVoiceSearch
+  } = useVoiceSearch({
+    onTranscript: (text) => {
+      setSearchQuery(text);
+      addSearchTerm(text);
+    }
+  });
 
   const handleSelectProximity = () => {
     setSortBy('proximity');
-    if (!userCoords && typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
       setIsLocating(true);
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
           setIsLocating(false);
+          window.dispatchEvent(new CustomEvent('app-toast', {
+            detail: {
+              message: "📍 Position GPS détectée ! Établissements classés par proximité.",
+              type: "info"
+            }
+          }));
         },
         (err) => {
           console.warn("Géolocalisation refusée ou non disponible, fallback Ouagadougou", err);
           setUserCoords({ lat: 12.3686, lng: -1.5275 });
           setIsLocating(false);
+          window.dispatchEvent(new CustomEvent('app-toast', {
+            detail: {
+              message: "📍 Position approximative (centre de Ouagadougou) appliquée.",
+              type: "warning"
+            }
+          }));
         },
-        { timeout: 7000 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
       );
+    } else {
+      setUserCoords({ lat: 12.3686, lng: -1.5275 });
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: {
+          message: "Géolocalisation non prise en charge. Tri centré sur Ouagadougou.",
+          type: "warning"
+        }
+      }));
     }
   };
 
@@ -698,31 +775,62 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
     return e.category === selectedCategory;
   });
 
-  // Calculate distance map if userCoords available
+  // Calculate distance map if userCoords available or fallback to Ouagadougou center
   const establishmentDistances: Record<string, number> = {};
-  if (userCoords) {
+  const activeUserCoords = userCoords || (sortBy === 'proximity' ? { lat: 12.3686, lng: -1.5275 } : null);
+  if (activeUserCoords) {
     validEstablishments.forEach(est => {
       const coords = getEstCoords(est);
       if (coords) {
-        establishmentDistances[est.id] = calculateDistanceKm(userCoords.lat, userCoords.lng, coords.lat, coords.lng);
+        establishmentDistances[est.id] = calculateDistanceKm(activeUserCoords.lat, activeUserCoords.lng, coords.lat, coords.lng);
       }
     });
   }
 
-  // Sort establishments based on user choice: popular, rating, proximity, now
+  // Helper to compute average price for sorting and displaying
+  const getEstablishmentAvgPrice = (est: Establishment): number => {
+    if (est.averagePrice && est.averagePrice > 0) return est.averagePrice;
+    const anyEst = est as any;
+    if (Array.isArray(anyEst.products) && anyEst.products.length > 0) {
+      const validPrices = anyEst.products.map((p: any) => p.price).filter((p: any) => typeof p === 'number' && p > 0);
+      if (validPrices.length > 0) {
+        return Math.round(validPrices.reduce((a: number, b: number) => a + b, 0) / validPrices.length);
+      }
+    }
+    if (est.priceLevel) {
+      const levelMap: Record<number, number> = { 1: 2500, 2: 5000, 3: 10000, 4: 20000 };
+      return levelMap[est.priceLevel] || 3500;
+    }
+    if (est.category === 'boite_de_nuit') return 8000;
+    if (est.category === 'restaurants') return 5000;
+    if (est.category === 'bar') return 3500;
+    if (est.category === 'hotel') return 15000;
+    if (est.category === 'residence') return 12000;
+    if (est.category === 'glacier_pizzeria') return 3000;
+    if (est.category === 'maquis') return 2500;
+    return 3500;
+  };
+
+  // Sort establishments based on user choice: popular, rating, price_asc, price_desc, proximity, now
   const sortedEstablishments = [...categoryFilteredEstablishments].sort((a, b) => {
     if (sortBy === 'now' || modeMaintenant) {
       const weightA = getCrowdWeight(a);
       const weightB = getCrowdWeight(b);
       if (weightB !== weightA) return weightB - weightA;
     }
-    if (sortBy === 'proximity' && userCoords) {
+    if (sortBy === 'proximity') {
       const distA = establishmentDistances[a.id] ?? 9999;
       const distB = establishmentDistances[b.id] ?? 9999;
       if (distA !== distB) return distA - distB;
     }
     if (sortBy === 'rating') {
       return b.averageRating - a.averageRating;
+    }
+    if (sortBy === 'price_asc') {
+      return getEstablishmentAvgPrice(a) - getEstablishmentAvgPrice(b);
+    }
+    if (sortBy === 'price_desc') {
+      return getEstablishmentAvgPrice(b) - getEstablishmentAvgPrice(a);
     }
     // Default 'popular': ranking by favorites count or average rating
     const favA = popularEstsByFavorites.find(p => p.id === a.id)?.favoritesCount || 0;
@@ -765,6 +873,10 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
     }
     return true;
   });
+
+  const closestEstId = (sortBy === 'proximity' && filteredEstablishments.length > 0)
+    ? filteredEstablishments[0].id
+    : null;
 
   // Calendar helpers
   const MONTHS_FR = [
@@ -858,20 +970,41 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           </p>
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <button 
+              onClick={() => {
+                handleSelectProximity();
+                const target = document.getElementById('establishments-section');
+                target?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className={`px-5 py-2.5 rounded-full font-extrabold active:scale-95 transition-all text-xs flex items-center gap-2 shadow-md cursor-pointer ${
+                sortBy === 'proximity'
+                  ? 'bg-emerald-500 text-white ring-2 ring-white/80 shadow-lg'
+                  : 'bg-white/20 hover:bg-white/30 text-white border border-white/30'
+              }`}
+              title="Trier les établissements par proximité avec ma position GPS"
+            >
+              {isLocating ? (
+                <Loader2 className="w-4 h-4 animate-spin text-emerald-200" />
+              ) : (
+                <Compass className="w-4 h-4 text-emerald-300" />
+              )}
+              <span>Autour de moi</span>
+              {sortBy === 'proximity' && <span className="w-2 h-2 rounded-full bg-white animate-ping" />}
+            </button>
+            <button 
               onClick={() => onNavigate?.('explore')}
-              className="bg-white text-orange-600 px-5 py-2.5 rounded-full font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-xs flex items-center gap-2"
+              className="bg-white text-orange-600 px-5 py-2.5 rounded-full font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-xs flex items-center gap-2 cursor-pointer"
             >
               <MapPin className="w-4 h-4" /> Explorer la carte
             </button>
             <button 
               onClick={() => setShowGuideModal(true)}
-              className="bg-amber-400 hover:bg-amber-300 text-gray-950 px-5 py-2.5 rounded-full font-extrabold shadow-md active:scale-95 transition-all text-xs flex items-center gap-1.5"
+              className="bg-amber-400 hover:bg-amber-300 text-gray-950 px-5 py-2.5 rounded-full font-extrabold shadow-md active:scale-95 transition-all text-xs flex items-center gap-1.5 cursor-pointer"
             >
               <BookOpen className="w-4 h-4 text-gray-900" /> Guide d'Utilisation
             </button>
             <button 
               onClick={() => setModeMaintenant(!modeMaintenant)}
-              className={`px-5 py-2.5 rounded-full font-extrabold active:scale-95 transition-all text-xs flex items-center gap-2 shadow-md ${
+              className={`px-5 py-2.5 rounded-full font-extrabold active:scale-95 transition-all text-xs flex items-center gap-2 shadow-md cursor-pointer ${
                 modeMaintenant 
                   ? 'bg-amber-300 text-gray-950 ring-2 ring-amber-200 animate-pulse' 
                   : 'bg-black/30 hover:bg-black/40 text-white border border-white/30'
@@ -882,7 +1015,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
             </button>
             <button 
               onClick={() => setShowGroupOutingModal(true)}
-              className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-5 py-2.5 rounded-full font-bold active:scale-95 transition-all text-xs flex items-center gap-1.5"
+              className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-5 py-2.5 rounded-full font-bold active:scale-95 transition-all text-xs flex items-center gap-1.5 cursor-pointer"
             >
               <Users className="w-4 h-4 text-orange-200" /> Sortie de Groupe
             </button>
@@ -890,7 +1023,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
         </div>
 
         {/* Barre de Recherche Rapide (Quick Search Bar) */}
-        <div className="relative z-10 mt-5 bg-white/95 dark:bg-gray-950/95 backdrop-blur-md rounded-3xl p-3 shadow-xl border border-white/40 dark:border-gray-800 text-gray-900 dark:text-white">
+        <div className="relative z-20 mt-5 bg-white/95 dark:bg-gray-950/95 backdrop-blur-md rounded-3xl p-3 shadow-xl border border-white/40 dark:border-gray-800 text-gray-900 dark:text-white">
           <div className="relative flex items-center">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-orange-500">
               <Search className="w-5 h-5" />
@@ -898,24 +1031,138 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
             <input
               type="text"
               value={searchQuery}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setTimeout(() => setIsSearchFocused(false), 250)}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchQuery.trim()) {
+                  addSearchTerm(searchQuery);
+                  (e.target as HTMLElement).blur();
+                  setIsSearchFocused(false);
+                }
+              }}
               placeholder="Rechercher par nom ou par type (maquis, restaurant, bar, club)..."
-              className="w-full pl-11 pr-10 py-3 bg-gray-50 dark:bg-gray-900 rounded-2xl text-xs sm:text-sm font-medium border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all shadow-inner"
+              className="w-full pl-11 pr-20 py-3 bg-gray-50 dark:bg-gray-900 rounded-2xl text-xs sm:text-sm font-medium border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all shadow-inner"
             />
-            {searchQuery && (
+            <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center gap-1">
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer rounded-lg"
+                  title="Effacer la recherche"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"
-                title="Effacer la recherche"
+                onClick={toggleVoiceSearch}
+                className={`p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center ${
+                  isVoiceListening
+                    ? 'bg-red-500 text-white animate-pulse shadow-md ring-2 ring-red-400'
+                    : 'text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-gray-800'
+                }`}
+                title={
+                  !isVoiceSupported
+                    ? "Recherche vocale non supportée sur ce navigateur"
+                    : isVoiceListening
+                    ? "Arrêter l'écoute vocale"
+                    : "Rechercher par commande vocale"
+                }
+                aria-label="Recherche vocale"
               >
-                <X className="w-4 h-4" />
+                {isVoiceListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
               </button>
-            )}
+            </div>
           </div>
 
-          {/* Filtres Rapides par Type : Tous, Maquis, Restaurant, Bar, Club */}
+          {/* Menu déroulant d'historique des recherches */}
+          {isSearchFocused && searchHistory.length > 0 && !searchQuery && (
+            <div className="absolute left-0 right-0 top-full mt-2 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 p-3 z-50 flex flex-col gap-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="flex items-center justify-between px-1 pb-1.5 border-b border-gray-100 dark:border-gray-800">
+                <span className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <History className="w-3.5 h-3.5 text-orange-500" />
+                  Dernières recherches
+                </span>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    clearSearchHistory();
+                  }}
+                  className="text-[10px] font-bold text-red-500 hover:text-red-700 flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Effacer tout
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto">
+                {searchHistory.map((term) => (
+                  <div
+                    key={term}
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-orange-50 dark:hover:bg-gray-800/80 group transition-colors cursor-pointer"
+                  >
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setSearchQuery(term);
+                        addSearchTerm(term);
+                        setIsSearchFocused(false);
+                        triggerHaptic('light');
+                      }}
+                      className="flex items-center gap-2.5 text-xs font-semibold text-gray-700 dark:text-gray-200 group-hover:text-orange-600 dark:group-hover:text-orange-400 flex-1 text-left"
+                    >
+                      <Clock className="w-3.5 h-3.5 text-gray-400 group-hover:text-orange-500 shrink-0" />
+                      <span className="truncate">{term}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        removeSearchTerm(term);
+                      }}
+                      className="p-1 text-gray-400 hover:text-red-500 rounded-md transition-colors"
+                      title="Supprimer cette recherche"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {isVoiceListening && (
+            <div className="flex items-center gap-2 mt-2 px-3 py-1.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs font-bold text-red-600 dark:text-red-400 animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+              <span>🎙️ Écoute en cours... Parlez maintenant pour rechercher un établissement</span>
+            </div>
+          )}
+
+          {/* Filtres Rapides par Type : Tous, Maquis, Restaurant, Bar, Club + Autour de moi */}
           <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pt-2.5 pb-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                handleSelectProximity();
+                const target = document.getElementById('establishments-section');
+                target?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                sortBy === 'proximity'
+                  ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-300'
+                  : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+              }`}
+              title="Trouver les établissements les plus proches de moi"
+            >
+              {isLocating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Navigation className="w-3.5 h-3.5" />}
+              <span>Autour de moi</span>
+            </button>
             {[
               { id: 'all', label: 'Tous', icon: '🌟' },
               { id: 'maquis', label: 'Maquis', icon: '🔥' },
@@ -962,6 +1209,38 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
               <span className="text-orange-600 dark:text-orange-400 font-black">↓</span>
             </button>
           </div>
+
+          {/* Puces de recherches récentes rapides */}
+          {searchHistory.length > 0 && !searchQuery && (
+            <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pt-2 border-t border-gray-100/80 dark:border-gray-800/80 mt-1">
+              <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 flex items-center gap-1 shrink-0">
+                <History className="w-3 h-3 text-orange-500" />
+                Récents :
+              </span>
+              {searchHistory.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery(item);
+                    addSearchTerm(item);
+                    triggerHaptic('light');
+                  }}
+                  className="shrink-0 px-2.5 py-1 bg-gray-100 hover:bg-orange-50 dark:bg-gray-900 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-orange-600 rounded-lg text-xs font-medium border border-gray-200/60 dark:border-gray-800 transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <span>{item}</span>
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={clearSearchHistory}
+                className="text-[10px] text-gray-400 hover:text-red-500 font-bold shrink-0 ml-1 px-1 transition-colors cursor-pointer"
+                title="Vider l'historique de recherche"
+              >
+                Effacer
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1729,47 +2008,96 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
             {/* Tri / Sort controls */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
               <button
-                onClick={() => setSortBy('popular')}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 ${
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  setSortBy('popular');
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${
                   sortBy === 'popular'
                     ? 'bg-orange-600 text-white shadow-sm'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
                 }`}
               >
                 <Flame className="w-3.5 h-3.5" /> Populaires
               </button>
               <button
-                onClick={() => setSortBy('rating')}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 ${
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  setSortBy('rating');
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${
                   sortBy === 'rating'
                     ? 'bg-orange-600 text-white shadow-sm'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
                 }`}
               >
                 <Star className="w-3.5 h-3.5" /> Mieux notés
               </button>
               <button
-                onClick={handleSelectProximity}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 ${
-                  sortBy === 'proximity'
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  setSortBy('price_asc');
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${
+                  sortBy === 'price_asc'
                     ? 'bg-orange-600 text-white shadow-sm'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
                 }`}
-                title="Trier par proximité géographique"
+                title="Trier par prix moyen le plus accessible"
+              >
+                <Coins className="w-3.5 h-3.5" /> Prix abordable
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  setSortBy('price_desc');
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${
+                  sortBy === 'price_desc'
+                    ? 'bg-orange-600 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
+                }`}
+                title="Trier par prix moyen standing"
+              >
+                <ArrowUpDown className="w-3.5 h-3.5" /> Prix standing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  handleSelectProximity();
+                }}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${
+                  sortBy === 'proximity'
+                    ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
+                }`}
+                title="Trier par proximité géographique avec ma position GPS"
               >
                 {isLocating ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
                   <Compass className="w-3.5 h-3.5" />
                 )}
-                À proximité
+                <span>Autour de moi</span>
+                {sortBy === 'proximity' && (
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                )}
               </button>
               <button
-                onClick={() => setSortBy('now')}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 ${
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  setSortBy('now');
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${
                   sortBy === 'now'
                     ? 'bg-amber-400 text-gray-950 font-black shadow-sm'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
                 }`}
               >
                 <Zap className="w-3.5 h-3.5" /> En direct
@@ -1787,21 +2115,43 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Rechercher par nom, description, quartier, spécialité..."
-              className="w-full pl-10 pr-10 py-3 bg-white rounded-2xl border border-gray-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-xs sm:text-sm font-medium outline-none transition-all shadow-xs placeholder:text-gray-400"
+              className="w-full pl-10 pr-20 py-3 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-xs sm:text-sm font-medium outline-none transition-all shadow-xs placeholder:text-gray-400 dark:placeholder:text-gray-500 text-gray-900 dark:text-white"
             />
-            {searchQuery && (
+            <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center gap-1">
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer rounded-lg"
+                  title="Effacer la recherche"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
               <button
-                onClick={() => setSearchQuery('')}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
-                title="Effacer la recherche"
+                type="button"
+                onClick={toggleVoiceSearch}
+                className={`p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center ${
+                  isVoiceListening
+                    ? 'bg-red-500 text-white animate-pulse shadow-md ring-2 ring-red-400'
+                    : 'text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-gray-800'
+                }`}
+                title={
+                  !isVoiceSupported
+                    ? "Recherche vocale non supportée sur ce navigateur"
+                    : isVoiceListening
+                    ? "Arrêter l'écoute vocale"
+                    : "Rechercher par commande vocale"
+                }
+                aria-label="Recherche vocale"
               >
-                <X className="w-4 h-4" />
+                {isVoiceListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
               </button>
-            )}
+            </div>
           </div>
 
           {/* Type Filter Bar (Maquis, Restaurant, Bar, Boîte de nuit) */}
-          <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm mb-4">
+          <div className="bg-white dark:bg-gray-900 p-2 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm mb-4">
             <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 px-0.5">
               {[
                 { id: 'all', label: 'Tous', icon: SlidersHorizontal },
@@ -1815,10 +2165,10 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                   <button
                     key={cat.id}
                     onClick={() => setSelectedCategory(cat.id)}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex-shrink-0 ${
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex-shrink-0 cursor-pointer ${
                       isSelected
-                        ? 'bg-orange-50 text-orange-700 ring-1 ring-orange-400/40 shadow-xs'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 ring-1 ring-orange-400/40 shadow-xs'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
                     }`}
                   >
                     <span>{cat.label}</span>
@@ -1828,16 +2178,42 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
             </div>
           </div>
 
+          {/* Status banner when Proximity sort is active */}
+          {sortBy === 'proximity' && (
+            <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-850 rounded-2xl p-3 mb-4 flex items-center justify-between gap-3 text-xs text-emerald-900 dark:text-emerald-200 shadow-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                <span className="font-bold">Mode "Autour de moi" actif :</span>
+                <span>Établissements classés par distance croissante</span>
+              </div>
+              <button
+                onClick={handleSelectProximity}
+                disabled={isLocating}
+                className="text-emerald-700 dark:text-emerald-300 font-extrabold hover:underline flex items-center gap-1 flex-shrink-0 cursor-pointer"
+                title="Réactualiser ma position"
+              >
+                {isLocating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                <span>{isLocating ? 'Actualisation...' : 'Actualiser'}</span>
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-col gap-4">
-            {filteredEstablishments.length === 0 ? (
-              <div className="bg-white border border-gray-100 rounded-3xl p-8 text-center shadow-sm">
-                <div className="w-12 h-12 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-3 border border-orange-100 animate-bounce">
+            {loading ? (
+              <div className="flex flex-col gap-4" aria-label="Chargement des établissements...">
+                {[1, 2, 3, 4].map(i => (
+                  <EstablishmentCardSkeleton key={i} />
+                ))}
+              </div>
+            ) : filteredEstablishments.length === 0 ? (
+              <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-3xl p-8 text-center shadow-sm">
+                <div className="w-12 h-12 bg-orange-50 dark:bg-orange-950/50 rounded-full flex items-center justify-center mx-auto mb-3 border border-orange-100 dark:border-orange-900 animate-bounce">
                   <Users className="w-6 h-6 text-orange-500" />
                 </div>
-                <h3 className="text-sm font-bold text-gray-900 mb-1">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-1">
                   {searchQuery ? `Aucun établissement trouvé pour "${searchQuery}"` : filterMemberOnly ? "Aucun club membre" : "Aucun établissement trouvé"}
                 </h3>
-                <p className="text-xs text-gray-500 leading-relaxed max-w-xs mx-auto">
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed max-w-xs mx-auto">
                   {searchQuery 
                     ? "Vérifiez l'orthographe ou tentez une recherche plus large."
                     : filterMemberOnly 
@@ -1848,7 +2224,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                   {searchQuery && (
                     <button
                       onClick={() => setSearchQuery('')}
-                      className="px-4 py-1.5 rounded-full bg-orange-100 text-orange-700 hover:bg-orange-200 font-bold text-xs transition-colors"
+                      className="px-4 py-1.5 rounded-full bg-orange-100 dark:bg-orange-900/60 text-orange-700 dark:text-orange-300 hover:bg-orange-200 font-bold text-xs transition-colors cursor-pointer"
                     >
                       Effacer la recherche
                     </button>
@@ -1856,7 +2232,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                   {selectedCategory !== 'all' && (
                     <button
                       onClick={() => setSelectedCategory('all')}
-                      className="px-4 py-1.5 rounded-full bg-orange-600 text-white font-bold text-xs"
+                      className="px-4 py-1.5 rounded-full bg-orange-600 text-white font-bold text-xs cursor-pointer"
                     >
                       Voir tous les établissements
                     </button>
@@ -1866,14 +2242,15 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
             ) : (
               filteredEstablishments.map(est => {
                 const imageUrl = est.photos[0] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800';
-                const isFav = currentUser ? (favorites[currentUser.id] || []).includes(est.id) : false;
+                const effectiveUserId = currentUser ? currentUser.id : 'guest';
+                const isFav = (favorites[effectiveUserId] || []).includes(est.id);
                 const distKm = establishmentDistances[est.id];
 
                 return (
-                  <div key={est.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-                    <div className="h-36 relative">
+                  <div key={est.id} className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden hover:shadow-md transition-shadow">
+                    <div className="h-36 sm:h-44 relative">
                        <ImageChargementProgressif src={imageUrl} alt={est.name} className="w-full h-full object-cover" />
-                       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+                       <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent"></div>
                        <div className="absolute top-3 left-3">
                          <CrowdStatusBadge establishment={est} showControlForOwner={false} />
                        </div>
@@ -1883,8 +2260,13 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
 
                        {/* Proximity badge if available */}
                        {typeof distKm === 'number' && (
-                         <div className="absolute top-3 left-28 bg-black/50 backdrop-blur-md text-white font-bold text-[11px] px-2.5 py-1 rounded-full flex items-center gap-1 border border-white/10">
-                           <MapPin className="w-3 h-3 text-orange-400" /> {formatDistance(distKm)}
+                         <div className={`absolute top-3 left-28 backdrop-blur-md text-white font-bold text-[11px] px-2.5 py-1 rounded-full flex items-center gap-1 border shadow-xs ${
+                           est.id === closestEstId 
+                             ? 'bg-emerald-600/90 border-emerald-400 text-white' 
+                             : 'bg-black/60 border-white/20'
+                         }`}>
+                           <MapPin className={`w-3 h-3 ${est.id === closestEstId ? 'text-white fill-white' : 'text-orange-400'}`} />
+                           <span>{est.id === closestEstId ? `🏆 Plus proche (${formatDistance(distKm)})` : `à ${formatDistance(distKm)}`}</span>
                          </div>
                        )}
 
@@ -1899,7 +2281,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                                url: `${window.location.origin}/#est-${est.id}`
                              });
                            }}
-                           className="p-2 rounded-full backdrop-blur-md bg-black/40 hover:bg-black/60 text-white transition-all active:scale-90"
+                           className="p-2 rounded-full backdrop-blur-md bg-black/40 hover:bg-black/60 text-white transition-all active:scale-90 cursor-pointer"
                            aria-label="Partager cet établissement"
                            title="Partager cet établissement"
                          >
@@ -1909,13 +2291,20 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                          <button
                            onClick={async (e) => {
                              e.stopPropagation();
-                             if (!currentUser) {
-                               setGlobalError({ message: "Veuillez vous connecter pour sauvegarder vos lieux favoris.", type: "info" });
-                               return;
-                             }
-                             await toggleFavorite(currentUser.id, est.id);
+                             const effectiveClientId = currentUser ? currentUser.id : 'guest';
+                             await toggleFavorite(effectiveClientId, est.id);
+                             const nowFav = !isFav;
+                             triggerHaptic(nowFav ? 'success' : 'light');
+                             window.dispatchEvent(new CustomEvent('app-toast', {
+                               detail: {
+                                 message: nowFav 
+                                   ? `❤️ ${est.name} ajouté aux favoris${!currentUser ? ' (enregistré localement)' : ''}` 
+                                   : `💔 ${est.name} retiré des favoris`,
+                                 type: 'info'
+                                }
+                             }));
                            }}
-                           className={`p-2 rounded-full backdrop-blur-md transition-all active:scale-90 ${
+                           className={`p-2 rounded-full backdrop-blur-md transition-all active:scale-90 cursor-pointer ${
                              isFav 
                                ? "bg-red-500 text-white shadow-md" 
                                : "bg-black/40 hover:bg-black/60 text-white"
@@ -1930,27 +2319,29 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                     <div className="p-4 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
                       <div className="flex flex-col justify-center flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-gray-900 text-lg truncate">{est.name}</h3>
+                          <h3 className="font-bold text-gray-900 dark:text-white text-lg truncate">{est.name}</h3>
                           {isFav && (
-                            <span className="bg-red-50 text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-red-100 flex items-center gap-0.5">
+                            <span className="bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-red-100 dark:border-red-900 flex items-center gap-0.5">
                               <Heart className="w-2.5 h-2.5 fill-red-500" /> Favori
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-gray-500 capitalize font-medium truncate flex items-center gap-1.5 mt-0.5">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 capitalize font-medium truncate flex items-center gap-1.5 mt-0.5">
                           <span>{est.category.replace(/_/g, ' ')}</span>
                           <span>•</span>
                           <span>{est.neighborhood || est.quarter || 'Ouagadougou'}</span>
+                          <span>•</span>
+                          <span className="text-gray-700 dark:text-gray-300 font-semibold">~{getEstablishmentAvgPrice(est).toLocaleString('fr-FR')} F</span>
                           {typeof distKm === 'number' && (
                             <>
                               <span>•</span>
-                              <span className="text-orange-600 font-bold">à {formatDistance(distKm)}</span>
+                              <span className="text-orange-600 dark:text-orange-400 font-bold">à {formatDistance(distKm)}</span>
                             </>
                           )}
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
+                      <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100 dark:border-gray-800">
                         {/* Explicit 'Partager' button on each card */}
                         <button
                           onClick={async (e) => {
@@ -1961,10 +2352,10 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                               url: `${window.location.origin}/#est-${est.id}`
                             });
                           }}
-                          className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-700 font-bold text-xs px-3 py-2 rounded-xl transition-all flex-shrink-0"
+                          className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-750 active:scale-95 text-gray-700 dark:text-gray-300 font-bold text-xs px-3 py-2 rounded-xl transition-all flex-shrink-0 cursor-pointer"
                           title="Partager la fiche établissement"
                         >
-                          <Share2 className="w-3.5 h-3.5 text-gray-500" />
+                          <Share2 className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
                           <span>Partager</span>
                         </button>
 
@@ -1972,20 +2363,27 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                         <button
                           onClick={async (e) => {
                             e.stopPropagation();
-                            if (!currentUser) {
-                              setGlobalError({ message: "Veuillez vous connecter pour sauvegarder vos lieux favoris.", type: "info" });
-                              return;
-                            }
-                            await toggleFavorite(currentUser.id, est.id);
+                            const effectiveClientId = currentUser ? currentUser.id : 'guest';
+                            await toggleFavorite(effectiveClientId, est.id);
+                            const nowFav = !isFav;
+                            triggerHaptic(nowFav ? 'success' : 'light');
+                            window.dispatchEvent(new CustomEvent('app-toast', {
+                              detail: {
+                                message: nowFav 
+                                  ? `❤️ ${est.name} ajouté aux favoris${!currentUser ? ' (enregistré localement)' : ''}` 
+                                  : `💔 ${est.name} retiré des favoris`,
+                                type: 'info'
+                              }
+                            }));
                           }}
-                          className={`flex items-center gap-1.5 font-bold text-xs px-3 py-2 rounded-xl transition-all active:scale-95 flex-shrink-0 ${
+                          className={`flex items-center gap-1.5 font-bold text-xs px-3 py-2 rounded-xl transition-all active:scale-95 flex-shrink-0 cursor-pointer ${
                             isFav
-                              ? "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
-                              : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                              ? "bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-900"
+                              : "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300"
                           }`}
                           title={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
                         >
-                          <Heart className={`w-3.5 h-3.5 ${isFav ? "fill-red-500 text-red-500" : "text-gray-500"}`} />
+                          <Heart className={`w-3.5 h-3.5 ${isFav ? "fill-red-500 text-red-500" : "text-gray-500 dark:text-gray-400"}`} />
                           <span>{isFav ? "Favori" : "Favoris"}</span>
                         </button>
 

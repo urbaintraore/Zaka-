@@ -375,6 +375,8 @@ export interface Establishment {
   reservationsClosedReason?: string;
   affluence?: 'calme' | 'anime' | 'tres_anime' | 'complet';
   currentSong?: any;
+  averagePrice?: number;
+  priceLevel?: 1 | 2 | 3 | 4;
 }
 
 export type PubType = 'annonce' | 'promo' | 'bon_plan' | 'evenement' | 'recrutement';

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Calendar, Clock, Users, FileText, Send, CheckCircle2, ChevronLeft, ChevronRight, Ban, Phone } from 'lucide-react';
+import { triggerHaptic } from '../utils/haptics';
 
 interface ReservationModalProps {
   establishmentName: string;
@@ -144,6 +145,7 @@ export function ReservationModal({
   };
 
   const handleFinalConfirm = () => {
+    triggerHaptic('success');
     onSubmit({ 
       reservationType, 
       date: selectedDate, 

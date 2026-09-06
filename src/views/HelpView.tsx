@@ -28,6 +28,7 @@ import { useAppStore } from '../store';
 import { exportReservationsToCSV } from '../utils/exportReservationsCsv';
 import { downloadGuidePDF } from '../utils/downloadGuide';
 import { Tab } from '../components/BottomNav';
+import { QuickFeedbackCard } from '../components/QuickFeedbackCard';
 
 interface HelpViewProps {
   onNavigate?: (tab: Tab) => void;
@@ -543,6 +544,14 @@ export function HelpView({ onNavigate }: HelpViewProps) {
             );
           })
         )}
+      </div>
+
+      {/* Formulaire de Feedback Rapide (Signalement / Suggestion) */}
+      <div className="mb-8" id="quick-feedback">
+        <QuickFeedbackCard
+          establishments={establishments}
+          currentUser={currentUser}
+        />
       </div>
 
       {/* Direct Manager Assistance / Contact Card */}

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, Establishment, Publication, Review, Application, RelationshipRequest, ServiceRequest, Role, Reservation, MenuDuJour, Entreprise, CarnetEntry, HairSalonData, Coiffeur, StaffReview, StaffAttendance, Parrainage, Campaign, Ad, AdPayment, AdInvoice, AdDailyStat, CampaignStatus, LoyaltyCard, ZakaRedemption, GroupOuting, Friendship, AdOrganization, AdAuditLog, AdRateConfig, AdSupportTicket, AdCreative, TakeawayOrder, StockItem, SaleRecord, StockReception, StockInventory } from './types';
-import { triggerHapticFeedback } from './utils/haptics';
+import { triggerHaptic, triggerHapticFeedback } from './utils/haptics';
 import { supabase, isSupabaseConfigured } from './lib/supabaseClient';
 import { saveEstablishmentsToIndexedDB, getEstablishmentsFromIndexedDB, getOfflineCacheMetadata, saveFavoritesToIndexedDB, getFavoritesFromIndexedDB, saveUserProfileToIndexedDB, getUserProfileFromIndexedDB } from './utils/offlineIndexedDB';
 
@@ -914,6 +914,65 @@ const DEFAULT_ADS: Ad[] = [];
 
 const AppContext = createContext<AppContextType | null>(null);
 
+const LOCAL_FAVORITES_PREFIX = 'zaka_favorites_';
+const LOCAL_FAVORITE_TAGS_PREFIX = 'zaka_favorite_tags_';
+const GLOBAL_LOCAL_FAVORITES_KEY = 'zaka_local_favorites';
+
+export const getLocalFavoritesMap = (): Record<string, string[]> => {
+  try {
+    const result: Record<string, string[]> = {};
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const guestStored = localStorage.getItem(GLOBAL_LOCAL_FAVORITES_KEY);
+      if (guestStored) {
+        try {
+          const parsed = JSON.parse(guestStored);
+          if (Array.isArray(parsed)) {
+            result['guest'] = parsed;
+          }
+        } catch { /* ignore */ }
+      }
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(LOCAL_FAVORITES_PREFIX)) {
+          const uId = key.replace(LOCAL_FAVORITES_PREFIX, '');
+          try {
+            const val = JSON.parse(localStorage.getItem(key) || '[]');
+            if (Array.isArray(val)) {
+              result[uId] = val;
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    }
+    return result;
+  } catch (e) {
+    console.warn("Could not read favorites from localStorage:", e);
+    return {};
+  }
+};
+
+export const getLocalFavoriteTagsMap = (): Record<string, Record<string, string[]>> => {
+  try {
+    const result: Record<string, Record<string, string[]>> = {};
+    if (typeof window !== 'undefined' && window.localStorage) {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(LOCAL_FAVORITE_TAGS_PREFIX)) {
+          const uId = key.replace(LOCAL_FAVORITE_TAGS_PREFIX, '');
+          try {
+            const val = JSON.parse(localStorage.getItem(key) || '{}');
+            result[uId] = val;
+          } catch { /* ignore */ }
+        }
+      }
+    }
+    return result;
+  } catch (e) {
+    console.warn("Could not read favorite tags from localStorage:", e);
+    return {};
+  }
+};
+
 const getInitialTheme = (): 'light' | 'dark' => {
   try {
     const saved = localStorage.getItem('app-theme');
@@ -936,8 +995,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     publications: DEFAULT_PUBLICATIONS,
     entreprises: [],
     reviews: [],
-    favorites: {},
-    favoriteTags: {},
+    favorites: getLocalFavoritesMap(),
+    favoriteTags: getLocalFavoriteTagsMap(),
     applications: [],
     relationshipRequests: getLocalRelationshipRequests(),
     serviceRequests: [],
@@ -966,7 +1025,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     receptionsStock: [],
     inventairesStock: [],
     ventes: [],
-    loading: false,
+    loading: true,
     globalError: null,
     missingTables: [],
     theme: getInitialTheme(),
@@ -1719,6 +1778,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const establishmentIds = data?.establishmentIds || [];
         const tags = data?.tags || {};
         saveFavoritesToIndexedDB(state.currentUser!.id, establishmentIds).catch(e => console.warn('[IndexedDB] Favorites save notice:', e));
+        try {
+          localStorage.setItem(`zaka_favorites_${state.currentUser!.id}`, JSON.stringify(establishmentIds));
+          localStorage.setItem(`zaka_favorite_tags_${state.currentUser!.id}`, JSON.stringify(tags));
+          localStorage.setItem('zaka_local_favorites', JSON.stringify(establishmentIds));
+        } catch (storageErr) {
+          console.warn("Could not cache favorites in localStorage:", storageErr);
+        }
         setState(s => ({
           ...s,
           favorites: {
@@ -1746,7 +1812,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, async (error) => {
       console.warn("Erreur listening to favorites:", error);
       try {
-        const cachedFavs = await getFavoritesFromIndexedDB(state.currentUser!.id);
+        let cachedFavs: string[] = [];
+        const localFavs = localStorage.getItem(`zaka_favorites_${state.currentUser!.id}`) || localStorage.getItem('zaka_local_favorites');
+        if (localFavs) {
+          try {
+            cachedFavs = JSON.parse(localFavs);
+          } catch { /* ignore */ }
+        }
+        if (!cachedFavs || cachedFavs.length === 0) {
+          cachedFavs = await getFavoritesFromIndexedDB(state.currentUser!.id) || [];
+        }
         if (cachedFavs && cachedFavs.length > 0) {
           setState(s => ({
             ...s,
@@ -2502,12 +2577,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleFavorite = async (clientId: string, establishmentId: string) => {
     try {
-      // Trigger haptic feedback vibration for tactile feedback
-      triggerHapticFeedback(60);
-      
-      const userFavs = state.favorites[clientId] || [];
-      const userTags = state.favoriteTags[clientId] || {};
+      const effectiveClientId = clientId || (state.currentUser ? state.currentUser.id : 'guest');
+      const userFavs = state.favorites[effectiveClientId] || [];
+      const userTags = state.favoriteTags[effectiveClientId] || {};
       const isFav = userFavs.includes(establishmentId);
+      
+      // Trigger tactile haptic feedback
+      triggerHaptic(!isFav ? 'success' : 'light');
+
       const updatedFavs = isFav 
         ? userFavs.filter(id => id !== establishmentId)
         : [...userFavs, establishmentId];
@@ -2521,27 +2598,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...s,
         favorites: {
           ...s.favorites,
-          [clientId]: updatedFavs
+          [effectiveClientId]: updatedFavs,
+          ...(effectiveClientId === 'guest' ? { guest: updatedFavs } : {})
         },
         favoriteTags: {
           ...s.favoriteTags,
-          [clientId]: updatedTags
+          [effectiveClientId]: updatedTags,
+          ...(effectiveClientId === 'guest' ? { guest: updatedTags } : {})
         }
       }));
 
-      await setDoc(doc(db, 'favorites', clientId), {
-        establishmentIds: updatedFavs,
-        tags: updatedTags
-      });
+      // Immediate LocalStorage persistence so favorites persist offline / without network
+      try {
+        localStorage.setItem(`zaka_favorites_${effectiveClientId}`, JSON.stringify(updatedFavs));
+        localStorage.setItem(`zaka_favorite_tags_${effectiveClientId}`, JSON.stringify(updatedTags));
+        localStorage.setItem('zaka_local_favorites', JSON.stringify(updatedFavs));
+      } catch (storageErr) {
+        console.warn("Could not save favorites to localStorage:", storageErr);
+      }
+
+      // Also persist to IndexedDB for device resilience
+      saveFavoritesToIndexedDB(effectiveClientId, updatedFavs).catch(e => console.warn('[IndexedDB] save notice:', e));
+
+      // Sync with Firestore if user is authenticated and not in offline/guest mode
+      if (effectiveClientId !== 'guest' && !state.isOffline) {
+        await setDoc(doc(db, 'favorites', effectiveClientId), {
+          establishmentIds: updatedFavs,
+          tags: updatedTags
+        });
+      }
     } catch (error) {
+      console.warn("Favorites cloud sync notice (handled with local storage):", error);
       handleFirestoreError(error, OperationType.WRITE, `favorites/${clientId}`);
     }
   };
 
   const updateFavoriteTags = async (clientId: string, establishmentId: string, tags: string[]) => {
     try {
-      const userFavs = state.favorites[clientId] || [];
-      const userTags = state.favoriteTags[clientId] || {};
+      const effectiveClientId = clientId || (state.currentUser ? state.currentUser.id : 'guest');
+      const userFavs = state.favorites[effectiveClientId] || [];
+      const userTags = state.favoriteTags[effectiveClientId] || {};
       
       const updatedTags = {
         ...userTags,
@@ -2552,14 +2648,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...s,
         favoriteTags: {
           ...s.favoriteTags,
-          [clientId]: updatedTags
+          [effectiveClientId]: updatedTags
         }
       }));
 
-      await setDoc(doc(db, 'favorites', clientId), {
-        establishmentIds: userFavs,
-        tags: updatedTags
-      });
+      try {
+        localStorage.setItem(`zaka_favorite_tags_${effectiveClientId}`, JSON.stringify(updatedTags));
+        localStorage.setItem('zaka_local_favorite_tags', JSON.stringify(updatedTags));
+      } catch (storageErr) {
+        console.warn("Could not save favorite tags to localStorage:", storageErr);
+      }
+
+      if (effectiveClientId !== 'guest' && !state.isOffline) {
+        await setDoc(doc(db, 'favorites', effectiveClientId), {
+          establishmentIds: userFavs,
+          tags: updatedTags
+        });
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `favorites/${clientId}`);
     }
@@ -2567,20 +2672,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const saveAllFavoriteTags = async (clientId: string, tagsMap: Record<string, string[]>) => {
     try {
-      const userFavs = state.favorites[clientId] || [];
+      const effectiveClientId = clientId || (state.currentUser ? state.currentUser.id : 'guest');
+      const userFavs = state.favorites[effectiveClientId] || [];
       
       setState(s => ({
         ...s,
         favoriteTags: {
           ...s.favoriteTags,
-          [clientId]: tagsMap
+          [effectiveClientId]: tagsMap
         }
       }));
 
-      await setDoc(doc(db, 'favorites', clientId), {
-        establishmentIds: userFavs,
-        tags: tagsMap
-      });
+      try {
+        localStorage.setItem(`zaka_favorite_tags_${effectiveClientId}`, JSON.stringify(tagsMap));
+        localStorage.setItem('zaka_local_favorite_tags', JSON.stringify(tagsMap));
+      } catch (storageErr) {
+        console.warn("Could not save all favorite tags to localStorage:", storageErr);
+      }
+
+      if (effectiveClientId !== 'guest' && !state.isOffline) {
+        await setDoc(doc(db, 'favorites', effectiveClientId), {
+          establishmentIds: userFavs,
+          tags: tagsMap
+        });
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `favorites/${clientId}`);
     }
