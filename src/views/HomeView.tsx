@@ -680,7 +680,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
   // Base list of validated establishments
   const validEstablishments = establishments.filter(e => e.status === 'valide');
 
-  // Filter by selected category (Maquis, Restaurant, Bar, Boîte de nuit, etc.)
+  // Filter by selected category (Maquis, Restaurant, Bar, Boîte de nuit / Club, etc.)
   const categoryFilteredEstablishments = validEstablishments.filter(e => {
     if (selectedCategory === 'all') return true;
     if (selectedCategory === 'maquis') {
@@ -692,8 +692,8 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
     if (selectedCategory === 'bar') {
       return e.category === 'bar';
     }
-    if (selectedCategory === 'boite_de_nuit') {
-      return e.category === 'boite_de_nuit';
+    if (selectedCategory === 'boite_de_nuit' || selectedCategory === 'club') {
+      return e.category === 'boite_de_nuit' || (e.category as string) === 'club';
     }
     return e.category === selectedCategory;
   });
@@ -743,7 +743,20 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
       const descMatch = (e.description || '').toLowerCase().includes(q);
       const neighborhoodMatch = (e.neighborhood || e.quarter || '').toLowerCase().includes(q);
       const cityMatch = (e.city || '').toLowerCase().includes(q);
-      const categoryMatch = (e.category || '').toLowerCase().replace(/_/g, ' ').includes(q);
+      
+      // Type matching for maquis, restaurant, bar, club / boite de nuit
+      const isMaquisQuery = q.includes('maquis');
+      const isRestoQuery = q.includes('resto') || q.includes('restaurant') || q.includes('pizz') || q.includes('manger');
+      const isBarQuery = q === 'bar' || q.includes('bar ') || q.startsWith('bar') || q.includes('lounge') || q.includes('pub');
+      const isClubQuery = q.includes('club') || q.includes('boite') || q.includes('boîte') || q.includes('discotheque') || q.includes('discothèque') || q.includes('night');
+
+      const categoryMatch = 
+        (e.category || '').toLowerCase().replace(/_/g, ' ').includes(q) ||
+        (isMaquisQuery && e.category === 'maquis') ||
+        (isRestoQuery && (e.category === 'restaurant' || e.category === 'restaurants' || e.category === 'glacier_pizzeria')) ||
+        (isBarQuery && e.category === 'bar') ||
+        (isClubQuery && (e.category === 'boite_de_nuit' || (e.category as string) === 'club'));
+
       const tagMatch = (e.tags || []).some(t => t.toLowerCase().includes(q));
 
       if (!nameMatch && !descMatch && !neighborhoodMatch && !cityMatch && !categoryMatch && !tagMatch) {
@@ -876,22 +889,78 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           </div>
         </div>
 
-        {/* Quick Filter Bar */}
-        <div className="relative z-10 -mx-6 px-6 overflow-x-auto hide-scrollbar">
-          <div className="flex items-center gap-2 pb-2">
-            {['Tous', 'Maquis', 'Restaurant', 'Bar', 'Discothèque'].map((cat) => (
+        {/* Barre de Recherche Rapide (Quick Search Bar) */}
+        <div className="relative z-10 mt-5 bg-white/95 dark:bg-gray-950/95 backdrop-blur-md rounded-3xl p-3 shadow-xl border border-white/40 dark:border-gray-800 text-gray-900 dark:text-white">
+          <div className="relative flex items-center">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-orange-500">
+              <Search className="w-5 h-5" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Rechercher par nom ou par type (maquis, restaurant, bar, club)..."
+              className="w-full pl-11 pr-10 py-3 bg-gray-50 dark:bg-gray-900 rounded-2xl text-xs sm:text-sm font-medium border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all shadow-inner"
+            />
+            {searchQuery && (
               <button
-                key={cat}
-                onClick={() => setMapCategory(cat)}
-                className={`shrink-0 px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                  mapCategory.toLowerCase() === cat.toLowerCase()
-                ? 'bg-white text-orange-600 shadow-sm'
-                : 'bg-white/20 text-white hover:bg-white/30'
-            }`}
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"
+                title="Effacer la recherche"
               >
-                {cat}
+                <X className="w-4 h-4" />
               </button>
-            ))}
+            )}
+          </div>
+
+          {/* Filtres Rapides par Type : Tous, Maquis, Restaurant, Bar, Club */}
+          <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pt-2.5 pb-0.5">
+            {[
+              { id: 'all', label: 'Tous', icon: '🌟' },
+              { id: 'maquis', label: 'Maquis', icon: '🔥' },
+              { id: 'restaurant', label: 'Restaurant', icon: '🍽️' },
+              { id: 'bar', label: 'Bar', icon: '🍹' },
+              { id: 'boite_de_nuit', label: 'Club', icon: '🪩' },
+            ].map((cat) => {
+              const isSelected = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(cat.id);
+                    if (cat.id === 'all') setMapCategory('Tous');
+                    else if (cat.id === 'maquis') setMapCategory('Maquis');
+                    else if (cat.id === 'restaurant') setMapCategory('Restaurant');
+                    else if (cat.id === 'bar') setMapCategory('Bar');
+                    else if (cat.id === 'boite_de_nuit') setMapCategory('Discothèque');
+                  }}
+                  className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                    isSelected
+                      ? 'bg-orange-600 text-white shadow-sm'
+                      : 'bg-gray-100 dark:bg-gray-850 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <span className="text-xs">{cat.icon}</span>
+                  <span>{cat.label}</span>
+                </button>
+              );
+            })}
+
+            {/* Compteur de résultats & Saut vers la liste */}
+            <button
+              type="button"
+              onClick={() => {
+                const target = document.getElementById('establishments-section');
+                target?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="ml-auto shrink-0 text-[11px] font-extrabold text-orange-700 dark:text-orange-300 bg-orange-100/80 dark:bg-orange-950/60 hover:bg-orange-200 dark:hover:bg-orange-900/60 px-3 py-1.5 rounded-full border border-orange-200/80 dark:border-orange-900/40 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+              title="Voir les résultats"
+            >
+              <span>{filteredEstablishments.length} lieu{filteredEstablishments.length > 1 ? 'x' : ''}</span>
+              <span className="text-orange-600 dark:text-orange-400 font-black">↓</span>
+            </button>
           </div>
         </div>
       </div>
@@ -1644,7 +1713,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           </section>
         )}
 
-        <section>
+        <section id="establishments-section">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-xl font-black text-gray-900 tracking-tight">
@@ -1739,7 +1808,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                 { id: 'maquis', label: 'Maquis', icon: Flame },
                 { id: 'restaurant', label: 'Restaurants', icon: Sparkles },
                 { id: 'bar', label: 'Bars', icon: Wine },
-                { id: 'boite_de_nuit', label: 'Boîtes de nuit', icon: Trophy }
+                { id: 'boite_de_nuit', label: 'Clubs / Boîtes', icon: Trophy }
               ].map(cat => {
                 const isSelected = selectedCategory === cat.id;
                 return (

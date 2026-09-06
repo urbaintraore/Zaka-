@@ -17,7 +17,7 @@ import { LoyaltyAndPointsModule } from './LoyaltyAndPointsModule';
 import { EstablishmentPhotoGallery } from './EstablishmentPhotoGallery';
 import { EstablishmentPhotoGalleryManager } from './EstablishmentPhotoGalleryManager';
 import { useAppStore } from '../store';
-import { shareContent } from '../utils/platform';
+import { shareContent, getSocialShareUrl, copyToClipboard } from '../utils/platform';
 
 interface EstablishmentDetailModalProps {
   establishment: Establishment;
@@ -99,12 +99,37 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
     }
   };
 
+  const [shareCopied, setShareCopied] = useState(false);
+
+  const establishmentShareUrl = typeof window !== 'undefined' 
+    ? `${window.location.origin}/#est-${establishment.id}`
+    : '';
+
   const handleShare = async () => {
-    await shareContent({
-      title: establishment.name,
-      text: establishment.description || `Découvrez ${establishment.name} sur Zaka+`,
-      url: window.location.href
+    const success = await shareContent({
+      title: `${establishment.name} - Zaka+`,
+      text: establishment.description || `Découvrez ${establishment.name} (${establishment.neighborhood || establishment.city || 'Ouagadougou'}) sur Zaka+ !`,
+      url: establishmentShareUrl,
+      dialogTitle: `Partager ${establishment.name}`
     });
+    if (success) {
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 3000);
+    }
+  };
+
+  const handleCopyDirectLink = async () => {
+    await copyToClipboard(establishmentShareUrl);
+    setShareCopied(true);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: {
+          message: 'Lien de la fiche copié dans le presse-papier !',
+          type: 'info'
+        }
+      }));
+    }
+    setTimeout(() => setShareCopied(false), 3000);
   };
 
   const handleReservationSubmit = (data: { reservationType: string, date: string, time: string, guests: number, details: string }) => {
@@ -278,6 +303,91 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
                 )}
               </button>
             )}
+            {/* Section Partage Réseaux Sociaux & Messageries via @capacitor/share */}
+            <div className="mt-4 p-4 bg-gradient-to-r from-orange-50/80 to-amber-50/80 dark:from-gray-900 dark:to-gray-850 rounded-2xl border border-orange-200/80 dark:border-gray-800 space-y-3 shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center">
+                    <Share2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider">Partager la fiche</h4>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Invitez vos amis sur vos réseaux sociaux ou applications de messagerie</p>
+                  </div>
+                </div>
+                {shareCopied && (
+                  <span className="text-[10px] font-bold text-green-700 bg-green-100 dark:bg-green-950/60 dark:text-green-300 px-2 py-0.5 rounded-full animate-bounce">
+                    ✓ Partagé !
+                  </span>
+                )}
+              </div>
+
+              {/* Bouton Partage Natif Principal (@capacitor/share) */}
+              <button
+                type="button"
+                onClick={handleShare}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-98 cursor-pointer"
+              >
+                <Share2 className="w-4 h-4" />
+                <span>Partager via vos applications (WhatsApp, Messenger, SMS...)</span>
+              </button>
+
+              {/* Raccourcis Réseaux Sociaux & Copie Directe */}
+              <div className="grid grid-cols-4 gap-1.5 pt-1">
+                <a
+                  href={getSocialShareUrl('whatsapp', {
+                    title: `${establishment.name} sur Zaka+`,
+                    text: `Découvrez ${establishment.name} (${establishment.neighborhood || establishment.city || 'Ouagadougou'}) : `,
+                    url: establishmentShareUrl
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/50 transition-all text-[11px] font-bold gap-1 active:scale-95"
+                  title="Partager sur WhatsApp"
+                >
+                  <span className="text-base leading-none">💬</span>
+                  <span className="truncate max-w-full">WhatsApp</span>
+                </a>
+
+                <a
+                  href={getSocialShareUrl('facebook', {
+                    title: establishment.name,
+                    url: establishmentShareUrl
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/50 transition-all text-[11px] font-bold gap-1 active:scale-95"
+                  title="Partager sur Facebook"
+                >
+                  <span className="text-base leading-none">📘</span>
+                  <span className="truncate max-w-full">Facebook</span>
+                </a>
+
+                <a
+                  href={getSocialShareUrl('telegram', {
+                    title: `${establishment.name} sur Zaka+`,
+                    url: establishmentShareUrl
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-900/50 transition-all text-[11px] font-bold gap-1 active:scale-95"
+                  title="Partager sur Telegram"
+                >
+                  <span className="text-base leading-none">✈️</span>
+                  <span className="truncate max-w-full">Telegram</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={handleCopyDirectLink}
+                  className="flex flex-col items-center justify-center py-2 px-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-750 transition-all text-[11px] font-bold gap-1 active:scale-95 cursor-pointer"
+                  title="Copier le lien"
+                >
+                  <span className="text-base leading-none">🔗</span>
+                  <span className="truncate max-w-full">Copier</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Targeted Ad Placement */}

@@ -7,6 +7,20 @@ export function Toast() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
+    const handleCustomToast = (e: any) => {
+      if (e.detail?.message) {
+        setGlobalError({
+          message: e.detail.message,
+          type: e.detail.type || 'info',
+          code: e.detail.code
+        });
+      }
+    };
+    window.addEventListener('app-toast', handleCustomToast);
+    return () => window.removeEventListener('app-toast', handleCustomToast);
+  }, [setGlobalError]);
+
+  useEffect(() => {
     if (!globalError) {
       setIsVisible(false);
       return;

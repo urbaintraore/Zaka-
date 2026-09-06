@@ -3,43 +3,98 @@ import { Clipboard } from '@capacitor/clipboard';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 
-export async function shareContent(options: { title: string; text?: string; url?: string }): Promise<void> {
+export interface ShareOptions {
+  title: string;
+  text?: string;
+  url?: string;
+  dialogTitle?: string;
+}
+
+export async function shareContent(options: ShareOptions): Promise<boolean> {
+  const shareUrl = options.url || (typeof window !== 'undefined' ? window.location.href : '');
+  const shareTitle = options.title || 'Zaka+';
+  const shareText = options.text || '';
+  const dialogTitle = options.dialogTitle || 'Partager sur vos réseaux ou messageries';
+
+  // 1. Try Capacitor Share first (Android, iOS and supported environments)
+  try {
+    const canShareResult = await Share.canShare();
+    if (canShareResult && canShareResult.value) {
+      await Share.share({
+        title: shareTitle,
+        text: shareText,
+        url: shareUrl,
+        dialogTitle: dialogTitle,
+      });
+      return true;
+    }
+  } catch (error) {
+    console.warn('Notice vérification Share.canShare:', error);
+  }
+
+  // 2. Direct attempt with Capacitor Share on native platform
   if (Capacitor.isNativePlatform()) {
     try {
-      const canShareResult = await Share.canShare();
-      if (canShareResult.value) {
-        await Share.share({
-          title: options.title,
-          text: options.text,
-          url: options.url || window.location.href,
-          dialogTitle: 'Partager',
-        });
-        return;
-      }
+      await Share.share({
+        title: shareTitle,
+        text: shareText,
+        url: shareUrl,
+        dialogTitle: dialogTitle,
+      });
+      return true;
     } catch (error) {
-      console.error('Erreur de partage natif:', error);
+      console.warn('Erreur Share.share natif:', error);
     }
   }
 
-  if (typeof navigator !== 'undefined' && navigator.share) {
+  // 3. Fallback to standard Web Share API if supported
+  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
     try {
       await navigator.share({
-        title: options.title,
-        text: options.text,
-        url: options.url || window.location.href,
+        title: shareTitle,
+        text: shareText,
+        url: shareUrl,
       });
-      return;
-    } catch (error) {
+      return true;
+    } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        return false;
+      }
       console.warn('Erreur lors du partage web:', error);
     }
   }
 
+  // 4. Fallback: Copy link to clipboard with Toast feedback (no alert)
   try {
-    const shareUrl = options.url || window.location.href;
     await copyToClipboard(shareUrl);
-    alert('Lien copié dans le presse-papier !');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: {
+          message: 'Lien de la fiche copié dans le presse-papier !',
+          type: 'info'
+        }
+      }));
+    }
+    return true;
   } catch (err) {
     console.error('Impossible de copier le lien:', err);
+    return false;
+  }
+}
+
+export function getSocialShareUrl(platform: 'whatsapp' | 'facebook' | 'twitter' | 'telegram', options: ShareOptions): string {
+  const url = encodeURIComponent(options.url || (typeof window !== 'undefined' ? window.location.href : ''));
+  const text = encodeURIComponent((options.title ? `${options.title}\n` : '') + (options.text ? `${options.text}\n` : ''));
+
+  switch (platform) {
+    case 'whatsapp':
+      return `https://api.whatsapp.com/send?text=${text}${url}`;
+    case 'facebook':
+      return `https://www.facebook.com/sharer/sharer.php?u=${url}`;
+    case 'twitter':
+      return `https://twitter.com/intent/tweet?text=${text}&url=${url}`;
+    case 'telegram':
+      return `https://t.me/share/url?url=${url}&text=${text}`;
   }
 }
 

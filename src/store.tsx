@@ -91,6 +91,50 @@ const cleanPayloadForSupabase = (tableName: string, payload: any) => {
     if (clean.userId && !clean.initiatorId) {
       clean.initiatorId = clean.userId;
     }
+    if (clean.initiator_id && !clean.initiatorId) {
+      clean.initiatorId = clean.initiator_id;
+    }
+    if (clean.target_id && !clean.targetId) {
+      clean.targetId = clean.target_id;
+    }
+    if (clean.user_id && !clean.userId) {
+      clean.userId = clean.user_id;
+    }
+    if (clean.establishment_id && !clean.establishmentId) {
+      clean.establishmentId = clean.establishment_id;
+    }
+    if (clean.establishment_name && !clean.establishmentName) {
+      clean.establishmentName = clean.establishment_name;
+    }
+    if (clean.requested_role && !clean.requestedRole) {
+      clean.requestedRole = clean.requested_role;
+    }
+    if (clean.identity_photo_url && !clean.identityPhotoUrl) {
+      clean.identityPhotoUrl = clean.identity_photo_url;
+    }
+    if (clean.is_dj !== undefined && clean.isDJ === undefined) {
+      clean.isDJ = clean.is_dj;
+    }
+    if (clean.isDj !== undefined && clean.isDJ === undefined) {
+      clean.isDJ = clean.isDj;
+    }
+    if (clean.is_caissier !== undefined && clean.isCaissier === undefined) {
+      clean.isCaissier = clean.is_caissier;
+    }
+    if (clean.is_serveur !== undefined && clean.isServeur === undefined) {
+      clean.isServeur = clean.is_serveur;
+    }
+    delete clean.is_dj;
+    delete clean.isDj;
+    delete clean.is_caissier;
+    delete clean.is_serveur;
+    delete clean.requested_role;
+    delete clean.initiator_id;
+    delete clean.target_id;
+    delete clean.user_id;
+    delete clean.establishment_id;
+    delete clean.establishment_name;
+    delete clean.identity_photo_url;
   }
 
   if (tableName === 'conversations') {
@@ -148,6 +192,23 @@ const saveLocalMenus = (menus: any[]) => {
     localStorage.setItem('zaka_menus_du_jour', JSON.stringify(menus));
   } catch (e) {
     console.error('Failed to save menus to localStorage', e);
+  }
+};
+
+const getLocalRelationshipRequests = (): RelationshipRequest[] => {
+  try {
+    const stored = localStorage.getItem('zaka_local_relationship_requests');
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    return [];
+  }
+};
+
+const saveLocalRelationshipRequests = (requests: RelationshipRequest[]) => {
+  try {
+    localStorage.setItem('zaka_local_relationship_requests', JSON.stringify(requests));
+  } catch (e) {
+    console.warn('Failed to save relationship requests to localStorage', e);
   }
 };
 
@@ -209,7 +270,10 @@ const addDoc = async (collRef: string, payload: any) => {
         establishmentName: cleanPayload.establishmentName || 'Établissement',
         requestedRole: cleanPayload.requestedRole || 'client',
         status: cleanPayload.status || 'en_attente',
-        date: cleanPayload.date || new Date().toISOString()
+        date: cleanPayload.date || new Date().toISOString(),
+        isDJ: !!cleanPayload.isDJ,
+        isCaissier: !!cleanPayload.isCaissier,
+        isServeur: !!cleanPayload.isServeur
       };
       const legRes = await supabase.from(tableName).insert(legacyPayload).select().single();
       if (!legRes.error) {
@@ -348,6 +412,11 @@ const deleteDoc = async (docRef: { collectionName: string, docId?: string }) => 
     const filtered = menus.filter((m: any) => m.id !== id);
     saveLocalMenus(filtered);
     return;
+  }
+  if (docRef.collectionName === 'relationshipRequests' && docRef.docId) {
+    const localRels = getLocalRelationshipRequests();
+    const filtered = localRels.filter(r => r.id !== docRef.docId);
+    saveLocalRelationshipRequests(filtered);
   }
   if (!isSupabaseConfigured) return;
   const tableName = mapCollectionToTable(docRef.collectionName);
@@ -511,6 +580,18 @@ const onSnapshot = (queryObj: any, callback: (snapshot: any) => void, errorCallb
         for (const filter of queryObj.filters) {
           if (filter.op === '==') {
             queryBuilder = queryBuilder.eq(filter.field, filter.value);
+          } else if (filter.op === 'in') {
+            queryBuilder = queryBuilder.in(filter.field, filter.value);
+          } else if (filter.op === 'array-contains') {
+            queryBuilder = queryBuilder.contains(filter.field, [filter.value]);
+          } else if (filter.op === '>') {
+            queryBuilder = queryBuilder.gt(filter.field, filter.value);
+          } else if (filter.op === '<') {
+            queryBuilder = queryBuilder.lt(filter.field, filter.value);
+          } else if (filter.op === '>=') {
+            queryBuilder = queryBuilder.gte(filter.field, filter.value);
+          } else if (filter.op === '<=') {
+            queryBuilder = queryBuilder.lte(filter.field, filter.value);
           }
         }
       }
@@ -757,7 +838,7 @@ interface AppContextType extends AppState {
   removeFriend: (friendshipId: string) => Promise<void>;
   setGlobalError: (err: { message: string; code?: string; type?: 'error' | 'warning' | 'info' } | null) => void;
   toggleTheme: () => void;
-  setTheme: (theme: 'light' | 'dark') => void;
+  setTheme: (theme: 'light' | 'dark' | 'auto') => void;
 }
 
 export enum OperationType {
@@ -819,7 +900,7 @@ export function handleFirestoreError(error: any, operationType: OperationType, p
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  console.warn('Firestore Warning: ', JSON.stringify(errInfo));
   // Removed throw to prevent crashing the entire application state when a table is missing
 }
 
@@ -858,7 +939,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     favorites: {},
     favoriteTags: {},
     applications: [],
-    relationshipRequests: [],
+    relationshipRequests: getLocalRelationshipRequests(),
     serviceRequests: [],
     reservations: [],
     menusDuJour: [],
@@ -976,20 +1057,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [state.theme]);
 
   useEffect(() => {
-    // Dynamic detection of system color scheme if no user preference is saved
-    const hasLocalTheme = localStorage.getItem('app-theme') !== null;
-    if (!hasLocalTheme && window.matchMedia) {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handleSystemThemeChange = (e: MediaQueryListEvent) => {
-        const hasOverride = localStorage.getItem('app-theme') !== null;
-        if (!hasOverride) {
-          const systemTheme = e.matches ? 'dark' : 'light';
-          setState(s => ({ ...s, theme: systemTheme }));
-        }
-      };
+    // Dynamic detection of system color scheme (prefers-color-scheme)
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+    const handleSystemThemeChange = (e: MediaQueryListEvent | MediaQueryList) => {
+      const saved = localStorage.getItem('app-theme');
+      // If user has not manually locked a theme (or set to auto), automatically toggle to match system
+      if (!saved || saved === 'auto') {
+        const systemTheme = e.matches ? 'dark' : 'light';
+        setState(s => ({ ...s, theme: systemTheme }));
+      }
+    };
+
+    if (mediaQuery.addEventListener) {
       mediaQuery.addEventListener('change', handleSystemThemeChange);
-      return () => mediaQuery.removeEventListener('change', handleSystemThemeChange);
+    } else if ((mediaQuery as any).addListener) {
+      (mediaQuery as any).addListener(handleSystemThemeChange);
     }
+
+    return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener('change', handleSystemThemeChange);
+      } else if ((mediaQuery as any).removeListener) {
+        (mediaQuery as any).removeListener(handleSystemThemeChange);
+      }
+    };
   }, []);
 
   // Keep track of notified publications and replies to avoid duplicates
@@ -1121,7 +1214,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       setUnreadCount(count);
     }, (error) => {
-      console.error("Erreur listening to unread conversations:", error);
+      console.warn("Erreur listening to unread conversations:", error);
     });
 
     return () => unsubscribe();
@@ -1274,7 +1367,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       setState(s => ({ ...s, establishments: mergedEsts, offlineCachedCount: mergedEsts.length }));
     }, async (error) => {
-      console.error("Erreur establishments:", error);
+      console.warn("Erreur establishments:", error);
       // Fallback to IndexedDB cached establishments if available
       try {
         const cached = await getEstablishmentsFromIndexedDB();
@@ -1304,7 +1397,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       setState(s => ({ ...s, publications: mergedPubs }));
     }, (error) => {
-      console.error("Erreur publications:", error);
+      console.warn("Erreur publications:", error);
       // Fallback to defaults in case of error
       setState(s => ({ ...s, publications: DEFAULT_PUBLICATIONS }));
     });
@@ -1316,7 +1409,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(doc => revs.push({ id: doc.id, ...doc.data() } as Review));
       setState(s => ({ ...s, reviews: revs }));
     }, (error) => {
-      console.error("Erreur reviews:", error);
+      console.warn("Erreur reviews:", error);
     });
 
     // Listen to menus du jour
@@ -1326,7 +1419,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(doc => menus.push({ id: doc.id, ...doc.data() } as MenuDuJour));
       setState(s => ({ ...s, menusDuJour: menus }));
     }, (error) => {
-      console.error("Erreur menus_du_jour:", error);
+      console.warn("Erreur menus_du_jour:", error);
     });
 
     // Listen to entreprises
@@ -1344,7 +1437,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       setState(s => ({ ...s, entreprises: mergedEnts }));
     }, (error) => {
-      console.error("Erreur listening to entreprises:", error);
+      console.warn("Erreur listening to entreprises:", error);
     });
 
     // Listen to ZAKA Ads campaigns (public)
@@ -1361,7 +1454,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       setState(s => ({ ...s, campaigns: mergedCamps }));
     }, (error) => {
-      console.error("Erreur listening to campaigns:", error);
+      console.warn("Erreur listening to campaigns:", error);
       setState(s => ({ ...s, campaigns: DEFAULT_CAMPAIGNS }));
     });
 
@@ -1379,7 +1472,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       setState(s => ({ ...s, ads: mergedAds }));
     }, (error) => {
-      console.error("Erreur listening to ads:", error);
+      console.warn("Erreur listening to ads:", error);
       setState(s => ({ ...s, ads: DEFAULT_ADS }));
     });
 
@@ -1409,7 +1502,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(docSnap => oList.push({ id: docSnap.id, ...docSnap.data() } as AdOrganization));
       setState(s => ({ ...s, adOrganizations: oList }));
     }, (error) => {
-      console.error("Erreur listening to adOrganizations:", error);
+      console.warn("Erreur listening to adOrganizations:", error);
     });
 
     // Listen to ad audit logs
@@ -1419,7 +1512,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(docSnap => aList.push({ id: docSnap.id, ...docSnap.data() } as AdAuditLog));
       setState(s => ({ ...s, adAuditLogs: aList }));
     }, (error) => {
-      console.error("Erreur listening to adAuditLogs:", error);
+      console.warn("Erreur listening to adAuditLogs:", error);
     });
 
     // Listen to ad rates
@@ -1429,7 +1522,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(docSnap => rList.push({ id: docSnap.id, ...docSnap.data() } as AdRateConfig));
       setState(s => ({ ...s, adRates: rList }));
     }, (error) => {
-      console.error("Erreur listening to adRates:", error);
+      console.warn("Erreur listening to adRates:", error);
     });
 
     // Listen to ad support tickets
@@ -1439,7 +1532,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(docSnap => tList.push({ id: docSnap.id, ...docSnap.data() } as AdSupportTicket));
       setState(s => ({ ...s, adSupportTickets: tList }));
     }, (error) => {
-      console.error("Erreur listening to adSupportTickets:", error);
+      console.warn("Erreur listening to adSupportTickets:", error);
     });
 
     // Listen to ad creatives
@@ -1449,7 +1542,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(docSnap => cList.push({ id: docSnap.id, ...docSnap.data() } as AdCreative));
       setState(s => ({ ...s, adCreatives: cList }));
     }, (error) => {
-      console.error("Erreur listening to adCreatives:", error);
+      console.warn("Erreur listening to adCreatives:", error);
     });
 
     // Listen to ad payments
@@ -1459,7 +1552,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(docSnap => pList.push({ id: docSnap.id, ...docSnap.data() } as AdPayment));
       setState(s => ({ ...s, adPayments: pList }));
     }, (error) => {
-      console.error("Erreur listening to payments:", error);
+      console.warn("Erreur listening to payments:", error);
     });
 
     // Listen to ad invoices
@@ -1469,7 +1562,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(docSnap => iList.push({ id: docSnap.id, ...docSnap.data() } as AdInvoice));
       setState(s => ({ ...s, adInvoices: iList }));
     }, (error) => {
-      console.error("Erreur listening to invoices:", error);
+      console.warn("Erreur listening to invoices:", error);
     });
 
     // Listen to ad daily stats
@@ -1479,7 +1572,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(docSnap => sList.push({ id: docSnap.id, ...docSnap.data() } as AdDailyStat));
       setState(s => ({ ...s, adDailyStats: sList }));
     }, (error) => {
-      console.error("Erreur listening to adStatistics:", error);
+      console.warn("Erreur listening to adStatistics:", error);
     });
 
     // Listen to users
@@ -1491,7 +1584,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       setState(s => ({ ...s, users: uList }));
     }, (error) => {
-      console.error("Erreur listening to users:", error);
+      console.warn("Erreur listening to users:", error);
     });
 
     // Listen to friendships
@@ -1503,7 +1596,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       setState(s => ({ ...s, friendships: fList }));
     }, (error) => {
-      console.error("Erreur listening to friendships:", error);
+      console.warn("Erreur listening to friendships:", error);
     });
 
     // Listen to parrainages
@@ -1513,7 +1606,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(docSnap => pList.push({ id: docSnap.id, ...docSnap.data() } as Parrainage));
       setState(s => ({ ...s, parrainages: pList }));
     }, (error) => {
-      console.error("Erreur listening to parrainages:", error);
+      console.warn("Erreur listening to parrainages:", error);
     });
 
     // Listen to relationship requests
@@ -1525,23 +1618,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
         rels.push({
           id: doc.id,
           ...d,
-          initiatorId: d.initiatorId || d.userId || d.initiator_id || d.user_id || '',
+          initiatorId: d.initiatorId || d.initiator_id || d.userId || d.user_id || '',
           targetId: d.targetId || d.target_id || '',
-          userId: d.userId || d.initiatorId || '',
+          userId: d.userId || d.user_id || d.initiatorId || d.initiator_id || '',
           establishmentId: d.establishmentId || d.establishment_id || '',
           type: d.type || 'client_join',
           requestedRole: d.requestedRole || d.requested_role || 'client',
           status: d.status || 'en_attente',
           date: d.date || d.created_at || new Date().toISOString(),
-          isDJ: !!(d.isDJ || d.is_dj),
-          isCaissier: !!(d.isCaissier || d.is_caissier),
-          isServeur: !!(d.isServeur || d.is_serveur),
+          isDJ: !!(d.isDJ || d.is_dj || d.requestedRole === 'dj' || d.requested_role === 'dj'),
+          isCaissier: !!(d.isCaissier || d.is_caissier || d.requestedRole === 'caissier' || d.requested_role === 'caissier'),
+          isServeur: !!(d.isServeur || d.is_serveur || d.requestedRole === 'serveur' || d.requested_role === 'serveur'),
           identityPhotoUrl: d.identityPhotoUrl || d.identity_photo_url || ''
         } as RelationshipRequest);
       });
-      setState(s => ({ ...s, relationshipRequests: rels }));
+
+      // Merge with locally stored modifications to guarantee role persistence across sessions
+      const localList = getLocalRelationshipRequests();
+      const merged = rels.map(r => {
+        const loc = localList.find(l => l.id === r.id);
+        if (loc) {
+          return {
+            ...r,
+            isDJ: loc.isDJ !== undefined ? loc.isDJ : r.isDJ,
+            isCaissier: loc.isCaissier !== undefined ? loc.isCaissier : r.isCaissier,
+            isServeur: loc.isServeur !== undefined ? loc.isServeur : r.isServeur,
+            requestedRole: loc.requestedRole || r.requestedRole,
+            status: loc.status || r.status
+          };
+        }
+        return r;
+      });
+
+      localList.forEach(loc => {
+        if (!merged.some(m => m.id === loc.id)) {
+          merged.push(loc);
+        }
+      });
+
+      saveLocalRelationshipRequests(merged);
+      setState(s => ({ ...s, relationshipRequests: merged }));
     }, (error) => {
-      console.error("Erreur relationshipRequests:", error);
+      console.warn("Erreur relationshipRequests:", error);
     });
 
     // Listen to staff reviews
@@ -1551,7 +1669,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(doc => sReviews.push({ id: doc.id, ...doc.data() } as StaffReview));
       setState(s => ({ ...s, staffReviews: sReviews }));
     }, (error) => {
-      console.error("Erreur staffReviews:", error);
+      console.warn("Erreur staffReviews:", error);
     });
 
     // Listen to staff attendances
@@ -1561,7 +1679,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(doc => attList.push({ id: doc.id, ...doc.data() } as StaffAttendance));
       setState(s => ({ ...s, staffAttendances: attList }));
     }, (error) => {
-      console.error("Erreur staffAttendances:", error);
+      console.warn("Erreur staffAttendances:", error);
     });
 
     // Listen to service requests
@@ -1571,7 +1689,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(doc => sers.push({ id: doc.id, ...doc.data() } as ServiceRequest));
       setState(s => ({ ...s, serviceRequests: sers }));
     }, (error) => {
-      console.error("Erreur serviceRequests:", error);
+      console.warn("Erreur serviceRequests:", error);
     });
 
     // Listen to reservations
@@ -1581,7 +1699,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(doc => resList.push({ id: doc.id, ...doc.data() } as Reservation));
       setState(s => ({ ...s, reservations: resList }));
     }, (error) => {
-      console.error("Erreur reservations:", error);
+      console.warn("Erreur reservations:", error);
     });
 
     // Listen to takeaway orders
@@ -1591,7 +1709,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(doc => toList.push({ id: doc.id, ...doc.data() } as TakeawayOrder));
       setState(s => ({ ...s, takeawayOrders: toList }));
     }, (error) => {
-      console.error("Erreur takeawayOrders:", error);
+      console.warn("Erreur takeawayOrders:", error);
     });
 
     // Listen to favorites
@@ -1626,7 +1744,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }));
       }
     }, async (error) => {
-      console.error("Erreur listening to favorites:", error);
+      console.warn("Erreur listening to favorites:", error);
       try {
         const cachedFavs = await getFavoritesFromIndexedDB(state.currentUser!.id);
         if (cachedFavs && cachedFavs.length > 0) {
@@ -1650,7 +1768,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(docSnap => carnet.push({ id: docSnap.id, ...docSnap.data() } as CarnetEntry));
       setState(s => ({ ...s, carnetEntrees: carnet }));
     }, (error) => {
-      console.error("Erreur listening to carnet_entrees:", error);
+      console.warn("Erreur listening to carnet_entrees:", error);
     });
 
     // Listen to loyalty_cards
@@ -1660,7 +1778,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(docSnap => cards.push({ id: docSnap.id, ...docSnap.data() } as LoyaltyCard));
       setState(s => ({ ...s, loyaltyCards: cards }));
     }, (error) => {
-      console.error("Erreur listening to loyalty_cards:", error);
+      console.warn("Erreur listening to loyalty_cards:", error);
     });
 
     // Listen to zaka_redemptions
@@ -1670,7 +1788,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(docSnap => redList.push({ id: docSnap.id, ...docSnap.data() } as ZakaRedemption));
       setState(s => ({ ...s, zakaRedemptions: redList }));
     }, (error) => {
-      console.error("Erreur listening to zaka_redemptions:", error);
+      console.warn("Erreur listening to zaka_redemptions:", error);
     });
 
     // Listen to group_outings
@@ -1680,7 +1798,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       snapshot.forEach(docSnap => gList.push({ id: docSnap.id, ...docSnap.data() } as GroupOuting));
       setState(s => ({ ...s, groupOutings: gList }));
     }, (error) => {
-      console.error("Erreur listening to group_outings:", error);
+      console.warn("Erreur listening to group_outings:", error);
     });
 
     // Listen to stocks
@@ -1779,7 +1897,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return { ...s, applications: [...updated, ...candidateApps] };
       });
     }, (error) => {
-      console.error("Erreur listing candidate applications:", error);
+      console.warn("Erreur listing candidate applications:", error);
     });
     unsubscribes.push(unsubCandidate);
 
@@ -1808,7 +1926,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             return { ...s, applications: [...updated, ...managerApps] };
           });
         }, (error) => {
-          console.error("Erreur listing manager applications:", error);
+          console.warn("Erreur listing manager applications:", error);
         });
         unsubscribes.push(unsubManager);
       });
@@ -2581,33 +2699,116 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const persistRelationshipRoleUpdate = async (requestId: string, roleData: {
+    isDJ?: boolean;
+    isCaissier?: boolean;
+    isServeur?: boolean;
+    requestedRole?: string;
+    status?: string;
+  }) => {
+    if (!isSupabaseConfigured) return;
+
+    const payload: any = {};
+    if (roleData.isDJ !== undefined) {
+      payload.isDJ = roleData.isDJ;
+    }
+    if (roleData.isCaissier !== undefined) {
+      payload.isCaissier = roleData.isCaissier;
+    }
+    if (roleData.isServeur !== undefined) {
+      payload.isServeur = roleData.isServeur;
+    }
+    if (roleData.requestedRole !== undefined) {
+      payload.requestedRole = roleData.requestedRole;
+    }
+    if (roleData.status !== undefined) {
+      payload.status = roleData.status;
+    }
+
+    try {
+      await updateDoc(doc(db, 'relationshipRequests', requestId), payload);
+    } catch (e) {
+      console.warn("Erreur persistRelationshipRoleUpdate:", e);
+    }
+  };
+
   const createRelationshipRequest = async (req: Omit<RelationshipRequest, 'id' | 'status' | 'date'>) => {
     try {
+      // If gerant is inviting, candidate is targetId; otherwise it is initiatorId
+      const targetUserId = req.type === 'gerant_invite' ? req.targetId : req.initiatorId;
+      const targetUser = state.users.find(u => u.id === targetUserId);
+      const est = state.establishments.find(e => e.id === req.establishmentId);
+
       // Validate unique establishment for staff roles
       const restrictedRoles = ['serveur', 'caissier', 'menage', 'vigile'];
       if (req.requestedRole && restrictedRoles.includes(req.requestedRole)) {
         const existingRestricted = state.relationshipRequests.find(r => 
-          (r.initiatorId === req.initiatorId || r.userId === req.initiatorId) && 
+          (r.targetId === targetUserId || r.initiatorId === targetUserId || r.userId === targetUserId) && 
           r.status !== 'refusee' &&
+          r.establishmentId !== req.establishmentId &&
           r.requestedRole && restrictedRoles.includes(r.requestedRole)
         );
         if (existingRestricted) {
-          throw new Error("Vous ne pouvez être employé que dans un seul établissement à la fois (sauf Gérant et DJ).");
+          throw new Error("Cet utilisateur est déjà employé dans un autre établissement.");
         }
       }
 
-      const est = state.establishments.find(e => e.id === req.establishmentId);
-      const user = state.currentUser;
+      const isDJ = !!(req.isDJ || req.requestedRole === 'dj');
+      const isCaissier = !!(req.isCaissier || req.requestedRole === 'caissier');
+      const isServeur = !!((req as any).isServeur || req.requestedRole === 'serveur');
 
-      await addDoc(collection(db, 'relationshipRequests'), {
+      const newId = `rel_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const requestPayload: any = {
         ...req,
-        userId: req.initiatorId,
-        userName: user?.name || user?.email || 'Utilisateur',
-        userPhone: user?.phone || '',
+        userId: targetUserId,
+        userName: targetUser?.name || state.currentUser?.name || 'Utilisateur',
+        userPhone: targetUser?.phone || state.currentUser?.phone || '',
         establishmentName: est?.name || 'Établissement',
         status: 'en_attente',
-        date: new Date().toISOString()
+        date: new Date().toISOString(),
+        isDJ,
+        isCaissier,
+        isServeur,
+        requestedRole: req.requestedRole || 'client'
+      };
+      delete requestPayload.is_dj;
+      delete requestPayload.isDj;
+      delete requestPayload.is_caissier;
+      delete requestPayload.is_serveur;
+      delete requestPayload.requested_role;
+
+      const newRecord: RelationshipRequest = {
+        id: newId,
+        initiatorId: req.initiatorId,
+        targetId: req.targetId,
+        userId: targetUserId || '',
+        establishmentId: req.establishmentId,
+        type: req.type || 'client_join',
+        requestedRole: req.requestedRole || 'client',
+        status: 'en_attente',
+        date: requestPayload.date,
+        isDJ,
+        isCaissier,
+        isServeur,
+        identityPhotoUrl: req.identityPhotoUrl || ''
+      };
+
+      setState(s => {
+        const updated = [...s.relationshipRequests, newRecord];
+        saveLocalRelationshipRequests(updated);
+        return { ...s, relationshipRequests: updated };
       });
+
+      if (isSupabaseConfigured) {
+        const docRes = await addDoc(collection(db, 'relationshipRequests'), requestPayload);
+        if (docRes && docRes.id) {
+          setState(s => {
+            const updated = s.relationshipRequests.map(r => r.id === newId ? { ...r, id: docRes.id } : r);
+            saveLocalRelationshipRequests(updated);
+            return { ...s, relationshipRequests: updated };
+          });
+        }
+      }
     } catch (error: any) {
       console.error("Erreur createRelationshipRequest:", error);
       throw error;
@@ -2616,7 +2817,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateRelationshipRequest = async (id: string, status: 'acceptee' | 'refusee') => {
     try {
-      await updateDoc(doc(db, 'relationshipRequests', id), { status });
+      const existing = state.relationshipRequests.find(r => r.id === id);
+      const isDJ = existing ? !!(existing.isDJ || existing.requestedRole === 'dj') : false;
+      const isCaissier = existing ? !!(existing.isCaissier || existing.requestedRole === 'caissier') : false;
+      const isServeur = existing ? !!((existing as any).isServeur || existing.requestedRole === 'serveur') : false;
+      const targetUserId = existing ? (existing.type === 'gerant_invite' ? existing.targetId : (existing.userId || existing.initiatorId)) : null;
+
+      setState(s => {
+        const updated = s.relationshipRequests.map(r => 
+          r.id === id ? { 
+            ...r, 
+            status,
+            isDJ: status === 'acceptee' ? isDJ : r.isDJ,
+            isCaissier: status === 'acceptee' ? isCaissier : r.isCaissier,
+            isServeur: status === 'acceptee' ? isServeur : r.isServeur
+          } : r
+        );
+        saveLocalRelationshipRequests(updated);
+
+        let updatedUsers = s.users;
+        let updatedCurrentUser = s.currentUser;
+        if (status === 'acceptee' && targetUserId) {
+          const userRole = isCaissier ? 'caissier' : (isDJ ? 'dj' : null);
+          if (userRole) {
+            updatedUsers = s.users.map(u => u.id === targetUserId ? { ...u, role: userRole as Role } : u);
+            if (s.currentUser?.id === targetUserId) {
+              updatedCurrentUser = { ...s.currentUser, role: userRole as Role };
+            }
+          }
+        }
+
+        return { 
+          ...s, 
+          relationshipRequests: updated,
+          users: updatedUsers,
+          currentUser: updatedCurrentUser
+        };
+      });
+
+      await persistRelationshipRoleUpdate(id, { 
+        status,
+        ...(status === 'acceptee' ? { isDJ, isCaissier, isServeur } : {})
+      });
+
+      if (status === 'acceptee' && targetUserId && isSupabaseConfigured) {
+        if (isCaissier) {
+          await supabase.from('users').update({ role: 'caissier' }).eq('id', targetUserId);
+        } else if (isDJ) {
+          await supabase.from('users').update({ role: 'dj' }).eq('id', targetUserId);
+        }
+      }
     } catch (error: any) {
       console.error("Erreur updateRelationshipRequest:", error);
       throw error;
@@ -2625,7 +2875,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleDJStatus = async (requestId: string, isDJ: boolean) => {
     try {
-      await updateDoc(doc(db, 'relationshipRequests', requestId), { isDJ });
+      const req = state.relationshipRequests.find(r => r.id === requestId);
+      const requestedRole = isDJ ? 'dj' : (req?.isCaissier ? 'caissier' : (req as any)?.isServeur ? 'serveur' : 'client');
+      const targetUserId = req ? (req.type === 'gerant_invite' ? req.targetId : (req.userId || req.initiatorId)) : null;
+
+      // 1. Immediate React state update & local storage persistence
+      setState(s => {
+        const updatedRels = s.relationshipRequests.map(r => 
+          r.id === requestId ? { ...r, isDJ, requestedRole: requestedRole as any } : r
+        );
+        saveLocalRelationshipRequests(updatedRels);
+
+        const updatedUsers = targetUserId 
+          ? s.users.map(u => u.id === targetUserId ? { ...u, role: (isDJ ? 'dj' : (u.role === 'dj' ? 'client' : u.role)) as Role } : u)
+          : s.users;
+
+        const updatedCurrentUser = (targetUserId && s.currentUser?.id === targetUserId)
+          ? { ...s.currentUser, role: (isDJ ? 'dj' : (s.currentUser.role === 'dj' ? 'client' : s.currentUser.role)) as Role }
+          : s.currentUser;
+
+        return {
+          ...s,
+          relationshipRequests: updatedRels,
+          users: updatedUsers,
+          currentUser: updatedCurrentUser
+        };
+      });
+
+      // 2. Persist to relationship_requests table
+      await persistRelationshipRoleUpdate(requestId, { isDJ, requestedRole });
+
+      // 3. Persist to users table in Supabase
+      if (targetUserId && isSupabaseConfigured) {
+        const newRole = isDJ ? 'dj' : 'client';
+        await supabase.from('users').update({ role: newRole }).eq('id', targetUserId);
+      }
     } catch (error: any) {
       console.error("Erreur toggleDJStatus:", error);
       throw error;
@@ -2634,11 +2918,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleCaissierStatus = async (requestId: string, isCaissier: boolean) => {
     try {
-      const requestedRole = isCaissier ? 'caissier' : 'client';
-      if (isSupabaseConfigured) {
-        await supabase.from('relationship_requests').update({ isCaissier, requestedRole }).eq('id', requestId);
+      const req = state.relationshipRequests.find(r => r.id === requestId);
+      const requestedRole = isCaissier ? 'caissier' : (req?.isDJ ? 'dj' : (req as any)?.isServeur ? 'serveur' : 'client');
+      const targetUserId = req ? (req.type === 'gerant_invite' ? req.targetId : (req.userId || req.initiatorId)) : null;
+
+      // 1. Immediate React state update & local storage persistence
+      setState(s => {
+        const updatedRels = s.relationshipRequests.map(r => 
+          r.id === requestId ? { ...r, isCaissier, requestedRole: requestedRole as any } : r
+        );
+        saveLocalRelationshipRequests(updatedRels);
+
+        const updatedUsers = targetUserId 
+          ? s.users.map(u => u.id === targetUserId ? { ...u, role: (isCaissier ? 'caissier' : (u.role === 'caissier' ? 'client' : u.role)) as Role } : u)
+          : s.users;
+
+        const updatedCurrentUser = (targetUserId && s.currentUser?.id === targetUserId)
+          ? { ...s.currentUser, role: (isCaissier ? 'caissier' : (s.currentUser.role === 'caissier' ? 'client' : s.currentUser.role)) as Role }
+          : s.currentUser;
+
+        return {
+          ...s,
+          relationshipRequests: updatedRels,
+          users: updatedUsers,
+          currentUser: updatedCurrentUser
+        };
+      });
+
+      // 2. Persist to relationship_requests table
+      await persistRelationshipRoleUpdate(requestId, { isCaissier, requestedRole });
+
+      // 3. Persist to users table in Supabase
+      if (targetUserId && isSupabaseConfigured) {
+        const newRole = isCaissier ? 'caissier' : 'client';
+        await supabase.from('users').update({ role: newRole }).eq('id', targetUserId);
       }
-      await updateDoc(doc(db, 'relationshipRequests', requestId), { isCaissier, requestedRole });
     } catch (error: any) {
       console.error("Erreur toggleCaissierStatus:", error);
       throw error;
@@ -2647,11 +2961,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleServeurStatus = async (requestId: string, isServeur: boolean) => {
     try {
-      const requestedRole = isServeur ? 'serveur' : 'client';
-      if (isSupabaseConfigured) {
-        await supabase.from('relationship_requests').update({ isServeur, requestedRole }).eq('id', requestId);
-      }
-      await updateDoc(doc(db, 'relationshipRequests', requestId), { isServeur, requestedRole });
+      const req = state.relationshipRequests.find(r => r.id === requestId);
+      const requestedRole = isServeur ? 'serveur' : (req?.isDJ ? 'dj' : req?.isCaissier ? 'caissier' : 'client');
+      const targetUserId = req ? (req.type === 'gerant_invite' ? req.targetId : (req.userId || req.initiatorId)) : null;
+
+      // 1. Immediate React state update & local storage persistence
+      setState(s => {
+        const updatedRels = s.relationshipRequests.map(r => 
+          r.id === requestId ? { ...r, isServeur, requestedRole: requestedRole as any } : r
+        );
+        saveLocalRelationshipRequests(updatedRels);
+
+        return {
+          ...s,
+          relationshipRequests: updatedRels
+        };
+      });
+
+      // 2. Persist to relationship_requests table
+      await persistRelationshipRoleUpdate(requestId, { isServeur, requestedRole });
     } catch (error: any) {
       console.error("Erreur toggleServeurStatus:", error);
       throw error;
@@ -3973,7 +4301,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const setTheme = (newTheme: 'light' | 'dark') => {
+  const setTheme = (newTheme: 'light' | 'dark' | 'auto') => {
+    if (newTheme === 'auto') {
+      try {
+        localStorage.removeItem('app-theme');
+      } catch (e) {
+        console.warn("Could not remove theme from storage:", e);
+      }
+      const systemTheme = (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        ? 'dark'
+        : 'light';
+      setState(s => ({ ...s, theme: systemTheme }));
+      return;
+    }
+
     try {
       localStorage.setItem('app-theme', newTheme);
     } catch (e) {

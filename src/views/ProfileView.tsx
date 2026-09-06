@@ -589,11 +589,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                             </button>
                             <button
                               type="button"
-                              onClick={() => {
-                                localStorage.removeItem('app-theme');
-                                const systemTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-                                setTheme(systemTheme);
-                              }}
+                              onClick={() => setTheme('auto')}
                               className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                                 localStorage.getItem('app-theme') === null
                                   ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
@@ -988,11 +984,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        localStorage.removeItem('app-theme');
-                        const systemTheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-                        setTheme(systemTheme);
-                      }}
+                      onClick={() => setTheme('auto')}
                       className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         localStorage.getItem('app-theme') === null
                           ? 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 shadow-xs font-black'
