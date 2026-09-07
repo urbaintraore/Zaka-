@@ -781,6 +781,7 @@ interface AppContextType extends AppState {
   updateProfile: (profileData: { name: string; city: string; country: string; email?: string; phone?: string }) => Promise<void>;
   createRelationshipRequest: (req: Omit<RelationshipRequest, 'id' | 'status' | 'date'>) => Promise<void>;
   updateRelationshipRequest: (id: string, status: 'acceptee' | 'refusee') => Promise<void>;
+  deleteRelationshipRequest: (id: string) => Promise<void>;
   createServiceRequest: (req: Omit<ServiceRequest, 'id' | 'status' | 'date'>) => Promise<void>;
   updateServiceRequest: (id: string, status: 'validee' | 'refusee', message?: string) => Promise<void>;
   createConversation: (clientId: string, establishmentId: string, clientName: string, establishmentName: string, ownerId: string) => Promise<string>;
@@ -3260,6 +3261,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const deleteRelationshipRequest = async (id: string) => {
+    try {
+      const req = state.relationshipRequests.find(r => r.id === id);
+      const targetUserId = req ? (req.type === 'gerant_invite' ? req.targetId : (req.userId || req.initiatorId)) : null;
+
+      // 1. Remove from local state immediately
+      setState(s => {
+        const updatedRels = s.relationshipRequests.filter(r => r.id !== id);
+        saveLocalRelationshipRequests(updatedRels);
+
+        let updatedUsers = s.users;
+        let updatedCurrentUser = s.currentUser;
+
+        // Reset staff role back to client if user has no other active staff affiliation
+        if (targetUserId && req?.status === 'acceptee' && (req.isDJ || req.isCaissier || req.requestedRole === 'dj' || req.requestedRole === 'caissier')) {
+          const otherActiveStaffReq = updatedRels.find(r => 
+            (r.targetId === targetUserId || r.initiatorId === targetUserId || r.userId === targetUserId) &&
+            r.status === 'acceptee' &&
+            (r.isDJ || r.isCaissier || r.requestedRole === 'dj' || r.requestedRole === 'caissier')
+          );
+
+          if (!otherActiveStaffReq) {
+            updatedUsers = s.users.map(u => u.id === targetUserId ? { ...u, role: 'client' as Role } : u);
+            if (s.currentUser?.id === targetUserId && (s.currentUser.role === 'dj' || s.currentUser.role === 'caissier')) {
+              updatedCurrentUser = { ...s.currentUser, role: 'client' as Role };
+            }
+          }
+        }
+
+        return {
+          ...s,
+          relationshipRequests: updatedRels,
+          users: updatedUsers,
+          currentUser: updatedCurrentUser
+        };
+      });
+
+      // 2. Delete from database
+      await deleteDoc(doc(db, 'relationshipRequests', id));
+
+      if (isSupabaseConfigured) {
+        await supabase.from('relationship_requests').delete().eq('id', id);
+      }
+    } catch (error: any) {
+      console.error("Erreur deleteRelationshipRequest:", error);
+      throw error;
+    }
+  };
+
   const addStockItem = async (item: Omit<StockItem, 'id' | 'createdAt'>) => {
     const volume = item.volume || '66cl';
     const unitsPerCase = item.unitsPerCase || 12;
@@ -4639,6 +4689,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateProfile,
       createRelationshipRequest,
       updateRelationshipRequest,
+      deleteRelationshipRequest,
       createServiceRequest,
       updateServiceRequest,
       createConversation,

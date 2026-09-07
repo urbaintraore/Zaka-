@@ -683,8 +683,19 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
             <TableauDeBordRH establishmentId={establishment.id} establishmentName={establishment.name} />
           ) : (
             <div className="space-y-4">
-              <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide">Équipe & Personnel</h3>
-              <p className="text-xs text-gray-500 font-medium">Découvrez les employés de cet établissement et notez leurs prestations.</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide">Équipe & Personnel</h3>
+                  <p className="text-xs text-gray-500 font-medium">Donnez votre avis sur le personnel de cet établissement.</p>
+                </div>
+              </div>
+
+              {!isOwner && (
+                <div className="p-3 bg-blue-50/80 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 rounded-xl text-[11px] font-semibold text-blue-800 dark:text-blue-300 flex items-center gap-2">
+                  <span>🔒</span>
+                  <span>Les avis sur le personnel sont <strong>strictement confidentiels</strong> et ne sont pas visibles par les autres clients. Seul le gérant consulte tous les avis dans son profil.</span>
+                </div>
+              )}
 
               {reviewSuccessMsg && (
                 <div className="p-3 bg-green-50 text-green-700 rounded-xl text-xs font-bold">
@@ -703,13 +714,14 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
                     .map(r => {
                       const memberId = r.type === 'client_join' ? r.initiatorId : r.targetId;
                       const memberUser = users.find(u => u.id === memberId);
+                      const myReview = staffReviews.find(sr => sr.establishmentId === establishment.id && sr.staffId === memberId && sr.clientId === currentUser?.id);
                       const staffReviewsList = staffReviews.filter(sr => sr.establishmentId === establishment.id && sr.staffId === memberId && sr.status === 'valide');
                       const avgRating = staffReviewsList.length > 0 
                         ? (staffReviewsList.reduce((acc, curr) => acc + curr.rating, 0) / staffReviewsList.length).toFixed(1)
                         : '0.0';
 
                       return (
-                        <div key={r.id} className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 flex items-center justify-between shadow-sm">
+                        <div key={r.id} className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 flex items-center justify-between shadow-sm flex-wrap gap-2">
                           <div className="flex items-center gap-3">
                             {r.identityPhotoUrl || memberUser?.avatar ? (
                               <img src={r.identityPhotoUrl || memberUser?.avatar} alt="Personnel" className="w-12 h-12 rounded-xl object-cover border border-orange-200 shadow-sm" />
@@ -725,20 +737,41 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
                                   {r.isDJ ? 'DJ' : r.requestedRole}
                                 </span>
                               </h4>
-                              <div className="flex items-center gap-1.5 text-xs text-yellow-500 font-bold mt-0.5">
-                                <span>★</span>
-                                <span>{avgRating} ({staffReviewsList.length} avis)</span>
-                              </div>
+                              
+                              {isOwner ? (
+                                <div className="flex items-center gap-1.5 text-xs text-yellow-500 font-bold mt-0.5">
+                                  <span>★</span>
+                                  <span>{avgRating} ({staffReviewsList.length} avis reçus)</span>
+                                </div>
+                              ) : myReview ? (
+                                <div className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400 font-bold mt-0.5">
+                                  <span>Votre avis : {'★'.repeat(myReview.rating)}</span>
+                                  <span className="text-[10px] text-gray-400 font-normal italic">(transmis au gérant)</span>
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-gray-400 font-medium mt-0.5">
+                                  Pas encore d'avis soumis
+                                </div>
+                              )}
                             </div>
                           </div>
 
-                          {currentUser && currentUser.role === 'client' && (
+                          {currentUser && (
                             <button
                               type="button"
-                              onClick={() => setRatingStaffId(memberId)}
-                              className="px-3 py-2 bg-orange-50 hover:bg-orange-100 text-orange-600 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                              onClick={() => {
+                                setRatingStaffId(memberId);
+                                if (myReview) {
+                                  setStaffRatingVal(myReview.rating);
+                                  setStaffComment(myReview.comment || '');
+                                } else {
+                                  setStaffRatingVal(5);
+                                  setStaffComment('');
+                                }
+                              }}
+                              className="px-3.5 py-2 bg-orange-50 hover:bg-orange-100 text-orange-600 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1"
                             >
-                              ⭐ Noter
+                              ⭐ {myReview ? 'Modifier mon avis' : 'Donner mon avis'}
                             </button>
                           )}
                         </div>

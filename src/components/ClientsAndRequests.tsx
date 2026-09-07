@@ -8,6 +8,7 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
     relationshipRequests, 
     serviceRequests, 
     updateRelationshipRequest, 
+    deleteRelationshipRequest,
     updateServiceRequest, 
     createRelationshipRequest,
     createConversation, 
@@ -583,6 +584,24 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
                       </button>
                     )
                   )}
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (window.confirm(`Voulez-vous retirer ${member.user?.name || 'ce membre'} de l'établissement ?`)) {
+                        try {
+                          await deleteRelationshipRequest(member.requestId);
+                          setSuccessMsg(`${member.user?.name || 'Le membre'} a été retiré de l'établissement. Vous pouvez désormais lui envoyer une nouvelle invitation ou il pourra soumettre une nouvelle demande.`);
+                        } catch (err) {
+                          setErrorMsg("Erreur lors du retrait du membre.");
+                        }
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-[10px] rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                    title="Retirer cet utilisateur de l'établissement"
+                  >
+                    <X className="w-3.5 h-3.5" /> Retirer
+                  </button>
                 </div>
               </div>
             );

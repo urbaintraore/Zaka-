@@ -81,7 +81,7 @@ interface ExploreViewProps {
 }
 
 export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
-  const { establishments, currentUser, relationshipRequests, createRelationshipRequest, createServiceRequest, setGlobalError, users, favorites, toggleFavorite, loading } = useAppStore();
+  const { establishments, currentUser, relationshipRequests, createRelationshipRequest, deleteRelationshipRequest, createServiceRequest, setGlobalError, users, favorites, toggleFavorite, loading } = useAppStore();
   
   const isSupabaseReady = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
   
@@ -442,22 +442,80 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
                         }
                         if (req.status === 'en_attente') {
                           return (
-                            <span className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-yellow-50 text-yellow-600 font-bold text-xs px-3 py-2.5 rounded-xl select-none">
-                              En attente
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-yellow-50 text-yellow-600 font-bold text-xs px-2.5 py-2 rounded-xl select-none">
+                                En attente
+                              </span>
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm("Voulez-vous annuler votre demande d'adhésion ?")) {
+                                    try {
+                                      await deleteRelationshipRequest(req.id);
+                                      alert("Demande annulée. Vous pouvez soumettre une nouvelle demande à tout moment.");
+                                    } catch (err) {
+                                      alert("Erreur lors de l'annulation.");
+                                    }
+                                  }
+                                }}
+                                className="bg-gray-100 hover:bg-red-50 text-gray-500 hover:text-red-600 font-bold text-xs px-2 py-2 rounded-xl transition-all cursor-pointer"
+                                title="Annuler ma demande"
+                              >
+                                Annuler
+                              </button>
+                            </div>
                           );
                         }
                         if (req.status === 'acceptee') {
                           return (
-                            <span className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-green-50 text-green-600 font-bold text-xs px-3 py-2.5 rounded-xl select-none">
-                              Membre ✓
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-green-50 text-green-600 font-bold text-xs px-2.5 py-2 rounded-xl select-none">
+                                Membre ✓
+                              </span>
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm("Voulez-vous vraiment vous retirer de cet établissement ? Vous pourrez refaire une demande à tout moment.")) {
+                                    try {
+                                      await deleteRelationshipRequest(req.id);
+                                      alert("Vous vous êtes retiré de cet établissement avec succès. Vous pouvez soumettre une nouvelle demande quand vous le souhaitez.");
+                                    } catch (err) {
+                                      alert("Erreur lors du retrait.");
+                                    }
+                                  }
+                                }}
+                                className="bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs px-2.5 py-2 rounded-xl transition-all cursor-pointer"
+                                title="Se retirer de cet établissement"
+                              >
+                                Se retirer
+                              </button>
+                            </div>
                           );
                         }
                         return (
-                          <span className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-red-50 text-red-600 font-bold text-xs px-3 py-2.5 rounded-xl select-none">
-                            Refusé
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-red-50 text-red-600 font-bold text-xs px-2 py-2 rounded-xl select-none">
+                              Refusé
+                            </span>
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  await deleteRelationshipRequest(req.id);
+                                  alert("Vous pouvez maintenant faire une nouvelle demande.");
+                                } catch (err) {
+                                  alert("Erreur lors de la réinitialisation.");
+                                }
+                              }}
+                              className="bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-xs px-2.5 py-2 rounded-xl transition-all cursor-pointer"
+                              title="Faire une nouvelle demande"
+                            >
+                              Réessayer
+                            </button>
+                          </div>
                         );
                       })()}
                       {djs.length > 0 ? (
