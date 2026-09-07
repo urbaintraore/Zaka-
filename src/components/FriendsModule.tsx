@@ -278,16 +278,19 @@ export function FriendsModule({ onStartChatWithConv, onInviteFriendToOuting }: F
     return nameMatch || emailMatch || (cleanPhoneSearch.length > 2 && phoneMatch);
   });
 
-  // Filter searchable users (not currentUser)
+  // Filter searchable users (not currentUser) strictly when search query is at least 2 characters
+  const hasSearchQuery = cleanSearch.length >= 2;
   const otherUsers = users.filter(u => u.id !== currentUser.id);
-  const filteredSearchUsers = otherUsers.filter(u => {
-    if (!cleanSearch) return true;
-    const nameMatch = u.name.toLowerCase().includes(cleanSearch);
-    const emailMatch = u.email ? u.email.toLowerCase().includes(cleanSearch) : false;
-    const phoneMatch = u.phone ? u.phone.replace(/\D/g, '').includes(cleanPhoneSearch) : false;
-    const cityMatch = u.city ? u.city.toLowerCase().includes(cleanSearch) : false;
-    return nameMatch || emailMatch || (cleanPhoneSearch.length > 2 && phoneMatch) || cityMatch;
-  });
+  const filteredSearchUsers = hasSearchQuery
+    ? otherUsers.filter(u => {
+        const nameMatch = u.name ? u.name.toLowerCase().includes(cleanSearch) : false;
+        const emailMatch = u.email ? u.email.toLowerCase().includes(cleanSearch) : false;
+        const phoneDigits = u.phone ? u.phone.replace(/\D/g, '') : '';
+        const phoneMatch = cleanPhoneSearch.length >= 3 && phoneDigits.includes(cleanPhoneSearch);
+        const phoneRawMatch = u.phone ? u.phone.toLowerCase().includes(cleanSearch) : false;
+        return nameMatch || emailMatch || phoneMatch || phoneRawMatch;
+      })
+    : [];
 
   const showFeedback = (type: 'success' | 'error' | 'info', text: string) => {
     setFeedbackMsg({ type, text });
@@ -1119,17 +1122,18 @@ export function FriendsModule({ onStartChatWithConv, onInviteFriendToOuting }: F
         </div>
       )}
 
-      {/* TAB 3: TROUVER DES AMI(E)S (MULTI-SELECTION / NOM / EMAIL / TELEPHONE) */}
+      {/* TAB 3: TROUVER DES AMI(E)S (RECHERCHE CONFIDENTIELLE PAR NOM / PRENOM / EMAIL / TELEPHONE) */}
       {activeTab === 'find' && (
-        <div>
+        <div className="space-y-4">
           {/* Search box with full criteria support */}
-          <div className="relative mb-3">
+          <div className="relative">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Entrez un nom, une adresse e-mail ou un numéro de téléphone..."
+              placeholder="Rechercher par nom, prénom, email ou téléphone (ex: 70 12 34 56)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
               className="w-full pl-10 pr-10 py-3 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 font-medium"
             />
             {searchQuery && (
@@ -1142,62 +1146,93 @@ export function FriendsModule({ onStartChatWithConv, onInviteFriendToOuting }: F
             )}
           </div>
 
-          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-3 px-1">
-            <span>
-              {filteredSearchUsers.length} utilisateur(s) trouvé(s)
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={selectAllSearchUsers}
-                className="text-amber-600 dark:text-amber-400 hover:underline font-bold text-[11px] cursor-pointer"
-              >
-                Tout sélectionner
-              </button>
-              {selectedUserIds.length > 0 && (
-                <button
-                  onClick={clearSelection}
-                  className="text-gray-400 hover:text-gray-600 font-bold text-[11px] cursor-pointer"
-                >
-                  Désélectionner ({selectedUserIds.length})
-                </button>
-              )}
-            </div>
-          </div>
+          {!hasSearchQuery ? (
+            /* Privacy-focused initial state - Do not dump users */
+            <div className="py-8 px-5 bg-gradient-to-b from-gray-50/80 to-white dark:from-gray-800/40 dark:to-gray-800/20 rounded-3xl border border-gray-100 dark:border-gray-800 text-center space-y-5">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-500/10 dark:bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                <Search className="w-7 h-7" />
+              </div>
+              <div className="max-w-md mx-auto space-y-1.5">
+                <h3 className="text-sm font-black text-gray-900 dark:text-white">
+                  Rechercher un(e) ami(e)
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                  Pour préserver la confidentialité des membres, la liste complète des utilisateurs n'est pas publique. Tapez au moins 2 caractères pour rechercher un proche.
+                </p>
+              </div>
 
-          {/* Sticky batch action bar if 1 or more friends selected */}
-          {selectedUserIds.length > 0 && (
-            <div className="sticky top-2 z-20 mb-4 p-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl shadow-lg flex items-center justify-between animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-center gap-2">
-                <CheckSquare className="w-4 h-4" />
-                <span className="text-xs font-bold">
-                  {selectedUserIds.length} ami(e){selectedUserIds.length > 1 ? 's' : ''} sélectionné(e){selectedUserIds.length > 1 ? 's' : ''}
-                </span>
+              {/* Search modalities guidance */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 max-w-lg mx-auto text-left pt-2">
+                <div className="p-3 rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 shadow-2xs">
+                  <div className="flex items-center gap-2 mb-1 text-amber-600 dark:text-amber-400 font-bold text-xs">
+                    <Users className="w-4 h-4" />
+                    <span>Nom / Prénom</span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    Tapez le nom ou prénom de votre ami(e).
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 shadow-2xs">
+                  <div className="flex items-center gap-2 mb-1 text-teal-600 dark:text-teal-400 font-bold text-xs">
+                    <Phone className="w-4 h-4" />
+                    <span>Téléphone</span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    Tapez son numéro mobile (ex: 70..., +226...).
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 shadow-2xs">
+                  <div className="flex items-center gap-2 mb-1 text-blue-600 dark:text-blue-400 font-bold text-xs">
+                    <Mail className="w-4 h-4" />
+                    <span>E-mail</span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    Tapez son adresse e-mail enregistrée.
+                  </p>
+                </div>
+              </div>
+
+              {/* Share Invite Link */}
+              <div className="pt-3 border-t border-gray-100 dark:border-gray-800 max-w-sm mx-auto">
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-3">
+                  Votre contact n'est pas encore sur ZAKA ? Invitez-le en un clic :
+                </p>
+                <button
+                  onClick={() => {
+                    const shareText = `Salut ! Rejoins-moi sur ZAKA pour partager nos sorties, événements et bons plans : ${window.location.origin}`;
+                    if (navigator.share) {
+                      navigator.share({ title: 'Rejoins-moi sur ZAKA', text: shareText, url: window.location.origin }).catch(() => {});
+                    } else {
+                      navigator.clipboard.writeText(shareText);
+                      showFeedback('success', "Lien d'invitation copié dans votre presse-papiers !");
+                    }
+                  }}
+                  className="w-full py-2.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all inline-flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Share2 className="w-4 h-4" />
+                  Inviter par WhatsApp / SMS
+                </button>
+              </div>
+            </div>
+          ) : filteredSearchUsers.length === 0 ? (
+            /* Search yielded no results */
+            <div className="text-center py-10 px-4 bg-gray-50 dark:bg-gray-800/40 rounded-3xl border border-dashed border-gray-200 dark:border-gray-700 space-y-3">
+              <UserX className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto" />
+              <div>
+                <p className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                  Aucun utilisateur trouvé pour « {searchQuery} »
+                </p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 max-w-sm mx-auto mt-1">
+                  Vérifiez l'orthographe du nom, le numéro ou l'adresse e-mail saisie. Si votre contact n'a pas encore de compte, vous pouvez lui envoyer une invitation directe.
+                </p>
               </div>
               <button
-                onClick={handleSendBatchRequests}
-                disabled={isBatchSending}
-                className="px-4 py-1.5 bg-white text-orange-600 hover:bg-orange-50 rounded-xl text-xs font-black shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              >
-                {isBatchSending ? "Envoi en cours..." : "Envoyer les invitations"}
-                <Send className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-
-          {filteredSearchUsers.length === 0 ? (
-            <div className="text-center py-10 px-4 bg-gray-50 dark:bg-gray-800/40 rounded-3xl border border-dashed border-gray-200 dark:border-gray-700">
-              <UserPlus className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-              <p className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                Aucun utilisateur inscrit ne correspond à "{searchQuery}".
-              </p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 max-w-sm mx-auto mt-1 mb-4">
-                Votre contact n'a pas encore de compte ? Invitez-le directement par SMS ou WhatsApp à rejoindre Zaka+ !
-              </p>
-              <button
                 onClick={() => {
-                  const shareText = `Salut ! Rejoins-moi sur Zaka+ pour partager nos sorties, événements et bons plans à Ouagadougou : ${window.location.origin}`;
+                  const shareText = `Salut ! Rejoins-moi sur ZAKA pour partager nos sorties, événements et bons plans : ${window.location.origin}`;
                   if (navigator.share) {
-                    navigator.share({ title: 'Rejoins-moi sur Zaka+', text: shareText, url: window.location.origin });
+                    navigator.share({ title: 'Rejoins-moi sur ZAKA', text: shareText, url: window.location.origin }).catch(() => {});
                   } else {
                     navigator.clipboard.writeText(shareText);
                     showFeedback('success', "Lien d'invitation copié dans votre presse-papiers !");
@@ -1210,93 +1245,85 @@ export function FriendsModule({ onStartChatWithConv, onInviteFriendToOuting }: F
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
-              {filteredSearchUsers.map(otherUser => {
-                const friendship = getFriendshipWith(otherUser.id);
-                const isAccepted = friendship?.status === 'accepted';
-                const isPending = friendship?.status === 'pending';
-                const isIncoming = isPending && friendship.requesterId !== currentUser.id;
-                const isSelected = selectedUserIds.includes(otherUser.id);
-                const canSelect = !isAccepted && !isPending;
+            /* Search results matched */
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 px-1">
+                <span className="font-semibold">
+                  {filteredSearchUsers.length} résultat{filteredSearchUsers.length > 1 ? 's' : ''} trouvé{filteredSearchUsers.length > 1 ? 's' : ''}
+                </span>
+                <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                  Recherche : « {searchQuery} »
+                </span>
+              </div>
 
-                return (
-                  <div 
-                    key={otherUser.id}
-                    onClick={() => canSelect && toggleSelectUser(otherUser.id)}
-                    className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
-                      isSelected 
-                        ? 'border-amber-400 bg-amber-50/60 dark:bg-amber-950/30 ring-2 ring-amber-400/20'
-                        : 'border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700 bg-white dark:bg-gray-800/80'
-                    } ${canSelect ? 'cursor-pointer' : ''}`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      {/* Checkbox for batch selection */}
-                      {canSelect && (
-                        <div 
-                          className="text-amber-500 shrink-0"
-                          onClick={(e) => { e.stopPropagation(); toggleSelectUser(otherUser.id); }}
-                        >
-                          {isSelected ? (
-                            <CheckSquare className="w-5 h-5 text-amber-500 fill-amber-100 dark:fill-amber-900/40" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
+                {filteredSearchUsers.map(otherUser => {
+                  const friendship = getFriendshipWith(otherUser.id);
+                  const isAccepted = friendship?.status === 'accepted';
+                  const isPending = friendship?.status === 'pending';
+                  const isIncoming = isPending && friendship.requesterId !== currentUser.id;
+
+                  return (
+                    <div 
+                      key={otherUser.id}
+                      className="flex items-center justify-between p-3 rounded-2xl border border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700 bg-white dark:bg-gray-800/80 transition-all shadow-2xs"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-bold flex items-center justify-center text-sm border border-amber-200 dark:border-amber-800/40 shrink-0">
+                          {otherUser.avatar ? (
+                            <img src={otherUser.avatar} alt={otherUser.name} className="w-full h-full rounded-full object-cover" />
                           ) : (
-                            <Square className="w-5 h-5 text-gray-300 dark:text-gray-600" />
+                            otherUser.name.charAt(0).toUpperCase()
                           )}
                         </div>
-                      )}
 
-                      <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold flex items-center justify-center text-sm border border-gray-200 dark:border-gray-700 shrink-0">
-                        {otherUser.avatar ? (
-                          <img src={otherUser.avatar} alt={otherUser.name} className="w-full h-full rounded-full object-cover" />
-                        ) : (
-                          otherUser.name.charAt(0).toUpperCase()
-                        )}
-                      </div>
-
-                      <div className="min-w-0">
-                        <h4 className="text-xs font-bold text-gray-900 dark:text-white truncate">
-                          {otherUser.name}
-                        </h4>
-                        <div className="flex items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400 truncate">
-                          {otherUser.phone && <span>📞 {otherUser.phone}</span>}
-                          {otherUser.email && !otherUser.phone && <span>✉️ {otherUser.email}</span>}
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                            {otherUser.name}
+                          </h4>
+                          <div className="flex items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                            {otherUser.phone && <span>📞 {otherUser.phone}</span>}
+                            {otherUser.email && !otherUser.phone && <span>✉️ {otherUser.email}</span>}
+                            {otherUser.city && <span className="text-gray-400">• {otherUser.city}</span>}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
-                      {isAccepted ? (
-                        <span className="px-2.5 py-1 text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-200 dark:border-emerald-800/40 inline-flex items-center gap-1">
-                          <ShieldCheck className="w-3 h-3" />
-                          Ami(e)
-                        </span>
-                      ) : isIncoming ? (
-                        <button
-                          onClick={() => handleAccept(friendship.id)}
-                          disabled={loadingActionId === friendship.id}
-                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-xl shadow-xs transition-all inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          <Check className="w-3 h-3" />
-                          Accepter
-                        </button>
-                      ) : isPending ? (
-                        <span className="px-2.5 py-1 text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-200 dark:border-amber-800/30 inline-flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          En attente
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handleSendRequest(otherUser.id)}
-                          disabled={loadingActionId === otherUser.id}
-                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1 shadow-xs cursor-pointer"
-                        >
-                          <UserPlus className="w-3.5 h-3.5" />
-                          Ajouter
-                        </button>
-                      )}
+                      <div className="shrink-0 ml-2">
+                        {isAccepted ? (
+                          <span className="px-2.5 py-1 text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-200 dark:border-emerald-800/40 inline-flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3" />
+                            Ami(e)
+                          </span>
+                        ) : isIncoming ? (
+                          <button
+                            onClick={() => handleAccept(friendship.id)}
+                            disabled={loadingActionId === friendship.id}
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-xl shadow-xs transition-all inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <Check className="w-3 h-3" />
+                            Accepter
+                          </button>
+                        ) : isPending ? (
+                          <span className="px-2.5 py-1 text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-200 dark:border-amber-800/30 inline-flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            En attente
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleSendRequest(otherUser.id)}
+                            disabled={loadingActionId === otherUser.id}
+                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1 shadow-xs cursor-pointer"
+                          >
+                            <UserPlus className="w-3.5 h-3.5" />
+                            Ajouter
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
