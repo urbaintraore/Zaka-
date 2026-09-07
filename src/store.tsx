@@ -330,6 +330,8 @@ interface AppContextType {
   entreprises?: any[];
   unreadCount?: number;
   ventes?: any[];
+  expenses?: any[];
+  addExpense?: (expense: any) => Promise<void>;
   stocks?: any[];
   addStockItem?: (item: any) => Promise<void>;
   updateStockItem?: (id: string, item: any) => Promise<void>;
@@ -522,15 +524,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const profile = await fetchUserProfileFromDb(session.user.id);
           if (profile) {
             setCurrentUser(profile);
-          } else {
-            setCurrentUser(null);
           }
-        } else {
-          setCurrentUser(null);
         }
       } catch (err) {
         console.error("Erreur d'initialisation de session Supabase:", err);
-        setCurrentUser(null);
       }
     };
 
@@ -538,15 +535,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (event === 'SIGNED_OUT') {
+          setCurrentUser(null);
+          return;
+        }
         if (session?.user) {
           const profile = await fetchUserProfileFromDb(session.user.id);
           if (profile) {
             setCurrentUser(profile);
-          } else {
-            setCurrentUser(null);
           }
-        } else {
-          setCurrentUser(null);
         }
       }
     );
@@ -683,6 +680,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
   const [applications, setApplications] = useState<any[]>([]);
+
+  const [stocks, setStocks] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('zaka_stocks');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [ventes, setVentes] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('zaka_ventes');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [expenses, setExpenses] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('zaka_expenses');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [staffAttendances, setStaffAttendances] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('zaka_staff_attendances');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('zaka_stocks', JSON.stringify(stocks));
+  }, [stocks]);
+
+  useEffect(() => {
+    localStorage.setItem('zaka_ventes', JSON.stringify(ventes));
+  }, [ventes]);
+
+  useEffect(() => {
+    localStorage.setItem('zaka_expenses', JSON.stringify(expenses));
+  }, [expenses]);
+
+  useEffect(() => {
+    localStorage.setItem('zaka_staff_attendances', JSON.stringify(staffAttendances));
+  }, [staffAttendances]);
   const [theme, setThemeState] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
@@ -1161,6 +1210,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setApplications(prev => [...prev, { ...app, id: `app-${Date.now()}`, date: new Date().toISOString() }]);
   };
 
+  const addStockItem = async (item: any) => {
+    setStocks(prev => [...prev, { ...item, id: `stock-${Date.now()}`, createdAt: new Date().toISOString() }]);
+  };
+
+  const updateStockItem = async (id: string, updates: any) => {
+    setStocks(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+  };
+
+  const deleteStockItem = async (id: string) => {
+    setStocks(prev => prev.filter(s => s.id !== id));
+  };
+
+  const recordSale = async (sale: any) => {
+    const saleId = `sale-${Date.now()}`;
+    const newSale = { ...sale, id: saleId, date: new Date().toISOString() };
+    
+    // Decrease stock quantities locally
+    setStocks(prev => prev.map(stock => {
+      const soldItem = sale.items.find((item: any) => item.stockId === stock.id);
+      if (soldItem) {
+        return { ...stock, quantity: Math.max(0, stock.quantity - soldItem.quantity) };
+      }
+      return stock;
+    }));
+
+    setVentes(prev => [newSale, ...prev]);
+  };
+
+  const addExpense = async (expense: any) => {
+    setExpenses(prev => [{ ...expense, id: `exp-${Date.now()}` }, ...prev]);
+  };
+
+  const createStaffAttendance = async (att: any) => {
+    setStaffAttendances(prev => [{ ...att, id: `att-${Date.now()}`, date: new Date().toISOString() }, ...prev]);
+  };
+
   return (
     <AppContext.Provider value={{
       currentUser,
@@ -1225,12 +1310,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       loading: false,
       entreprises: [],
       unreadCount: 0,
-      ventes: [],
-      stocks: [],
-      addStockItem: async () => {},
-      updateStockItem: async () => {},
-      deleteStockItem: async () => {},
-      recordSale: async () => {},
+      ventes,
+      expenses,
+      addExpense,
+      stocks,
+      addStockItem,
+      updateStockItem,
+      deleteStockItem,
+      recordSale,
       deleteRelationshipRequest: async () => {},
       updateServiceRequest: async (id: string, status: any, message?: string) => {},
       createRelationshipRequest: async () => {},
@@ -1239,8 +1326,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toggleServeurStatus: async (id: string, ...args: any[]) => {},
       staffReviews: [],
       updateStaffReviewStatus: async (id: string, status: any, note?: number, bonusOrSanction?: any) => {},
-      staffAttendances: [],
-      createStaffAttendance: async () => {},
+      staffAttendances,
+      createStaffAttendance,
       deleteStaffAttendance: async () => {},
       loyaltyCards: [],
       consumeLoyaltyReward: async () => {},

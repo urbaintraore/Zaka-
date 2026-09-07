@@ -12,12 +12,15 @@ import {
   downloadReceiptImage, 
   shareReceiptImage 
 } from '../utils/receiptImageGenerator';
+import { BarcodeScanner } from './BarcodeScanner';
+import { Scan } from 'lucide-react';
 
 interface PointOfSaleViewProps {
   establishmentId: string;
+  cashierName?: string;
 }
 
-export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
+export function PointOfSaleView({ establishmentId, cashierName }: PointOfSaleViewProps) {
   const { currentUser, stocks, recordSale, establishments } = useAppStore();
 
   const est = establishments.find(e => e.id === establishmentId);
@@ -44,11 +47,25 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
   const [isNoChangeMode, setIsNoChangeMode] = useState<boolean>(false);
   const [mobileMoneyCode, setMobileMoneyCode] = useState('');
   const [showCustomReceiptOptions, setShowCustomReceiptOptions] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
 
   // Get active stocks for this establishment
   const estStocks = useMemo(() => {
     return stocks.filter(item => item.establishmentId === establishmentId);
   }, [stocks, establishmentId]);
+
+  const handleScan = (decodedText: string) => {
+    setShowScanner(false);
+    // Find the item by barcode (or name if barcode is not set but matches)
+    const item = estStocks.find(s => s.barcode === decodedText || s.name.toLowerCase() === decodedText.toLowerCase());
+    if (item) {
+      addToCart(item.id);
+      setSuccessMsg(`Article "${item.name}" scanné et ajouté.`);
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } else {
+      setErrorMsg(`Aucun article trouvé pour le code: ${decodedText}`);
+    }
+  };
 
   // Categorize drink/food
   const getItemCategory = (name: string): 'bieres' | 'liqueurs' | 'softs' | 'nourriture' => {
@@ -417,7 +434,18 @@ export function PointOfSaleView({ establishmentId }: PointOfSaleViewProps) {
                   Vider
                 </button>
               )}
+              <button 
+                onClick={() => setShowScanner(true)}
+                className="p-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-lg text-gray-700 dark:text-gray-300 transition-colors"
+                title="Scanner un code-barres"
+              >
+                <Scan className="w-4 h-4" />
+              </button>
             </div>
+
+            {showScanner && (
+              <BarcodeScanner onScan={handleScan} onClose={() => setShowScanner(false)} />
+            )}
 
             {/* Quick Category Filter Pills */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 hide-scrollbar">

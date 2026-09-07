@@ -1,5 +1,5 @@
 {
-  "name": "Zaka",
+  "name": "Zaka+",
   "description": "Découverte, réservation et avis sur les établissements et sorties au Burkina Faso.",
   "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

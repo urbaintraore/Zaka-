@@ -442,6 +442,16 @@ export interface Publication {
 }
 
 // Stock & Sales Types
+export interface ExpenseRecord {
+  id: string;
+  establishmentId: string;
+  type: 'loyer' | 'electricite' | 'eau' | 'personnel' | 'marchandise' | 'autre';
+  amount: number;
+  description: string;
+  date: string;
+  recordedBy?: string;
+}
+
 export interface StockItem {
   id: string;
   establishmentId: string;
@@ -456,6 +466,7 @@ export interface StockItem {
   unitsPerCase?: number;
   unites_par_caisse?: number;
   stock_faible?: number;
+  barcode?: string;
   createdAt?: string;
 }
 

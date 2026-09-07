@@ -34,7 +34,7 @@ export function DashboardLayout() {
             </div>
             <div>
               <span className="text-lg font-black tracking-tight text-gray-900 dark:text-white flex items-center gap-1">
-                Zaka <span className="text-orange-600 dark:text-orange-400">BF</span>
+                Zaka<span className="text-orange-600 dark:text-orange-400">+</span>
               </span>
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block -mt-1">
                 Sorties & Réservations

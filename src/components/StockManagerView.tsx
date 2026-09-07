@@ -579,7 +579,16 @@ export function StockManagerView({ establishmentId, isGerant: propIsGerant }: St
                   const breakdownText = formatStockBreakdown(drink.quantity, unitsPerCaseVal);
 
                   return (
-                    <tr key={drink.id} className="hover:bg-gray-50/60 dark:hover:bg-gray-950/40 transition-colors">
+                    <tr 
+                      key={drink.id} 
+                      className={`transition-colors ${
+                        isOutOfStock 
+                          ? 'bg-red-50/70 hover:bg-red-100/70 dark:bg-red-950/20 dark:hover:bg-red-950/40' 
+                          : isLowStock 
+                            ? 'bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/40' 
+                            : 'hover:bg-gray-50/60 dark:hover:bg-gray-950/40'
+                      }`}
+                    >
                       {/* Name & Volume */}
                       <td className="py-3.5 px-3">
                         <div className="flex items-center gap-2.5">

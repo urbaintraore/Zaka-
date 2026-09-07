@@ -4,7 +4,7 @@ import { Establishment, CATEGORIES_LIST, Category, Publication } from '../types'
 import { 
   Plus, Edit2, Trash2, Store, Calendar, ShoppingBag, LogOut, Star, 
   MessageSquare, TrendingUp, Sparkles, Download, Image as ImageIcon, 
-  Users, Clock, HelpCircle, CheckCircle, Megaphone, FileText, Package, Boxes 
+  Users, Clock, HelpCircle, CheckCircle, Megaphone, FileText, Package, Boxes, AlertTriangle
 } from 'lucide-react';
 import { ZakaAdsManager } from '../components/ads/ZakaAdsManager';
 import { PointOfSaleView } from '../components/PointOfSaleView';
@@ -37,16 +37,13 @@ export function GerantDashboard(props: {
   
   // Sub-tabs
   const [activeSubTab, setActiveSubTab] = useState<
-    'establishments' | 'pos_stocks' | 'publications' | 'clients_staff' | 'rh' | 'reviews_faq'
-  >('establishments');
+    'profil' | 'pos' | 'stocks' | 'accounting' | 'rh' | 'clients' | 'marketing' | 'reviews'
+  >('profil');
 
-  // Selected establishment for active management
-  const myEstablishments = establishments.filter(
-    e => e.ownerId === currentUser?.id || currentUser?.role === 'admin' || !e.ownerId
-  );
-  const [selectedEstId, setSelectedEstId] = useState<string>(myEstablishments[0]?.id || '');
-
-  const activeEstablishment = establishments.find(e => e.id === selectedEstId) || myEstablishments[0];
+  // Active establishment for management
+  const activeEstablishment = establishments.find(
+    e => e.ownerId === currentUser?.id || e.gerantId === currentUser?.id
+  ) || establishments[0];
 
   const [showBoostModal, setShowBoostModal] = useState(false);
   const [selectedEstForBoost, setSelectedEstForBoost] = useState<Establishment | null>(null);
@@ -85,8 +82,9 @@ export function GerantDashboard(props: {
   // FAQ state
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
-  const myEstablishmentIds = myEstablishments.map(e => e.id);
-  const myPublications = localPublications.filter(p => myEstablishmentIds.includes(p.establishmentId));
+  const myPublications = activeEstablishment 
+    ? localPublications.filter(p => p.establishmentId === activeEstablishment.id)
+    : [];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -217,8 +215,39 @@ export function GerantDashboard(props: {
     }
   ];
 
+  // Logic for low stock notification
+  const { stocks } = useAppStore();
+  const lowStockItems = activeEstablishment 
+    ? stocks.filter(s => s.establishmentId === activeEstablishment.id && s.quantity <= (s.minQuantity || s.stock_faible || 5))
+    : [];
+
   return (
     <div className="space-y-6 pb-20">
+      {/* Low Stock Banner */}
+      {lowStockItems.length > 0 && (
+        <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl shadow-sm flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="text-sm font-bold text-amber-800">Alerte Stock Faible !</h3>
+            <p className="text-xs text-amber-700 mt-1">
+              {lowStockItems.length} article(s) en dessous du seuil minimum pour {activeEstablishment?.name} :
+            </p>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {lowStockItems.slice(0, 5).map(item => (
+                <span key={item.id} className="bg-amber-100 text-amber-800 px-2 py-1 rounded-md text-[10px] font-bold">
+                  {item.name} ({item.quantity} restants)
+                </span>
+              ))}
+              {lowStockItems.length > 5 && (
+                <span className="bg-amber-100 text-amber-800 px-2 py-1 rounded-md text-[10px] font-bold">
+                  + {lowStockItems.length - 5} autres
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Header & Welcome */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs">
         <div>
@@ -233,16 +262,11 @@ export function GerantDashboard(props: {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {myEstablishments.length > 0 && (
-            <select
-              value={selectedEstId || activeEstablishment?.id || ''}
-              onChange={e => setSelectedEstId(e.target.value)}
-              className="px-3.5 py-2.5 bg-orange-50 dark:bg-orange-950/50 border border-orange-200 dark:border-orange-800 text-orange-800 dark:text-orange-200 font-bold text-xs rounded-xl outline-none"
-            >
-              {myEstablishments.map(est => (
-                <option key={est.id} value={est.id}>{est.name} ({est.category})</option>
-              ))}
-            </select>
+          {activeEstablishment && (
+            <div className="px-3.5 py-2.5 bg-orange-50 dark:bg-orange-950/50 border border-orange-200 dark:border-orange-800 text-orange-800 dark:text-orange-200 font-bold text-xs rounded-xl flex items-center gap-2">
+              <Store size={16} />
+              <span>{activeEstablishment.name}</span>
+            </div>
           )}
           <button
             onClick={() => alert("Exportation globale du rapport de gestion en cours...")}
@@ -267,8 +291,8 @@ export function GerantDashboard(props: {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="p-5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-3xl flex items-center justify-between shadow-xs">
           <div>
-            <div className="text-2xl font-black text-gray-900 dark:text-white">{myEstablishments.length}</div>
-            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-1">Établissements</div>
+            <div className="text-2xl font-black text-gray-900 dark:text-white">1</div>
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-1">Établissement</div>
           </div>
           <div className="w-12 h-12 bg-orange-50 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 rounded-2xl flex items-center justify-center font-black">
             <Store size={22} />
@@ -288,7 +312,7 @@ export function GerantDashboard(props: {
         <div className="p-5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-3xl flex items-center justify-between shadow-xs">
           <div>
             <div className="text-2xl font-black text-gray-900 dark:text-white">
-              {reviews.filter(r => myEstablishmentIds.includes(r.establishmentId)).length}
+              {activeEstablishment ? reviews.filter(r => r.establishmentId === activeEstablishment.id).length : 0}
             </div>
             <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-1">Avis Clients</div>
           </div>
@@ -310,86 +334,38 @@ export function GerantDashboard(props: {
 
       {/* Main Sub Navigation Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-gray-200 dark:border-gray-800">
-        <button
-          onClick={() => setActiveSubTab('establishments')}
-          className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
-            activeSubTab === 'establishments'
-              ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
-              : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-800'
-          }`}
-        >
-          <Store size={15} />
-          <span>Établissements</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('pos_stocks')}
-          className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
-            activeSubTab === 'pos_stocks'
-              ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
-              : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-800'
-          }`}
-        >
-          <ShoppingBag size={15} />
-          <span>Caisse & Stocks (POS)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('publications')}
-          className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
-            activeSubTab === 'publications'
-              ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
-              : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-800'
-          }`}
-        >
-          <Megaphone size={15} />
-          <span>Publications & Promos</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('clients_staff')}
-          className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
-            activeSubTab === 'clients_staff'
-              ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
-              : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-800'
-          }`}
-        >
-          <Users size={15} />
-          <span>Relation Client & Staff</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('rh')}
-          className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
-            activeSubTab === 'rh'
-              ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
-              : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-800'
-          }`}
-        >
-          <Clock size={15} />
-          <span>Pointage & RH</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSubTab('reviews_faq')}
-          className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
-            activeSubTab === 'reviews_faq'
-              ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
-              : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-800'
-          }`}
-        >
-          <HelpCircle size={15} />
-          <span>Avis & FAQ</span>
-        </button>
+        {[
+          { id: 'profil', label: 'Profil de l\'établissement', icon: Store },
+          { id: 'pos', label: 'Caisse (POS)', icon: ShoppingBag },
+          { id: 'stocks', label: 'Gestion des Stocks', icon: Boxes },
+          { id: 'accounting', label: 'Comptabilité & Bilan', icon: TrendingUp },
+          { id: 'rh', label: 'Personnel & RH', icon: Clock },
+          { id: 'clients', label: 'Clients & Commandes', icon: Users },
+          { id: 'marketing', label: 'Marketing & Pubs', icon: Megaphone },
+          { id: 'reviews', label: 'Avis Clients', icon: Star }
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveSubTab(tab.id as any)}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
+              activeSubTab === tab.id
+                ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
+                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-800'
+            }`}
+          >
+            <tab.icon size={15} />
+            <span>{tab.label}</span>
+          </button>
+        ))}
       </div>
 
-      {/* 1. ESTABLISHMENTS TAB */}
-      {activeSubTab === 'establishments' && (
+      {/* 1. PROFIL TAB */}
+      {activeSubTab === 'profil' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
               <Store size={18} className="text-orange-600" />
-              <span>Mes Établissements (Maquis, Bars, Restaurants, Hôtels, Boîtes, Salons)</span>
+              <span>Profil de l'Établissement</span>
             </h3>
             <button
               onClick={() => {
@@ -408,119 +384,116 @@ export function GerantDashboard(props: {
           </div>
 
           <div className="grid grid-cols-1 gap-4">
-            {myEstablishments.map(est => {
-              const estReviews = reviews.filter(r => r.establishmentId === est.id);
-              const estRating = estReviews.length > 0 ? (estReviews.reduce((s, r) => s + r.rating, 0) / estReviews.length).toFixed(1) : null;
-              const estReservationsCount = reservations.filter(r => r.establishmentId === est.id).length;
-
-              return (
-                <div key={est.id} className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 p-5 space-y-4 shadow-xs">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 rounded-2xl bg-orange-100 dark:bg-orange-950 flex items-center justify-center text-orange-600 dark:text-orange-400 font-black overflow-hidden flex-shrink-0">
-                        {est.photoUrl || est.photos?.[0] ? (
-                          <img src={est.photoUrl || est.photos?.[0]} alt={est.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <Store size={28} />
-                        )}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="text-base font-black text-gray-900 dark:text-white">{est.name}</h4>
-                          <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 text-[10px] font-black rounded-md uppercase tracking-wider">
-                            Validé
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 capitalize mt-0.5">
-                          {est.category} • {est.neighborhood || 'Quartier'}, {est.city || 'Ouagadougou'} {est.country ? `(${est.country})` : ''}
-                        </p>
-                      </div>
+            {activeEstablishment && (
+              <div key={activeEstablishment.id} className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 p-5 space-y-4 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-orange-100 dark:bg-orange-950 flex items-center justify-center text-orange-600 dark:text-orange-400 font-black overflow-hidden flex-shrink-0">
+                      {activeEstablishment.photoUrl || activeEstablishment.photos?.[0] ? (
+                        <img src={activeEstablishment.photoUrl || activeEstablishment.photos?.[0]} alt={activeEstablishment.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Store size={28} />
+                      )}
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          setSelectedEstForBoost(est);
-                          setShowBoostModal(true);
-                        }}
-                        className="px-3.5 py-1.5 bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1"
-                      >
-                        <Sparkles size={14} />
-                        <span>Booster</span>
-                      </button>
-                      <button
-                        onClick={() => startEdit(est)}
-                        className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1"
-                      >
-                        <Edit2 size={14} />
-                        <span>Modifier</span>
-                      </button>
-                      <button
-                        onClick={() => deleteEstablishment(est.id)}
-                        className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1"
-                      >
-                        <Trash2 size={14} />
-                        <span>Supprimer</span>
-                      </button>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-base font-black text-gray-900 dark:text-white">{activeEstablishment.name}</h4>
+                        <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 text-[10px] font-black rounded-md uppercase tracking-wider">
+                          Validé
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 capitalize mt-0.5">
+                        {activeEstablishment.category} • {activeEstablishment.neighborhood || 'Quartier'}, {activeEstablishment.city || 'Ouagadougou'} {activeEstablishment.country ? `(${activeEstablishment.country})` : ''}
+                      </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                    <div className="p-3 bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-950 text-orange-600 flex items-center justify-center">
-                        <TrendingUp size={16} />
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-gray-400 uppercase font-bold">Affluence</div>
-                        <div className="text-xs font-black text-gray-800 dark:text-gray-200">Normale</div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedEstForBoost(activeEstablishment);
+                        setShowBoostModal(true);
+                      }}
+                      className="px-3.5 py-1.5 bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <Sparkles size={14} />
+                      <span>Booster</span>
+                    </button>
+                    <button
+                      onClick={() => startEdit(activeEstablishment)}
+                      className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <Edit2 size={14} />
+                      <span>Modifier</span>
+                    </button>
+                    <button
+                      onClick={() => deleteEstablishment(activeEstablishment.id)}
+                      className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <Trash2 size={14} />
+                      <span>Supprimer</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                  <div className="p-3 bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-950 text-orange-600 flex items-center justify-center">
+                      <TrendingUp size={16} />
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-400 uppercase font-bold">Affluence</div>
+                      <div className="text-xs font-black text-gray-800 dark:text-gray-200">Normale</div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-600 flex items-center justify-center">
+                      <Star size={16} className="fill-amber-400" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-400 uppercase font-bold">Note Client</div>
+                      <div className="text-xs font-black text-gray-800 dark:text-gray-200">
+                        { (() => {
+                          const estReviews = reviews.filter(r => r.establishmentId === activeEstablishment.id);
+                          return estReviews.length > 0 ? `${(estReviews.reduce((s, r) => s + r.rating, 0) / estReviews.length).toFixed(1)} (${estReviews.length})` : 'Aucun avis';
+                        })()}
                       </div>
                     </div>
+                  </div>
 
-                    <div className="p-3 bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-600 flex items-center justify-center">
-                        <Star size={16} className="fill-amber-400" />
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-gray-400 uppercase font-bold">Note Client</div>
-                        <div className="text-xs font-black text-gray-800 dark:text-gray-200">
-                          {estRating ? `${estRating} (${estReviews.length})` : 'Aucun avis'}
-                        </div>
+                  <div className="p-3 bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-600 flex items-center justify-center">
+                      <Calendar size={16} />
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-400 uppercase font-bold">Réservations</div>
+                      <div className="text-xs font-black text-gray-800 dark:text-gray-200">
+                        Ouvertes ({reservations.filter(r => r.establishmentId === activeEstablishment.id).length})
                       </div>
                     </div>
+                  </div>
 
-                    <div className="p-3 bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-600 flex items-center justify-center">
-                        <Calendar size={16} />
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-gray-400 uppercase font-bold">Réservations</div>
-                        <div className="text-xs font-black text-gray-800 dark:text-gray-200">
-                          Ouvertes ({estReservationsCount})
-                        </div>
-                      </div>
+                  <div className="p-3 bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-600 flex items-center justify-center">
+                      <ImageIcon size={16} />
                     </div>
-
-                    <div className="p-3 bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-600 flex items-center justify-center">
-                        <ImageIcon size={16} />
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-gray-400 uppercase font-bold">Galerie</div>
-                        <div className="text-xs font-black text-gray-800 dark:text-gray-200">
-                          {est.photos?.length || 0} photo{(est.photos?.length || 0) > 1 ? 's' : ''}
-                        </div>
+                    <div>
+                      <div className="text-[10px] text-gray-400 uppercase font-bold">Galerie</div>
+                      <div className="text-xs font-black text-gray-800 dark:text-gray-200">
+                        {activeEstablishment.photos?.length || 0} photo{(activeEstablishment.photos?.length || 0) > 1 ? 's' : ''}
                       </div>
                     </div>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {/* 2. ESPACE CAISSE & STOCKS TAB */}
-      {activeSubTab === 'pos_stocks' && (
+      {(activeSubTab === 'pos' || activeSubTab === 'stocks' || activeSubTab === 'accounting') && (
         <div className="space-y-8">
           {activeEstablishment ? (
             <div className="space-y-10">
@@ -534,32 +507,35 @@ export function GerantDashboard(props: {
                 </div>
               </div>
 
-              {/* Point of Sale Section */}
-              <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
-                <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-                  <ShoppingBag size={18} className="text-orange-600" />
-                  <span>Point de Vente (POS) & Impression de Reçu</span>
-                </h3>
-                <PointOfSaleView establishmentId={activeEstablishment.id} />
-              </div>
+              {activeSubTab === 'pos' && (
+                <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+                  <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+                    <ShoppingBag size={18} className="text-orange-600" />
+                    <span>Point de Vente (POS) & Reçus</span>
+                  </h3>
+                  <PointOfSaleView establishmentId={activeEstablishment.id} cashierName={currentUser?.name || "Caissier(e)"} />
+                </div>
+              )}
 
-              {/* Stock Management Section */}
-              <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
-                <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-                  <Boxes size={18} className="text-orange-600" />
-                  <span>Gestion des Stocks (Casier/Unités & Inventaires)</span>
-                </h3>
-                <StockManagerView establishmentId={activeEstablishment.id} isGerant={true} />
-              </div>
+              {activeSubTab === 'stocks' && (
+                <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+                  <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+                    <Boxes size={18} className="text-orange-600" />
+                    <span>Gestion des Stocks</span>
+                  </h3>
+                  <StockManagerView establishmentId={activeEstablishment.id} />
+                </div>
+              )}
 
-              {/* Journal de Caisse Section */}
-              <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
-                <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-                  <FileText size={18} className="text-orange-600" />
-                  <span>Journal de Caisse & Comptabilité Simplifiée</span>
-                </h3>
-                <AccountingView />
-              </div>
+              {activeSubTab === 'accounting' && (
+                <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+                  <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+                    <TrendingUp size={18} className="text-orange-600" />
+                    <span>Comptabilité & Bilan</span>
+                  </h3>
+                  <AccountingView establishmentId={activeEstablishment.id} />
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-12 bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800">
@@ -571,7 +547,7 @@ export function GerantDashboard(props: {
       )}
 
       {/* 3. PUBLICATIONS TAB */}
-      {activeSubTab === 'publications' && (
+      {activeSubTab === 'marketing' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
@@ -627,7 +603,7 @@ export function GerantDashboard(props: {
       )}
 
       {/* 4. RELATION CLIENT & STAFF TAB */}
-      {activeSubTab === 'clients_staff' && (
+      {activeSubTab === 'clients' && (
         <div className="space-y-6">
           {activeEstablishment ? (
             <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
@@ -674,7 +650,7 @@ export function GerantDashboard(props: {
       )}
 
       {/* 6. AVIS & FAQ TAB */}
-      {activeSubTab === 'reviews_faq' && (
+      {activeSubTab === 'reviews' && (
         <div className="space-y-8">
           <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
             <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">

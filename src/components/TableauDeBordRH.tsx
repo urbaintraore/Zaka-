@@ -6,6 +6,7 @@ import {
   Users, CheckCircle, XCircle, Plus, Trash2, BellRing, FileText, 
   Eye, Check, ShieldAlert, Star, DollarSign, Image as ImageIcon, Sparkles, HelpCircle, Archive, Send 
 } from 'lucide-react';
+import autoTable from 'jspdf-autotable';
 import jsPDF from 'jspdf';
 
 // Helper functions for time calculation
@@ -271,35 +272,25 @@ export function TableauDeBordRH({ establishmentId, establishmentName }: TableauD
     doc.setFont('helvetica', 'bold');
     doc.text('2. Détail par Employé & Calcul de Paie / Sanctions', 15, 92);
 
-    let startY = 100;
-    doc.setFontSize(8);
-    doc.setFillColor(241, 245, 249);
-    doc.rect(15, startY, pageWidth - 30, 8, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.text('Nom / Rôle', 18, startY + 5);
-    doc.text('Shifts', 75, startY + 5);
-    doc.text('Absences', 95, startY + 5);
-    doc.text('Retard Global', 120, startY + 5);
-    doc.text('Note', 155, startY + 5);
-    doc.text('Ajustement Paie', 172, startY + 5);
-
-    startY += 8;
-    doc.setFont('helvetica', 'normal');
-
-    Object.entries(staffStatsMap).forEach(([_, stats]) => {
-      if (startY > 270) {
-        doc.addPage();
-        startY = 20;
-      }
-      doc.text(`${stats.name} (${stats.role})`, 18, startY + 6);
-      doc.text(`${stats.shiftsCount}`, 75, startY + 6);
-      doc.text(`${stats.absencesCount} j`, 95, startY + 6);
-      doc.text(`${stats.totalGlobalDelay} min`, 120, startY + 6);
-      doc.text(`${stats.avgRating.toFixed(1)}/5`, 155, startY + 6);
+    const tableData = Object.entries(staffStatsMap).map(([_, stats]) => {
       const bsStr = `${stats.calculatedBonusOrSanction.type === 'bonus' ? '+' : '-'}${stats.calculatedBonusOrSanction.amount}F`;
-      doc.text(bsStr, 172, startY + 6);
+      return [
+        `${stats.name} (${stats.role})`,
+        stats.shiftsCount.toString(),
+        `${stats.absencesCount} j`,
+        `${stats.totalGlobalDelay} min`,
+        `${stats.avgRating.toFixed(1)}/5`,
+        bsStr
+      ];
+    });
 
-      startY += 8;
+    autoTable(doc, {
+      head: [['Nom / Rôle', 'Shifts', 'Absences', 'Retard Global', 'Note', 'Ajustement Paie']],
+      body: tableData,
+      startY: 100,
+      theme: 'grid',
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [30, 41, 59] } // Match header color
     });
 
     doc.save(`Rapport_Pointage_${establishmentName.replace(/\s+/g, '_')}_${targetMonth}.pdf`);
