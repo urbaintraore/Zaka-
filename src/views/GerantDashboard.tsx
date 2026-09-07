@@ -33,12 +33,13 @@ export function GerantDashboard(props: {
   } = useAppStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [creationStep, setCreationStep] = useState<'category' | 'details'>('category');
   const [editingEst, setEditingEst] = useState<Establishment | null>(null);
   
   // Sub-tabs
   const [activeSubTab, setActiveSubTab] = useState<
-    'profil' | 'pos' | 'stocks' | 'accounting' | 'rh' | 'clients' | 'marketing' | 'reviews'
-  >('profil');
+    'dashboard' | 'management' | 'marketing' | 'rh' | 'pos' | 'stocks' | 'accounting' | 'clients'
+  >('dashboard');
 
   // Active establishment for management
   const activeEstablishment = establishments.find(
@@ -88,6 +89,12 @@ export function GerantDashboard(props: {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!editingEst && creationStep === 'category') {
+      setCreationStep('details');
+      return;
+    }
+
     if (!name.trim()) return;
 
     const tagsArray = tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [];
@@ -137,6 +144,7 @@ export function GerantDashboard(props: {
     setMenuPdfUrl('');
     setSecondaryPhoto('');
     setShowAddModal(false);
+    setCreationStep('category');
   };
 
   const startEdit = (est: Establishment) => {
@@ -333,54 +341,58 @@ export function GerantDashboard(props: {
       </div>
 
       {/* Main Sub Navigation Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-gray-200 dark:border-gray-800">
-        {[
-          { id: 'profil', label: 'Profil de l\'établissement', icon: Store },
-          { id: 'pos', label: 'Caisse (POS)', icon: ShoppingBag },
-          { id: 'stocks', label: 'Gestion des Stocks', icon: Boxes },
-          { id: 'accounting', label: 'Comptabilité & Bilan', icon: TrendingUp },
-          { id: 'rh', label: 'Personnel & RH', icon: Clock },
-          { id: 'clients', label: 'Clients & Commandes', icon: Users },
-          { id: 'marketing', label: 'Marketing & Pubs', icon: Megaphone },
-          { id: 'reviews', label: 'Avis Clients', icon: Star }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveSubTab(tab.id as any)}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
-              activeSubTab === tab.id
-                ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
-                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-800'
-            }`}
-          >
-            <tab.icon size={15} />
-            <span>{tab.label}</span>
-          </button>
-        ))}
+      <div className="flex flex-col gap-4">
+        {/* Navigation - Grouped */}
+        <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-2 shadow-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[
+              { id: 'dashboard', label: 'Tableau de Bord', icon: Store },
+              { id: 'management', label: 'Gestion (Caisse/Stocks/Compta)', icon: ShoppingBag },
+              { id: 'marketing', label: 'Marketing', icon: Megaphone },
+              { id: 'rh', label: 'Personnel', icon: Users },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSubTab(tab.id as any)}
+                className={`px-4 py-3 rounded-2xl text-xs font-black flex flex-col items-center gap-2 transition-colors cursor-pointer ${
+                  activeSubTab === tab.id
+                    ? 'bg-orange-600 text-white shadow-md'
+                    : 'bg-gray-50 dark:bg-gray-950 text-gray-600 dark:text-gray-400 hover:bg-gray-100'
+                }`}
+              >
+                <tab.icon size={20} />
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        {/* Sub-tabs if needed could be added here */}
       </div>
 
-      {/* 1. PROFIL TAB */}
-      {activeSubTab === 'profil' && (
+      {/* 1. TABLEAU DE BORD TAB */}
+      {activeSubTab === 'dashboard' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
               <Store size={18} className="text-orange-600" />
-              <span>Profil de l'Établissement</span>
+              <span>Tableau de Bord</span>
             </h3>
-            <button
-              onClick={() => {
-                setEditingEst(null);
-                setName('');
-                setDescription('');
-                setNeighborhood('');
-                setPhotoUrl('');
-                setShowAddModal(true);
-              }}
-              className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-orange-600/15"
-            >
-              <Plus size={16} />
-              <span>Ajouter un établissement</span>
-            </button>
+            { !activeEstablishment && (
+                <button
+                onClick={() => {
+                    setEditingEst(null);
+                    setName('');
+                    setCategory('maquis');
+                    setCreationStep('category');
+                    setShowAddModal(true);
+                }}
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-orange-600/15"
+                >
+                <Plus size={16} />
+                <span>Créer mon établissement</span>
+                </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-4">
@@ -492,18 +504,18 @@ export function GerantDashboard(props: {
         </div>
       )}
 
-      {/* 2. ESPACE CAISSE & STOCKS TAB */}
+      {/* 2. GESTION (POS, STOCKS, COMPTA) TAB */}
       {(activeSubTab === 'pos' || activeSubTab === 'stocks' || activeSubTab === 'accounting') && (
         <div className="space-y-8">
           {activeEstablishment ? (
             <div className="space-y-10">
               <div className="p-4 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/50 rounded-2xl flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase">Établissement actif</span>
+                  <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase">Établissement</span>
                   <h4 className="text-sm font-black text-gray-900 dark:text-white">{activeEstablishment.name}</h4>
                 </div>
                 <div className="text-xs text-gray-500">
-                  {activeEstablishment.category} • {activeEstablishment.neighborhood || 'Quartier'}
+                  {activeEstablishment.category}
                 </div>
               </div>
 
@@ -511,7 +523,7 @@ export function GerantDashboard(props: {
                 <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
                   <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
                     <ShoppingBag size={18} className="text-orange-600" />
-                    <span>Point de Vente (POS) & Reçus</span>
+                    <span>Point de Vente (POS)</span>
                   </h3>
                   <PointOfSaleView establishmentId={activeEstablishment.id} cashierName={currentUser?.name || "Caissier(e)"} />
                 </div>
@@ -540,7 +552,7 @@ export function GerantDashboard(props: {
           ) : (
             <div className="text-center py-12 bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800">
               <Store size={40} className="mx-auto text-gray-400 mb-2" />
-              <p className="text-sm font-bold text-gray-700 dark:text-gray-300">Veuillez d'abord créer un établissement pour accéder à la caisse et aux stocks.</p>
+              <p className="text-sm font-bold text-gray-700 dark:text-gray-300">Veuillez d'abord configurer votre établissement.</p>
             </div>
           )}
         </div>
@@ -649,48 +661,6 @@ export function GerantDashboard(props: {
         </div>
       )}
 
-      {/* 6. AVIS & FAQ TAB */}
-      {activeSubTab === 'reviews' && (
-        <div className="space-y-8">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
-            <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-              <Star size={18} className="text-amber-500 fill-amber-400" />
-              <span>Visibilité des Avis Clients</span>
-            </h3>
-            {activeEstablishment ? (
-              <AvisUtilisateurs establishmentId={activeEstablishment.id} />
-            ) : (
-              <p className="text-xs text-gray-500">Sélectionnez un établissement pour voir ses avis.</p>
-            )}
-          </div>
-
-          <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
-            <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-              <HelpCircle size={18} className="text-orange-600" />
-              <span>Foire Aux Questions (FAQ Gérant & Établissements)</span>
-            </h3>
-            <div className="space-y-3">
-              {faqList.map((item, idx) => (
-                <div key={idx} className="border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden bg-gray-50 dark:bg-gray-950">
-                  <button
-                    onClick={() => setOpenFaqIndex(openFaqIndex === idx ? null : idx)}
-                    className="w-full px-4 py-3.5 text-left font-bold text-xs text-gray-900 dark:text-white flex items-center justify-between cursor-pointer"
-                  >
-                    <span>{item.q}</span>
-                    <span className="text-orange-600 font-bold">{openFaqIndex === idx ? '−' : '+'}</span>
-                  </button>
-                  {openFaqIndex === idx && (
-                    <div className="px-4 pb-4 text-xs text-gray-600 dark:text-gray-300 border-t border-gray-100 dark:border-gray-800 pt-3 leading-relaxed">
-                      {item.a}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Add / Edit Establishment Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -707,118 +677,119 @@ export function GerantDashboard(props: {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
-              <div>
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Nom de l'établissement</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Le Verdun, VIP Club..."
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
-                />
-              </div>
+            {(!activeEstablishment || editingEst) && (
+              <form onSubmit={handleSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+                {(!editingEst && creationStep === 'category') ? (
+                  <div>
+                    <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Choisir le type d'établissement</label>
+                    <select
+                      value={category}
+                      onChange={e => setCategory(e.target.value as Category)}
+                      className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
+                    >
+                      {CATEGORIES_LIST.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Nom de l'établissement</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: Le Verdun, VIP Club..."
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Description de l'établissement (optionnel)</label>
+                      <textarea
+                        rows={3}
+                        placeholder="Décrivez brièvement votre établissement..."
+                        value={description}
+                        onChange={e => setDescription(e.target.value)}
+                        className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Image de couverture (URL ou fichier)</label>
+                      <div className="flex gap-2 mt-1">
+                        <input
+                          type="url"
+                          placeholder="https://images.unsplash.com/..."
+                          value={photoUrl}
+                          onChange={e => setPhotoUrl(e.target.value)}
+                          className="flex-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
+                        />
+                        <label className="px-3 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-2xl text-xs font-bold cursor-pointer flex items-center gap-1.5 whitespace-nowrap">
+                          📁 Choisir
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            onChange={e => {
+                              if (e.target.files && e.target.files[0]) {
+                                const file = e.target.files[0];
+                                const reader = new FileReader();
+                                reader.onload = (uploadEvent) => {
+                                  if (uploadEvent.target?.result) {
+                                    setPhotoUrl(uploadEvent.target.result as string);
+                                  }
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }} 
+                          />
+                        </label>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Pays</label>
+                        <input
+                          type="text"
+                          value={country}
+                          onChange={e => setCountry(e.target.value)}
+                          className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Ville</label>
+                        <input
+                          type="text"
+                          value={city}
+                          onChange={e => setCity(e.target.value)}
+                          className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Quartier</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: KOURITENGA, Ouaga 2000"
+                        value={neighborhood}
+                        onChange={e => setNeighborhood(e.target.value)}
+                        className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
+                      />
+                    </div>
+                  </>
+                )}
 
-              <div>
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Type d'établissement</label>
-                <select
-                  value={category}
-                  onChange={e => setCategory(e.target.value as Category)}
-                  className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
-                >
-                  {CATEGORIES_LIST.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Description de l'établissement (optionnel)</label>
-                <textarea
-                  rows={3}
-                  placeholder="Décrivez brièvement votre établissement..."
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Image de couverture (URL ou fichier)</label>
-                <div className="flex gap-2 mt-1">
-                  <input
-                    type="url"
-                    placeholder="https://images.unsplash.com/..."
-                    value={photoUrl}
-                    onChange={e => setPhotoUrl(e.target.value)}
-                    className="flex-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
-                  />
-                  <label className="px-3 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-2xl text-xs font-bold cursor-pointer flex items-center gap-1.5 whitespace-nowrap">
-                    📁 Choisir
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      onChange={e => {
-                        if (e.target.files && e.target.files[0]) {
-                          const file = e.target.files[0];
-                          const reader = new FileReader();
-                          reader.onload = (uploadEvent) => {
-                            if (uploadEvent.target?.result) {
-                              setPhotoUrl(uploadEvent.target.result as string);
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }} 
-                    />
-                  </label>
+                <div className="pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <button
+                    type="submit"
+                    className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl cursor-pointer shadow-lg shadow-orange-600/20"
+                  >
+                    {(!editingEst && creationStep === 'category') ? 'Suivant' : (editingEst ? 'Mettre à jour l\'établissement' : 'Créer l\'établissement')}
+                  </button>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Pays</label>
-                  <input
-                    type="text"
-                    value={country}
-                    onChange={e => setCountry(e.target.value)}
-                    className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Ville</label>
-                  <input
-                    type="text"
-                    value={city}
-                    onChange={e => setCity(e.target.value)}
-                    className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Quartier</label>
-                <input
-                  type="text"
-                  placeholder="Ex: KOURITENGA, Ouaga 2000"
-                  value={neighborhood}
-                  onChange={e => setNeighborhood(e.target.value)}
-                  className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
-                />
-              </div>
-
-              <div className="pt-3 border-t border-gray-100 dark:border-gray-800">
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl cursor-pointer shadow-lg shadow-orange-600/20"
-                >
-                  {editingEst ? 'Mettre à jour l\'établissement' : 'Créer l\'établissement'}
-                </button>
-              </div>
-            </form>
-          </div>
+              </form>
+            )}</div>
         </div>
       )}
 
