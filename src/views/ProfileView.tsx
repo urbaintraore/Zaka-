@@ -50,7 +50,9 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
     setTheme,
     toggleTheme,
     applications,
-    favorites
+    favorites,
+    groupOutings,
+    respondGroupOuting
   } = useAppStore();
   const { isInstallable, promptInstall } = useInstallApp();
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -1288,16 +1290,16 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
           )}
         </div>
 
-        {/* Mes réservations de table (Restaurants) */}
+        {/* Planning de mes sorties (Réservations & Invitations entre amis) */}
         <div className="bg-white dark:bg-gray-950 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-900">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h3 className="text-sm font-black text-gray-900 dark:text-white mb-0.5 flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-orange-500" />
-                Mes réservations de table (Restaurants)
+                Planning de mes sorties
               </h3>
               <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold">
-                Visualisez vos réservations passées et futures dans le calendrier ou la liste.
+                Agrégez vos réservations de table et invitations reçues de la part d'amis, avec confirmation et déclinaison en un clic.
               </p>
             </div>
 
@@ -1332,12 +1334,19 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
           {reservationViewMode === 'calendar' ? (
             <UserReservationsCalendar
               reservations={myReservations}
+              groupOutings={groupOutings}
+              currentUser={currentUser}
               establishments={establishments}
               onStartChat={handleStartChat}
               onCancelReservation={async (id) => {
                 await updateReservationStatus(id, 'annulee');
               }}
+              onRespondGroupOuting={respondGroupOuting}
               onExplore={() => onNavigate && onNavigate('home')}
+              onCreateGroupOuting={() => {
+                setGroupOutingPreselectedFriendId(undefined);
+                setShowGroupOutingModal(true);
+              }}
             />
           ) : (
             <>

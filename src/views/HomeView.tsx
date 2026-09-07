@@ -26,60 +26,7 @@ import { ImageChargementProgressif } from '../components/ImageChargementProgress
 import { Rocket, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
 
-// Coordinates for common neighborhoods in Burkina Faso for proximity calculations fallback
-const NEIGHBORHOOD_COORDS: Record<string, { lat: number; lng: number }> = {
-  'ouaga 2000': { lat: 12.3167, lng: -1.4983 },
-  'gounghin': { lat: 12.3533, lng: -1.5544 },
-  'tampouy': { lat: 12.4042, lng: -1.5471 },
-  'zone du bois': { lat: 12.3789, lng: -1.4947 },
-  'centre-ville': { lat: 12.3686, lng: -1.5275 },
-  'koulouba': { lat: 12.3650, lng: -1.5220 },
-  '1200 logements': { lat: 12.3680, lng: -1.4950 },
-  'somgandé': { lat: 12.4100, lng: -1.4800 },
-  'dassasgho': { lat: 12.3700, lng: -1.4700 },
-  "patte d'oie": { lat: 12.3350, lng: -1.5120 },
-  'pissy': { lat: 12.3420, lng: -1.5720 },
-  'saaba': { lat: 12.3750, lng: -1.4150 },
-  'karpala': { lat: 12.3250, lng: -1.4600 },
-  'bobo-dioulasso': { lat: 11.1771, lng: -4.2979 },
-  'koudougou': { lat: 12.2526, lng: -2.3627 }
-};
-
-function getEstCoords(est: Establishment): { lat: number; lng: number } {
-  if (typeof est.lat === 'number' && typeof est.lng === 'number' && !isNaN(est.lat) && !isNaN(est.lng)) {
-    return { lat: est.lat, lng: est.lng };
-  }
-  if (est.geolocation && est.geolocation.includes(',')) {
-    const parts = est.geolocation.split(',').map(s => parseFloat(s.trim()));
-    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-      return { lat: parts[0], lng: parts[1] };
-    }
-  }
-  const nKey = (est.neighborhood || est.quarter || '').toLowerCase().trim();
-  if (nKey && NEIGHBORHOOD_COORDS[nKey]) {
-    return NEIGHBORHOOD_COORDS[nKey];
-  }
-  return { lat: 12.3686, lng: -1.5275 };
-}
-
-function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-function formatDistance(distKm: number): string {
-  if (distKm < 1) {
-    return `${Math.round(distKm * 1000)} m`;
-  }
-  return `${distKm.toFixed(1)} km`;
-}
+import { NEIGHBORHOOD_COORDS, getEstCoords, calculateDistanceKm, formatDistance } from '../utils/coordinates';
 
 export function HomeViewSkeleton() {
   return (
@@ -780,9 +727,9 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
     );
   };
 
-  // Base list of validated real establishments (excluding all fictional establishments)
+  // Base list of real establishments (including user-created and validated ones, excluding pure test placeholders)
   const validEstablishments = establishments
-    .filter(e => e.status === 'valide')
+    .filter(e => e.status === 'valide' || e.status === 'en_attente' || (currentUser && e.ownerId === currentUser.id) || Boolean(e.ownerId))
     .filter(e => !isFictionalEstablishment(e));
 
   // Filter by selected category (Maquis, Restaurant, Bar, Boîte de nuit / Club, etc.)

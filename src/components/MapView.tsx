@@ -3,6 +3,7 @@ import { Establishment } from '../types';
 import { MapPin, Navigation, Compass, X } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { getEstCoords, calculateDistanceMeters, formatDistance } from '../utils/coordinates';
 
 interface MapViewProps {
   establishments: Establishment[];
@@ -10,21 +11,7 @@ interface MapViewProps {
   selectedCategory?: string;
 }
 
-export function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371e3;
-  const p1 = (lat1 * Math.PI) / 180;
-  const p2 = (lat2 * Math.PI) / 180;
-  const dp = ((lat2 - lat1) * Math.PI) / 180;
-  const dl = ((lon2 - lon1) * Math.PI) / 180;
-  const a = Math.sin(dp / 2) * Math.sin(dp / 2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-export function formatDistance(meters: number): string {
-  if (meters < 1000) return `${Math.round(meters)} m`;
-  return `${(meters / 1000).toFixed(1)} km`;
-}
+export { calculateDistanceMeters, formatDistance };
 
 export function MapView({ establishments, onEstClick, selectedCategory }: MapViewProps) {
   const [userPos, setUserPos] = useState<{ lat: number; lng: number }>({
@@ -95,23 +82,9 @@ export function MapView({ establishments, onEstClick, selectedCategory }: MapVie
     });
 
     return filtered.map((est) => {
-      let lat = 12.3714 + (Math.random() - 0.5) * 0.05;
-      let lng = -1.5197 + (Math.random() - 0.5) * 0.05;
-
-      if (est.geolocation) {
-        const parts = est.geolocation.split(',');
-        if (parts.length === 2) {
-          const parsedLat = Number(parts[0].trim());
-          const parsedLng = Number(parts[1].trim());
-          if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
-            lat = parsedLat;
-            lng = parsedLng;
-          }
-        }
-      }
-
-      const distance = calculateDistanceMeters(userPos.lat, userPos.lng, lat, lng);
-      return { ...est, coords: { lat, lng }, distance };
+      const coords = getEstCoords(est);
+      const distance = calculateDistanceMeters(userPos.lat, userPos.lng, coords.lat, coords.lng);
+      return { ...est, coords, distance };
     }).sort((a, b) => a.distance - b.distance);
   }, [establishments, selectedCategory, userPos]);
 

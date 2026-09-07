@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../store';
-import { Search, MapPin, MessageSquare, Calendar, Heart, Share2, List, Map as MapIcon, Clock, Flame } from 'lucide-react';
+import { Search, MapPin, MessageSquare, Calendar, Heart, Share2, List, Map as MapIcon, Clock, Flame, Navigation } from 'lucide-react';
 import { ReservationModal } from '../components/ReservationModal';
 import { EstablishmentDetailModal } from '../components/EstablishmentDetailModal';
-import { getDistance } from '../utils/distance';
+import { getEstCoords, calculateDistanceKm, formatDistance } from '../utils/coordinates';
 import { getCurrentUserLocation } from '../utils/geolocation';
 import { shareContent } from '../utils/platform';
 import { MapView } from '../components/MapView';
@@ -147,13 +147,11 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
     }
     
     if (filterByProximity) {
-      if (!est.geolocation) return false;
       if (!userLocation) return false;
-      const [lat, lng] = est.geolocation.split(',').map(Number);
-      if (isNaN(lat) || isNaN(lng)) return false;
-      const dist = getDistance(userLocation.lat, userLocation.lng, lat, lng);
-      // Filter within 15 km
-      if (dist > 15) return false;
+      const coords = getEstCoords(est);
+      const dist = calculateDistanceKm(userLocation.lat, userLocation.lng, coords.lat, coords.lng);
+      // Filter within 25 km
+      if (dist > 25) return false;
     }
 
     // New: Open Now filter
@@ -170,10 +168,10 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
     return true;
   }).sort((a, b) => {
     if (!userLocation) return 0;
-    const [aLat, aLng] = a.geolocation ? a.geolocation.split(',').map(Number) : [0, 0];
-    const [bLat, bLng] = b.geolocation ? b.geolocation.split(',').map(Number) : [0, 0];
-    const distA = getDistance(userLocation.lat, userLocation.lng, aLat, aLng);
-    const distB = getDistance(userLocation.lat, userLocation.lng, bLat, bLng);
+    const coordsA = getEstCoords(a);
+    const coordsB = getEstCoords(b);
+    const distA = calculateDistanceKm(userLocation.lat, userLocation.lng, coordsA.lat, coordsA.lng);
+    const distB = calculateDistanceKm(userLocation.lat, userLocation.lng, coordsB.lat, coordsB.lng);
     return distA - distB;
   });
 
@@ -387,14 +385,13 @@ export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
                       <MapPin className="w-4 h-4 flex-shrink-0" />
                       <span>{est.address || est.city || ''} {est.neighborhood}</span>
                       {(() => {
-                        if (!userLocation || !est.geolocation) return null;
-                        const [lat, lng] = est.geolocation.split(',').map(Number);
-                        if (isNaN(lat) || isNaN(lng)) return null;
-                        const dist = getDistance(userLocation.lat, userLocation.lng, lat, lng);
+                        if (!userLocation) return null;
+                        const coords = getEstCoords(est);
+                        const dist = calculateDistanceKm(userLocation.lat, userLocation.lng, coords.lat, coords.lng);
                         return (
                           <>
                             <span className="text-gray-300">•</span>
-                            <span className="text-orange-600 font-bold">{dist.toFixed(1)} km</span>
+                            <span className="text-orange-600 font-bold">{formatDistance(dist)}</span>
                           </>
                         );
                       })()}
