@@ -122,6 +122,21 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
     }
   };
 
+  const [isUploadingCoverPhoto, setIsUploadingCoverPhoto] = useState(false);
+  const handleCoverPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      try {
+        setIsUploadingCoverPhoto(true);
+        const base64 = await compressImage(e.target.files[0], 1024, 1024, 0.7);
+        setEstPhotoUrl(base64);
+      } catch (err) {
+        console.error("Failed to compress cover photo", err);
+      } finally {
+        setIsUploadingCoverPhoto(false);
+      }
+    }
+  };
+
   const handleMenuImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       try {
@@ -338,9 +353,8 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-gray-500 ml-1">Description de l'établissement (ambiance, spécialités...)</label>
+            <label className="text-xs font-bold text-gray-500 ml-1">Description de l'établissement (optionnel)</label>
             <textarea 
-              required 
               value={estDescription} 
               onChange={e => setEstDescription(e.target.value)} 
               placeholder="Décrivez brièvement votre établissement..."
@@ -349,14 +363,44 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-gray-500 ml-1">Image de description (URL)</label>
-            <input 
-              type="url" 
-              placeholder="https://images.unsplash.com/..." 
-              value={estPhotoUrl} 
-              onChange={e => setEstPhotoUrl(e.target.value)} 
-              className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" 
-            />
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-gray-500 ml-1">Image de couverture / description (URL ou fichier - optionnel)</label>
+              {estPhotoUrl && (
+                <button 
+                  type="button" 
+                  onClick={() => setEstPhotoUrl('')}
+                  className="text-[10px] text-red-500 font-bold hover:underline"
+                >
+                  Effacer l'image
+                </button>
+              )}
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input 
+                type="text" 
+                placeholder="https://images.unsplash.com/... (optionnel)" 
+                value={estPhotoUrl} 
+                onChange={e => setEstPhotoUrl(e.target.value)} 
+                className="flex-1 px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium text-xs" 
+              />
+              
+              <label className="px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl cursor-pointer flex items-center justify-center shrink-0 transition-colors">
+                <span>📁 Choisir une photo</span>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleCoverPhotoUpload}
+                  className="hidden" 
+                />
+              </label>
+            </div>
+            {isUploadingCoverPhoto && <p className="text-[10px] text-orange-600 font-bold mt-1">Compression de la photo en cours...</p>}
+            {estPhotoUrl && (
+              <div className="mt-2 relative w-full h-32 rounded-xl overflow-hidden border border-gray-200 bg-gray-100">
+                <img src={estPhotoUrl} alt="Aperçu couverture" className="w-full h-full object-cover" />
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -399,13 +443,13 @@ export function GerantDashboard({ onLogout, onNavigate, onStartChatWithConv }: {
 
           <div className="flex flex-col gap-1">
             <label className="text-xs font-bold text-gray-500 ml-1">Géolocalisation (Lien Maps - optionnel)</label>
-            <input type="url" placeholder="https://maps.google.com/..." value={estGeolocation} onChange={e => setEstGeolocation(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
+            <input type="text" placeholder="https://maps.google.com/..." value={estGeolocation} onChange={e => setEstGeolocation(e.target.value)} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:bg-white focus:border-orange-500 outline-none font-medium" />
           </div>
 
           <div className="flex flex-col gap-1">
             <label className="text-xs font-bold text-gray-500 ml-1">Lien PDF du Menu (optionnel)</label>
             <input 
-              type="url" 
+              type="text" 
               placeholder="https://exemple.com/menu.pdf" 
               value={estMenuPdfUrl} 
               onChange={e => setEstMenuPdfUrl(e.target.value)} 

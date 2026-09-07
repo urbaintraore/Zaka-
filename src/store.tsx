@@ -2637,12 +2637,65 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addEstablishment = async (est: Omit<Establishment, 'id' | 'status' | 'averageRating'>) => {
     try {
-      await addDoc(collection(db, 'establishments'), {
+      const newId = 'est_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      const newEst: Establishment = {
         ...est,
+        id: newId,
         status: 'valide',
         averageRating: 0
+      };
+
+      // 1. Instantly update local state so the new establishment appears immediately in UI
+      setState(s => {
+        const updated = [newEst, ...s.establishments];
+        saveEstablishmentsToIndexedDB(updated).catch(err => console.warn("IndexedDB save err:", err));
+        return { ...s, establishments: updated };
       });
-    } catch (error) {
+
+      // 2. Persist to Firestore
+      try {
+        const docRef = await addDoc(collection(db, 'establishments'), {
+          ...est,
+          status: 'valide',
+          averageRating: 0
+        });
+        if (docRef?.id) {
+          setState(s => ({
+            ...s,
+            establishments: s.establishments.map(e => e.id === newId ? { ...e, id: docRef.id } : e)
+          }));
+        }
+      } catch (firestoreErr) {
+        console.warn("Firestore addEstablishment warn:", firestoreErr);
+      }
+
+      // 3. Persist to Supabase if configured
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('establishments').insert({
+            ownerId: est.ownerId,
+            name: est.name,
+            category: est.category,
+            country: est.country,
+            city: est.city,
+            neighborhood: est.neighborhood || '',
+            address: est.address || '',
+            phone: est.phone || '',
+            description: est.description || '',
+            photos: est.photos || [],
+            tags: est.tags || [],
+            geolocation: est.geolocation || '',
+            openingHours: est.openingHours || '',
+            menuPdfUrl: est.menuPdfUrl || '',
+            menuImages: est.menuImages || [],
+            status: 'valide',
+            averageRating: 0
+          });
+        } catch (supErr) {
+          console.warn("Supabase addEstablishment warn:", supErr);
+        }
+      }
+    } catch (error: any) {
       console.error("Erreur ajout etablissement:", error);
       throw error;
     }
@@ -2656,8 +2709,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return acc;
       }, {} as any);
-      await updateDoc(doc(db, 'establishments', id), cleanData);
-    } catch (error) {
+
+      // 1. Immediately update local state
+      setState(s => {
+        const updated = s.establishments.map(e => e.id === id ? { ...e, ...cleanData } : e);
+        saveEstablishmentsToIndexedDB(updated).catch(() => {});
+        return { ...s, establishments: updated };
+      });
+
+      // 2. Persist to Firestore
+      try {
+        await updateDoc(doc(db, 'establishments', id), cleanData);
+      } catch (err) {
+        console.warn("Firestore updateEstablishment warn:", err);
+      }
+
+      // 3. Persist to Supabase if configured
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('establishments').update(cleanData).eq('id', id);
+        } catch (supErr) {
+          console.warn("Supabase updateEstablishment warn:", supErr);
+        }
+      }
+    } catch (error: any) {
       console.error("Erreur mise à jour etablissement:", error);
       throw error;
     }
