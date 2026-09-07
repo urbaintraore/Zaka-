@@ -1,11 +1,6 @@
 {
-  "name": "Zaka+",
-  "description": "Plateforme de découverte et de promotion des lieux de sortie au Burkina Faso (maquis, bars, restaurants, boîtes de nuit).",
-  "requestFramePermissions": [
-    "geolocation",
-    "microphone"
-  ],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  "name": "Zaka",
+  "description": "Découverte, réservation et avis sur les établissements et sorties au Burkina Faso.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

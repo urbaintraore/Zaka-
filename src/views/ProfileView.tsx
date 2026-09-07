@@ -29,6 +29,8 @@ interface ProfileViewProps {
 export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProps) {
   const { 
     currentUser, 
+    users,
+    switchUser,
     login, 
     resetPassword,
     register, 
@@ -697,16 +699,6 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                   value={estDescription} 
                   onChange={e => setEstDescription(e.target.value)} 
                   className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium min-h-[100px]"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-gray-500 ml-1">Image de description (URL)</label>
-                <input 
-                  type="url" 
-                  placeholder="https://images.unsplash.com/..." 
-                  value={estPhotoUrl} 
-                  onChange={e => setEstPhotoUrl(e.target.value)} 
-                  className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" 
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -1497,6 +1489,56 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
           )}
         </div>
 
+        {/* Mes Établissements Favoris */}
+        <div className="bg-white dark:bg-gray-950 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-900">
+          <h3 className="text-sm font-black text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+            <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+            Mes Établissements Favoris
+          </h3>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold mb-4">Retrouvez les adresses que vous avez aimées et marquez vos coups de cœur.</p>
+
+          {favorites.length === 0 ? (
+            <p className="text-xs text-gray-400 font-bold py-4 text-center bg-gray-50 dark:bg-gray-900/40 rounded-2xl">
+              Aucun établissement favori pour le moment. Allez sur l'onglet Explorer pour en ajouter !
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {favorites.map(favId => {
+                const est = establishments.find(e => e.id === favId);
+                if (!est) return null;
+                return (
+                  <div key={favId} className="flex gap-3 p-3 bg-gray-50 dark:bg-gray-900/30 border border-gray-100 dark:border-gray-800 rounded-2xl relative group hover:shadow-2xs transition-all">
+                    <img 
+                      src={est.photoUrl} 
+                      alt={est.name} 
+                      className="w-14 h-14 rounded-xl object-cover" 
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="flex-1 min-w-0 flex flex-col justify-between">
+                      <div>
+                        <h4 className="font-bold text-xs text-gray-900 dark:text-white truncate">{est.name}</h4>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold">{est.neighborhood}, {est.city}</p>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="text-[10px] font-black text-amber-500">★</span>
+                          <span className="text-[10px] text-gray-600 dark:text-gray-300 font-bold">{est.rating || 'N/A'}</span>
+                        </div>
+                      </div>
+                      
+                      <button
+                        type="button"
+                        onClick={() => handleStartChat(est.id, est.name, est.ownerId)}
+                        className="text-[10px] text-orange-600 dark:text-orange-400 font-black hover:underline text-left cursor-pointer"
+                      >
+                        Discuter avec l'établissement
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Mes commandes à emporter */}
         <div className="bg-white dark:bg-gray-950 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-900">
           <h3 className="text-sm font-black text-gray-900 dark:text-white mb-1 flex items-center gap-2">
@@ -1784,9 +1826,40 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   return (
     <div className="p-4 max-w-md mx-auto pt-8">
       <div className="bg-white rounded-3xl p-6 shadow-xl shadow-orange-100/20 border border-gray-100">
-        <h2 className="text-2xl font-black text-gray-900 mb-6 text-center">
+        <h2 className="text-2xl font-black text-gray-900 mb-2 text-center">
           {mode === 'login' ? 'Connexion' : 'Créer un compte'}
         </h2>
+        
+        {mode === 'login' && (
+          <div className="mb-6 p-3 bg-orange-50/70 border border-orange-200/80 rounded-2xl">
+            <span className="text-[11px] font-black text-orange-900 uppercase tracking-wider block mb-2 text-center">
+              ⚡ Connexion rapide Démo (Choisir un profil) :
+            </span>
+            <div className="grid grid-cols-1 gap-1.5">
+              {users.slice(0, 5).map(u => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => switchUser(u.id)}
+                  className="w-full px-3 py-2 bg-white hover:bg-orange-100/60 border border-orange-200/60 text-left rounded-xl transition-all flex items-center justify-between group cursor-pointer shadow-2xs"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-lg bg-orange-100 text-orange-700 font-black text-[11px] flex items-center justify-center">
+                      {u.role === 'admin' ? '👑' : u.role === 'gerant' ? '🏪' : u.role === 'caissier' ? '🛒' : u.role === 'entreprise' ? '🏢' : '👤'}
+                    </span>
+                    <div>
+                      <p className="text-xs font-bold text-gray-900 group-hover:text-orange-900">{u.name}</p>
+                      <p className="text-[10px] font-medium text-gray-500">{u.email || u.phone}</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 bg-gray-100 text-gray-700 group-hover:bg-orange-600 group-hover:text-white rounded-md transition-colors">
+                    {u.role}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         
         {/* Auth Method Selector */}
         {!isOtpSent && (

@@ -1,50 +1,50 @@
-import React, { useState } from 'react';
-import { AdvertiserDashboard } from './AdvertiserDashboard';
-import { ZakaAdsManager } from './ads/ZakaAdsManager';
-import { Layers, Sparkles } from 'lucide-react';
+import React from 'react';
+import { Megaphone, TrendingUp, Eye, MousePointer } from 'lucide-react';
 
-export const ZakaAdsDashboard: React.FC = () => {
-  const [mode, setMode] = useState<'express' | 'manager'>('manager');
-
+export function ZakaAdsDashboard() {
   return (
-    <div className="space-y-4">
-      {/* Mode Selector Header */}
-      <div className="bg-white dark:bg-gray-800 p-3 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Layers className="w-5 h-5 text-orange-500" />
-          <span className="font-extrabold text-xs text-gray-900 dark:text-white uppercase tracking-wider">
-            Mode ZAKA Ads :
-          </span>
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="p-3 bg-indigo-600 text-white rounded-xl">
+          <Megaphone size={24} />
         </div>
-
-        <div className="flex gap-1.5 bg-gray-100 dark:bg-gray-900 p-1 rounded-xl">
-          <button
-            onClick={() => setMode('manager')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
-              mode === 'manager'
-                ? 'bg-amber-500 text-gray-950 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>ZAKA Ads Manager (B2B Pro)</span>
-          </button>
-
-          <button
-            onClick={() => setMode('express')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
-              mode === 'express'
-                ? 'bg-orange-600 text-white shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            <span>ZAKA Ads Express (Standard)</span>
-          </button>
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Zaka Ads & Sponsoring</h2>
+          <p className="text-xs text-gray-500">Boostez la visibilité de vos établissements</p>
         </div>
       </div>
 
-      {mode === 'manager' ? <ZakaAdsManager /> : <AdvertiserDashboard />}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center gap-4">
+          <div className="p-3 bg-indigo-600 text-white rounded-xl">
+            <Eye size={20} />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-gray-900">12,450</div>
+            <div className="text-xs font-semibold text-gray-500">Impressions</div>
+          </div>
+        </div>
+
+        <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-4">
+          <div className="p-3 bg-emerald-600 text-white rounded-xl">
+            <MousePointer size={20} />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-gray-900">840</div>
+            <div className="text-xs font-semibold text-gray-500">Clics</div>
+          </div>
+        </div>
+
+        <div className="p-4 bg-orange-50 border border-orange-100 rounded-2xl flex items-center gap-4">
+          <div className="p-3 bg-orange-600 text-white rounded-xl">
+            <TrendingUp size={20} />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-gray-900">6.7%</div>
+            <div className="text-xs font-semibold text-gray-500">Taux de conversion</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
-};
-
+}

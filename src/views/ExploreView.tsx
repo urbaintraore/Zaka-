@@ -1,610 +1,719 @@
-import { useState, useEffect } from 'react';
-import { useAppStore } from '../store';
-import { Search, MapPin, MessageSquare, Calendar, Heart, Share2, List, Map as MapIcon, Clock, Flame, Navigation } from 'lucide-react';
-import { ReservationModal } from '../components/ReservationModal';
-import { EstablishmentDetailModal } from '../components/EstablishmentDetailModal';
-import { getEstCoords, calculateDistanceKm, formatDistance } from '../utils/coordinates';
-import { getCurrentUserLocation } from '../utils/geolocation';
-import { shareContent } from '../utils/platform';
-import { MapView } from '../components/MapView';
-import { Establishment, CATEGORIES_LIST, getCategoryLabel } from '../types';
-import { HeartButton } from '../components/HeartButton';
-import { OuagadougouHeatmap } from '../components/OuagadougouHeatmap';
-import { AdPlacementBanner } from '../components/AdPlacementBanner';
+import React, { useState, useEffect } from 'react';
+import { useAppStore, calculateDistanceKm } from '../store';
+import { CATEGORIES_LIST, Category, Establishment, getCategoryLabel } from '../types';
+import { Search, MapPin, Star, Calendar, MessageSquare, Tag, Phone, Sparkles, Filter, SlidersHorizontal, Map, Grid, Crosshair, HelpCircle, Heart } from 'lucide-react';
+import { RateVisitedEstablishmentModal } from '../components/RateVisitedEstablishmentModal';
 
-import { JoinRoleModal } from '../components/JoinRoleModal';
-
-function isEstablishmentOpen(openingHours?: string): boolean {
-  if (!openingHours) return true;
-  try {
-    const cleanHours = openingHours.toLowerCase().trim();
-    if (cleanHours.includes('24h') || cleanHours.includes('24/7') || cleanHours.includes('toujours')) return true;
-    const parts = cleanHours.split(/[-–]/);
-    if (parts.length !== 2) return true;
-    const parseTime = (str: string): number => {
-      const cleanStr = str.replace(/[h:]/g, ' ').trim();
-      const timeParts = cleanStr.split(/\s+/);
-      const hours = parseInt(timeParts[0]) || 0;
-      const minutes = parseInt(timeParts[1]) || 0;
-      return hours * 60 + minutes;
-    };
-    const startMinutes = parseTime(parts[0]);
-    const endMinutes = parseTime(parts[1]);
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    if (endMinutes < startMinutes) {
-      return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
-    } else {
-      return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
-    }
-  } catch (e) {
-    return true;
-  }
-}
-
-function getPriceLevel(est: Establishment): 'low' | 'medium' | 'high' {
-  const desc = (est.description || '').toLowerCase();
-  const name = (est.name || '').toLowerCase();
-  const tags = (est.tags || []).map(t => t.toLowerCase());
-  if (
-    desc.includes('luxe') || 
-    desc.includes('vip') || 
-    desc.includes('gastronomique') || 
-    desc.includes('prestige') ||
-    desc.includes('haut de gamme') ||
-    tags.includes('luxe') ||
-    tags.includes('chic') ||
-    est.category === 'hotel' ||
-    est.category === 'residence'
-  ) {
-    return 'high';
-  }
-  if (
-    desc.includes('économique') || 
-    desc.includes('populaire') || 
-    desc.includes('pas cher') || 
-    desc.includes('braisé') || 
-    desc.includes('abordable') ||
-    name.includes('kiosque') ||
-    tags.includes('économique') ||
-    tags.includes('abordable') ||
-    est.category === 'maquis'
-  ) {
-    return 'low';
-  }
-  return 'medium';
-}
-
-interface ExploreViewProps {
-  onStartChat?: (estId: string, recipient?: 'gerant' | 'dj') => void;
-  onNavigate?: (tab: any) => void;
-}
-
-export function ExploreView({ onStartChat, onNavigate }: ExploreViewProps) {
-  const { establishments, currentUser, relationshipRequests, createRelationshipRequest, deleteRelationshipRequest, createServiceRequest, setGlobalError, users, favorites, toggleFavorite, loading } = useAppStore();
+export function ExploreView() {
+  const { establishments, toggleFavorite, favorites, currentUser, addReservation, userLocation, setUserLocation } = useAppStore();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<Category | 'all'>('all');
+  const [selectedCity, setSelectedCity] = useState<string>('all');
+  const [ratingEstModal, setRatingEstModal] = useState<Establishment | null>(null);
   
-  const isSupabaseReady = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
-  
-  console.log('[ExploreView] State:', {
-    establishmentsCount: establishments.length,
-    loading,
-    hasUser: !!currentUser,
-    isSupabaseReady,
-    firstFewEsts: (establishments || []).slice(0, 3).map(e => ({ id: e.id, name: e.name, status: e.status }))
-  });
-  const [search, setSearch] = useState('');
-  const [category, setCategory] = useState<string>('all');
+  // Advanced filters state
+  const [showFilters, setShowFilters] = useState(false);
   const [priceFilter, setPriceFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all');
-  const [openNowFilter, setOpenNowFilter] = useState(false);
-  const [selectedEst, setSelectedEst] = useState<Establishment | null>(null);
-  const [joinModalEst, setJoinModalEst] = useState<Establishment | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'map' | 'heatmap'>('list');
-  const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
-  const [filterByProximity, setFilterByProximity] = useState(false);
+  const [ratingFilter, setRatingFilter] = useState<number | 'all'>('all');
+  const [sortBy, setSortBy] = useState<'default' | 'rating' | 'distance'>('default');
+  const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
+  
+  // Selected map establishment preview
+  const [selectedMapEst, setSelectedMapEst] = useState<Establishment | null>(null);
 
+  // Reservation modal state
+  const [resModalEst, setResModalEst] = useState<Establishment | null>(null);
+  const [resDate, setResDate] = useState('');
+  const [resTime, setResTime] = useState('19:30');
+  const [resGuests, setResGuests] = useState(2);
+  const [resSuccessMessage, setResSuccessMessage] = useState('');
+
+  // Automatically request geolocation or load saved
   useEffect(() => {
-    getCurrentUserLocation()
-      .then((loc) => {
-        setUserLocation(loc);
-      })
-      .catch((error) => {
-        console.warn("Could not retrieve geolocation:", error.message || error);
-      });
-  }, []);
+    if (userLocation) {
+      setSortBy('distance');
+    }
+  }, [userLocation]);
 
-  const handleReservationSubmit = (data: { reservationType: string, date: string, time: string, guests: number, details: string }) => {
-    if (!currentUser || !selectedEst) return;
-    
-    const isAnniv = data.reservationType === 'anniversaire';
-    
-    createServiceRequest({
-      clientId: currentUser.id,
-      establishmentId: selectedEst.id,
-      type: isAnniv ? 'anniversaire' : 'reservation',
-      details: `Date: ${data.date} à ${data.time} | Places: ${data.guests} | Type: ${data.reservationType}${data.details ? ` | Note: ${data.details}` : ''}`
-    });
+  const handleActivateGeolocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+          setSortBy('distance');
+        },
+        (error) => {
+          console.error("Erreur de géolocalisation:", error);
+          // Fallback center of Ouagadougou
+          setUserLocation({ lat: 12.368, lng: -1.523 });
+          setSortBy('distance');
+        }
+      );
+    } else {
+      alert("La géolocalisation n'est pas supportée par votre navigateur.");
+    }
   };
 
+  const getPriceCategory = (priceStr?: string) => {
+    if (!priceStr) return 'medium';
+    const clean = priceStr.replace(/\s/g, '').replace('FCFA', '');
+    const parts = clean.split('-');
+    const minPrice = parseInt(parts[0]) || 0;
+    if (minPrice < 5000) return 'low';
+    if (minPrice < 15000) return 'medium';
+    return 'high';
+  };
+
+  // Convert lat/lng to percentage coordinates on map box (bounded for Ouagadougou)
+  const getMapCoords = (lat?: number, lng?: number) => {
+    const minLat = 12.30;
+    const maxLat = 12.42;
+    const minLng = -1.56;
+    const maxLng = -1.45;
+    
+    const l = lat || 12.368;
+    const g = lng || -1.523;
+    
+    // Y percentage (lat goes bottom-up, so invert it)
+    const y = 100 - ((l - minLat) / (maxLat - minLat)) * 100;
+    // X percentage
+    const x = ((g - minLng) / (maxLng - minLng)) * 100;
+    
+    return { 
+      x: Math.max(8, Math.min(92, x)), 
+      y: Math.max(8, Math.min(92, y)) 
+    };
+  };
+
+  // Filter establishments
   const filtered = establishments.filter(est => {
-    const isOwner = currentUser && est.ownerId === currentUser.id;
-    // Show validated ones to everyone, but also show pending ones if they are the owner OR if we want general visibility
-    // The user reports they are not visible in production. Let's relax the validation constraint for now 
-    // but keep a check for 'refusee' (rejected)
-    if (est.status === 'refusee' && !isOwner) return false;
+    const matchesCategory = selectedCategory === 'all' || est.category === selectedCategory;
+    const matchesCity = selectedCity === 'all' || est.city === selectedCity;
+    const matchesSearch = 
+      est.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      est.neighborhood.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      est.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (est.tags && est.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase())));
+      
+    const matchesPrice = priceFilter === 'all' || getPriceCategory(est.priceLevel) === priceFilter;
+    const matchesRating = ratingFilter === 'all' || (est.rating || 0) >= Number(ratingFilter);
     
-    // In production, users expect to see their new creations immediately.
-    // If the status is 'en_attente', we still show it in Explore for now to avoid the perception of a bug.
-    // We already have the 'EN ATTENTE' badge for the owner.
-    
-    if (category !== 'all' && est.category !== category) return false;
-    if (search) {
-      const searchLower = search.toLowerCase();
-      const nameMatch = (est.name || '').toLowerCase().includes(searchLower);
-      const neighborhoodMatch = (est.neighborhood || '').toLowerCase().includes(searchLower);
-      const categoryMatch = (est.category || '').replace(/_/g, ' ').toLowerCase().includes(searchLower);
-      const tagsMatch = est.tags && est.tags.some(tag => tag.toLowerCase().includes(searchLower));
-      if (!nameMatch && !neighborhoodMatch && !categoryMatch && !tagsMatch) return false;
-    }
-    
-    if (filterByProximity) {
-      if (!userLocation) return false;
-      const coords = getEstCoords(est);
-      const dist = calculateDistanceKm(userLocation.lat, userLocation.lng, coords.lat, coords.lng);
-      // Filter within 25 km
-      if (dist > 25) return false;
-    }
-
-    // New: Open Now filter
-    if (openNowFilter) {
-      if (!isEstablishmentOpen(est.openingHours)) return false;
-    }
-
-    // New: Price filter
-    if (priceFilter !== 'all') {
-      const level = getPriceLevel(est);
-      if (level !== priceFilter) return false;
-    }
-    
-    return true;
-  }).sort((a, b) => {
-    if (!userLocation) return 0;
-    const coordsA = getEstCoords(a);
-    const coordsB = getEstCoords(b);
-    const distA = calculateDistanceKm(userLocation.lat, userLocation.lng, coordsA.lat, coordsA.lng);
-    const distB = calculateDistanceKm(userLocation.lat, userLocation.lng, coordsB.lat, coordsB.lng);
-    return distA - distB;
+    return matchesCategory && matchesCity && matchesSearch && matchesPrice && matchesRating;
   });
 
+  // Sort establishments
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortBy === 'rating') {
+      return (b.rating || 0) - (a.rating || 0);
+    }
+    if (sortBy === 'distance' && userLocation) {
+      const distA = calculateDistanceKm(userLocation.lat, userLocation.lng, a.lat || 12.37, a.lng || -1.52);
+      const distB = calculateDistanceKm(userLocation.lat, userLocation.lng, b.lat || 12.37, b.lng || -1.52);
+      return distA - distB;
+    }
+    return 0; // default order
+  });
+
+  const handleMakeReservation = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resModalEst) return;
+
+    addReservation({
+      establishmentId: resModalEst.id,
+      establishmentName: resModalEst.name,
+      userId: currentUser?.id || 'u-1',
+      userName: currentUser?.name || 'Visiteur Zaka',
+      clientId: currentUser?.id || 'u-1',
+      date: resDate || new Date().toISOString().split('T')[0],
+      time: resTime,
+      guestsCount: resGuests,
+      status: 'pending'
+    });
+
+    setResSuccessMessage(`Réservation envoyée à ${resModalEst.name} pour le ${resDate} à ${resTime} (${resGuests} pers.) !`);
+    setTimeout(() => {
+      setResSuccessMessage('');
+      setResModalEst(null);
+    }, 2000);
+  };
+
   return (
-    <div className="p-4 max-w-3xl mx-auto pb-24">
-      {!isSupabaseReady && !loading && (
-        <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-amber-800 dark:text-amber-400 font-black text-sm">
-            <span className="text-xl">⚠️</span> Configuration Supabase manquante
-          </div>
-          <p className="text-xs text-amber-700 dark:text-amber-300 font-medium leading-relaxed">
-            L'application est en mode "Démo locale" car les clés API Supabase ne sont pas configurées. 
-            Les établissements créés ne seront pas persistés en production.
+    <div className="space-y-6 pb-20">
+      
+      {/* Search & Hero Banner */}
+      <div className="bg-gradient-to-r from-orange-600 to-amber-600 rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-orange-600/10">
+        <div className="max-w-3xl">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-bold uppercase tracking-wider mb-3">
+            <Sparkles size={14} className="animate-pulse" /> Explorer le Burkina Faso
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-black mb-2">Trouvez les meilleurs maquis, restaurants & hôtels</h1>
+          <p className="text-orange-100 text-xs sm:text-sm font-medium mb-6">
+            Découvrez les adresses tendances, réservez votre table en direct et profitez des privilèges exclusifs.
           </p>
+
+          {/* Search Bar & Primary Actions */}
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row gap-2 bg-white/10 p-1.5 backdrop-blur-md rounded-2xl border border-white/20">
+              <div className="flex-1 flex items-center gap-2 bg-white dark:bg-gray-900 rounded-xl px-3.5 py-2.5 text-gray-900 dark:text-white">
+                <Search size={18} className="text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Rechercher un lieu, quartier, tag (ex: #Piscine, #Grillades)..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full bg-transparent text-xs font-medium outline-none placeholder:text-gray-400"
+                />
+              </div>
+              <div className="flex gap-2">
+                <select
+                  value={selectedCity}
+                  onChange={e => setSelectedCity(e.target.value)}
+                  className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white rounded-xl px-3 py-2.5 text-xs font-bold outline-none cursor-pointer border-r border-transparent"
+                >
+                  <option value="all">📍 Toutes villes</option>
+                  <option value="Ouagadougou">Ouagadougou</option>
+                  <option value="Bobo-Dioulasso">Bobo-Dioulasso</option>
+                  <option value="Koudougou">Koudougou</option>
+                </select>
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`p-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                    showFilters 
+                      ? 'bg-white text-orange-600 border-white' 
+                      : 'bg-white/15 hover:bg-white/25 text-white border-white/20'
+                  }`}
+                  title="Filtres avancés"
+                >
+                  <SlidersHorizontal size={16} />
+                  <span className="hidden sm:inline">Filtres</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Geolocation Activation Prompt */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white/10 border border-white/10 p-3 rounded-2xl backdrop-blur-xs">
+              <div className="flex items-center gap-2 text-xs font-semibold">
+                <MapPin size={16} className="text-amber-300 animate-bounce" />
+                <span>
+                  {userLocation 
+                    ? `Géolocalisation activée (${userLocation.lat.toFixed(3)}, ${userLocation.lng.toFixed(3)})` 
+                    : 'Activez votre position pour voir les établissements les plus proches de vous.'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleActivateGeolocation}
+                className="px-3 py-1.5 bg-white text-orange-600 hover:bg-orange-50 rounded-xl text-[11px] font-black uppercase transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+              >
+                <Crosshair size={13} />
+                <span>{userLocation ? 'Mettre à jour' : 'Me géolocaliser'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Advanced Filters Drawer/Panel */}
+      {showFilters && (
+        <div className="p-4 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-3xl grid grid-cols-1 sm:grid-cols-3 gap-4 shadow-sm animate-fadeIn">
+          {/* Price Level */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Gamme de Prix</label>
+            <div className="flex bg-gray-50 dark:bg-gray-950 p-1 rounded-xl border border-gray-200/60 dark:border-gray-800">
+              {['all', 'low', 'medium', 'high'].map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPriceFilter(p as any)}
+                  className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg uppercase tracking-wide cursor-pointer transition-all ${
+                    priceFilter === p 
+                      ? 'bg-white dark:bg-gray-900 text-orange-600 dark:text-orange-400 shadow-2xs font-black' 
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  {p === 'all' ? 'Toutes' : p === 'low' ? 'Éco' : p === 'medium' ? 'Moy' : 'Lux'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Average Rating */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Note Minimale</label>
+            <div className="flex bg-gray-50 dark:bg-gray-950 p-1 rounded-xl border border-gray-200/60 dark:border-gray-800">
+              {['all', 4.0, 4.5, 4.8].map(r => (
+                <button
+                  key={r}
+                  onClick={() => setRatingFilter(r as any)}
+                  className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg cursor-pointer transition-all ${
+                    ratingFilter === r 
+                      ? 'bg-white dark:bg-gray-900 text-orange-600 dark:text-orange-400 shadow-2xs font-black' 
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  {r === 'all' ? 'Toutes' : `★ ${r}`}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sort selection */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Trier les résultats</label>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as any)}
+              disabled={sortBy === 'distance' && !userLocation}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-950 text-xs font-bold text-gray-700 dark:text-gray-300 rounded-xl border border-gray-200/60 dark:border-gray-800 focus:outline-none focus:border-orange-500 cursor-pointer disabled:opacity-50"
+            >
+              <option value="default">🏷️ Par défaut</option>
+              <option value="rating">⭐️ Meilleures notes</option>
+              <option value="distance" disabled={!userLocation}>🚗 Les plus proches (GPS requis)</option>
+            </select>
+          </div>
         </div>
       )}
-      <div className="mb-6">
-        <div className="relative mb-4">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="Rechercher un lieu, quartier..." 
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-gray-950 text-gray-900 dark:text-white rounded-xl border border-gray-200 dark:border-gray-900 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 outline-none font-medium transition-all"
-          />
-        </div>
-        <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-2">
-          {[{ id: 'all', label: 'Tout', icon: '✨' }, ...CATEGORIES_LIST].map((cat: { id: string; label: string; icon?: string }) => (
-            <button 
-              key={cat.id}
-              onClick={() => setCategory(cat.id)}
-              className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-colors ${category === cat.id ? 'bg-orange-600 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:border-orange-200 dark:bg-gray-900 dark:border-gray-800 dark:text-gray-300'}`}
+
+      {/* Main Bar: Layout mode switch (Grid vs Map) & Category Pills */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 dark:border-gray-800 pb-3">
+        {/* Category Horizontal Filter Pills */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <button
+              onClick={() => setSelectedCategory('all')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+                selectedCategory === 'all'
+                  ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
+                  : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border border-gray-200/80 dark:border-gray-800 hover:bg-gray-50'
+              }`}
             >
-              {cat.id === 'all' ? 'Tout' : (cat.icon ? `${cat.icon} ${cat.label}` : cat.label)}
+              🔥 Tout voir
             </button>
-          ))}
-        </div>
-
-        {/* Filtres rapides */}
-        <div className="flex items-center gap-2 mt-3 flex-wrap text-xs">
-          <span className="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 mr-1 tracking-wider">Filtres:</span>
-          
-          {/* Ouvert maintenant */}
-          <button
-            onClick={() => setOpenNowFilter(!openNowFilter)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-bold transition-all cursor-pointer ${
-              openNowFilter 
-                ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/20 dark:border-green-900 dark:text-green-400 font-black' 
-                : 'bg-white border-gray-200 text-gray-600 dark:bg-gray-900 dark:border-gray-800 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
-            Ouvert maintenant
-          </button>
-
-          {/* Prix Filter Option Group */}
-          <div className="flex bg-gray-100 dark:bg-gray-900 p-0.5 rounded-xl border border-gray-150 dark:border-gray-850">
-            {[
-              { id: 'all', label: 'Prix : Tout' },
-              { id: 'low', label: 'Abordable' },
-              { id: 'medium', label: 'Moyen' },
-              { id: 'high', label: 'Chic' }
-            ].map(lvl => (
+            {CATEGORIES_LIST.map(cat => (
               <button
-                key={lvl.id}
-                onClick={() => setPriceFilter(lvl.id as any)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                  priceFilter === lvl.id 
-                    ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black' 
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                  selectedCategory === cat.id
+                    ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20'
+                    : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border border-gray-200/80 dark:border-gray-800 hover:bg-gray-50'
                 }`}
               >
-                {lvl.label}
+                <span>{cat.icon}</span>
+                <span>{cat.label}</span>
               </button>
             ))}
           </div>
         </div>
-      </div>
-      
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-black text-gray-900">Explorer</h2>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={async () => {
-              if (!userLocation) {
-                try {
-                  const loc = await getCurrentUserLocation();
-                  setUserLocation(loc);
-                  setFilterByProximity(true);
-                } catch (error) {
-                  alert("Pour utiliser ce filtre, veuillez autoriser l'accès à votre position géographique.");
-                }
-                return;
-              }
-              setFilterByProximity(!filterByProximity);
-            }}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${filterByProximity ? 'bg-orange-50 border-orange-200 text-orange-600 font-black' : 'bg-white border-gray-200 text-gray-500 hover:text-gray-700'}`}
-          >
-            <MapPin className="w-3.5 h-3.5" />
-            À proximité
-          </button>
 
-          <div className="flex bg-gray-100 p-1 rounded-xl">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${viewMode === 'list' ? 'bg-white text-orange-600 shadow-xs' : 'text-gray-500 hover:text-gray-700'}`}
-              title="Liste"
-            >
-              <List className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('map')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${viewMode === 'map' ? 'bg-white text-orange-600 shadow-xs' : 'text-gray-500 hover:text-gray-700'}`}
-              title="Carte"
-            >
-              <MapIcon className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('heatmap')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${viewMode === 'heatmap' ? 'bg-white text-orange-600 shadow-xs' : 'text-gray-500 hover:text-gray-700'}`}
-              title="Carte Thermique"
-            >
-              <Flame className="w-4 h-4" />
-            </button>
-          </div>
+        {/* Layout Switch Option */}
+        <div className="flex bg-gray-100 dark:bg-gray-900 p-1 rounded-xl border border-gray-200 dark:border-gray-800 shrink-0 self-start md:self-auto">
+          <button
+            type="button"
+            onClick={() => setViewMode('grid')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              viewMode === 'grid'
+                ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Grid size={14} />
+            <span>Mosaïque ({sorted.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('map')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              viewMode === 'map'
+                ? 'bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 shadow-xs font-black'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Map size={14} />
+            <span>Carte Interactive</span>
+          </button>
         </div>
       </div>
-      
-      {viewMode === 'map' ? (
-        <MapView establishments={filtered} onEstClick={(id) => {
-          const est = establishments.find(e => e.id === id);
-          if (est) setSelectedEst(est);
-        }} />
-      ) : viewMode === 'heatmap' ? (
-        <OuagadougouHeatmap />
-      ) : (
-        <div className="flex flex-col gap-4">
-          <AdPlacementBanner placement="feed_native" />
-          {filtered.map(est => {
-            const djRequests = relationshipRequests.filter(r => r.establishmentId === est.id && r.status === 'acceptee' && r.isDJ);
-            const djs = djRequests.map(r => {
-              const djId = r.type === 'client_join' ? r.initiatorId : r.targetId;
-              return users.find(u => u.id === djId);
-            }).filter(Boolean);
 
-            const handleShare = async () => {
-              await shareContent({
-                title: est.name,
-                text: `Découvrez ${est.name} à ${est.neighborhood}`,
-                url: window.location.href
-              });
-            };
+      {/* RENDER GRID MODE */}
+      {viewMode === 'grid' ? (
+        sorted.length === 0 ? (
+          <div className="py-20 text-center space-y-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-3xl">
+            <div className="w-14 h-14 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto text-gray-400">
+              <Search size={28} />
+            </div>
+            <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Aucun établissement trouvé</h3>
+            <p className="text-xs text-gray-500 max-w-sm mx-auto">
+              Essayez de modifier vos filtres, de changer de ville ou de vider votre champ de recherche.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {sorted.map(est => {
+              const isFav = favorites.includes(est.id);
+              const distance = userLocation 
+                ? calculateDistanceKm(userLocation.lat, userLocation.lng, est.lat || 12.368, est.lng || -1.523) 
+                : null;
 
-            return (
-              <div 
-                key={est.id} 
-                className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => setSelectedEst(est)}
-              >
-                <div className="h-40 bg-gray-200 relative">
-                  <img src={est.photos[0] || 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800'} alt={est.name} className="w-full h-full object-cover" />
-                  <div className="absolute top-3 right-3 flex flex-col items-end gap-2">
-                    <div className="bg-white/90 backdrop-blur px-2.5 py-1 rounded-lg text-sm font-bold text-gray-900 flex items-center gap-1 shadow-sm">
-                      <span className="text-yellow-500">★</span> {est.averageRating.toFixed(1)}
-                    </div>
-                    {est.status === 'en_attente' && (
-                      <div className="bg-orange-500 text-white text-[10px] font-black px-2 py-1 rounded-lg shadow-sm animate-pulse">
-                        EN ATTENTE
-                      </div>
-                    )}
-                  </div>
-                  <div className="absolute top-3 left-3 flex gap-2">
-                    {currentUser && (
-                      <HeartButton
-                        isFavorite={(favorites[currentUser.id] || []).includes(est.id)}
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          await toggleFavorite(currentUser.id, est.id);
-                        }}
+              return (
+                <div key={est.id} className="bg-white dark:bg-gray-900 rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between group">
+                  <div>
+                    {/* Image & Badges */}
+                    <div className="relative h-48 overflow-hidden bg-gray-100 dark:bg-gray-800">
+                      <img 
+                        src={est.photoUrl} 
+                        alt={est.name} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                        referrerPolicy="no-referrer"
                       />
-                    )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
+                      
+                      {/* Category Pill */}
+                      <span className="absolute top-3 left-3 px-3 py-1 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md rounded-full text-[11px] font-black text-gray-900 dark:text-white uppercase tracking-wider shadow-xs">
+                        {getCategoryLabel(est.category)}
+                      </span>
+
+                      {/* Favorite Button */}
+                      <button
+                        onClick={() => toggleFavorite(est.id)}
+                        className={`absolute top-3 right-3 p-2.5 rounded-full backdrop-blur-md transition-all cursor-pointer ${
+                          isFav 
+                            ? 'bg-red-500 text-white shadow-md' 
+                            : 'bg-black/30 text-white hover:bg-white hover:text-red-500'
+                        }`}
+                        title={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+                      >
+                        <Heart size={16} className={isFav ? 'fill-current text-white' : ''} />
+                      </button>
+
+                      {/* Location & Distance Badge */}
+                      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-white">
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-1 text-xs font-bold text-gray-200">
+                            <MapPin size={14} className="text-orange-400" />
+                            <span>{est.neighborhood}, {est.city}</span>
+                          </div>
+                          {distance !== null && (
+                            <span className="text-[10px] font-extrabold text-orange-400 mt-0.5">
+                              🚀 À {distance} km de vous
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 bg-amber-500/90 backdrop-blur-xs px-2.5 py-0.5 rounded-lg text-xs font-black shadow-xs shrink-0 self-end">
+                          <Star size={12} className="fill-white" />
+                          <span>{est.rating || '4.8'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-5 space-y-3">
+                      <h3 className="text-base font-black text-gray-900 dark:text-white group-hover:text-orange-600 transition-colors">
+                        {est.name}
+                      </h3>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed">
+                        {est.description}
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {est.priceLevel && (
+                          <div className="text-[10px] font-bold text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 px-2 py-0.5 rounded-md">
+                            💰 {est.priceLevel}
+                          </div>
+                        )}
+                        {est.tags && est.tags.slice(0, 3).map((tag, idx) => (
+                          <span key={idx} className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-md">
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="p-5 pt-0 grid grid-cols-2 gap-2">
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleShare();
-                      }}
-                      className="p-2 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md transition-all active:scale-90 text-white"
-                      title="Partager"
+                      onClick={() => setResModalEst(est)}
+                      className="py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                     >
-                      <Share2 className="w-4 h-4" />
+                      <Calendar size={14} />
+                      <span>Réserver</span>
+                    </button>
+                    <button
+                      onClick={() => setRatingEstModal(est)}
+                      className="py-2.5 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <MessageSquare size={14} />
+                      <span>Laisser un avis</span>
                     </button>
                   </div>
                 </div>
-                <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">{est.category.replace(/_/g, ' ')}</div>
-                      {est.tags && est.tags.length > 0 && (
-                        <div className="flex gap-1">
-                          {est.tags.slice(0, 2).map((tag, i) => (
-                            <span key={i} className="text-[8px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded uppercase tracking-tighter">
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+              );
+            })}
+          </div>
+        )
+      ) : (
+        /* RENDER MAP MODE (STYLIZED VECTOR CANVAS MAP) */
+        <div className="space-y-4">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-md p-4 space-y-4">
+            
+            {/* Map Header Instructions */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-gray-100 dark:border-gray-800 pb-3">
+              <div>
+                <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Map size={16} className="text-orange-600" />
+                  Carte Interactive de Ouagadougou
+                </h3>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 font-semibold">
+                  Cliquez sur un repère coloré pour voir les détails d'un établissement et faire une réservation.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-orange-600 bg-orange-50 dark:bg-orange-950/40 px-2 py-0.5 rounded">
+                  <span className="w-2 h-2 rounded-full bg-orange-600" /> Maquis
+                </span>
+                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600" /> Hôtels
+                </span>
+                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded">
+                  <span className="w-2 h-2 rounded-full bg-blue-600" /> Piscines
+                </span>
+              </div>
+            </div>
+
+            {/* Interactive Vector Canvas Container */}
+            <div className="w-full h-[480px] bg-amber-50/20 dark:bg-gray-950 border border-gray-200/80 dark:border-gray-800 rounded-2xl relative overflow-hidden flex flex-col justify-end">
+              
+              {/* Outer grid pattern */}
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+
+              {/* Stylized streets as SVG overlays */}
+              <svg className="absolute inset-0 w-full h-full text-gray-200/50 dark:text-gray-800/40 pointer-events-none" stroke="currentColor" strokeWidth="2.5" fill="none">
+                {/* Blvd Circulaire */}
+                <path d="M 50,50 A 40,40 0 1,0 150,150" className="opacity-70" strokeDasharray="4,4" />
+                {/* Avenue Kwame Nkrumah */}
+                <line x1="10%" y1="10%" x2="90%" y2="90%" />
+                <line x1="90%" y1="10%" x2="10%" y2="90%" />
+                <line x1="50%" y1="0%" x2="50%" y2="100%" strokeWidth="1.5" />
+                <line x1="0%" y1="50%" x2="100%" y2="50%" strokeWidth="1.5" />
+              </svg>
+
+              {/* Neighborhoods stylized annotations */}
+              <div className="absolute top-12 left-[15%] text-[9px] font-black text-gray-400 uppercase tracking-widest pointer-events-none select-none opacity-40">Somgandé</div>
+              <div className="absolute top-1/4 right-[12%] text-[9px] font-black text-gray-400 uppercase tracking-widest pointer-events-none select-none opacity-40">Dassasgho</div>
+              <div className="absolute bottom-16 left-[18%] text-[9px] font-black text-gray-400 uppercase tracking-widest pointer-events-none select-none opacity-40">Patte d'Oie</div>
+              <div className="absolute bottom-24 right-[15%] text-[9px] font-black text-gray-400 uppercase tracking-widest pointer-events-none select-none opacity-40">Ouaga 2000</div>
+              <div className="absolute top-1/2 left-[38%] text-[10px] font-black text-orange-500/50 uppercase tracking-widest pointer-events-none select-none">Koulouba (Centre)</div>
+
+              {/* Pulse Marker for User Geolocation */}
+              {userLocation && (() => {
+                const { x, y } = getMapCoords(userLocation.lat, userLocation.lng);
+                return (
+                  <div 
+                    style={{ left: `${x}%`, top: `${y}%` }}
+                    className="absolute -translate-x-1/2 -translate-y-1/2 z-30"
+                    title="Votre position GPS"
+                  >
+                    <div className="relative flex items-center justify-center">
+                      <span className="absolute inline-flex h-6 w-6 rounded-full bg-blue-500 opacity-45 animate-ping" />
+                      <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-blue-600 border border-white shadow-md shadow-blue-500/40" />
                     </div>
-                    <h3 className="font-bold text-gray-900 text-lg truncate">{est.name}</h3>
-                    <div className="flex items-center gap-1.5 text-sm text-gray-500 mt-2 font-medium truncate">
-                      <MapPin className="w-4 h-4 flex-shrink-0" />
-                      <span>{est.address || est.city || ''} {est.neighborhood}</span>
-                      {(() => {
-                        if (!userLocation) return null;
-                        const coords = getEstCoords(est);
-                        const dist = calculateDistanceKm(userLocation.lat, userLocation.lng, coords.lat, coords.lng);
-                        return (
-                          <>
-                            <span className="text-gray-300">•</span>
-                            <span className="text-orange-600 font-bold">{formatDistance(dist)}</span>
-                          </>
-                        );
-                      })()}
-                    </div>
-                    {djs.length > 0 && (
-                      <div className="mt-2.5 flex items-center gap-1.5 text-[10px] font-bold text-purple-700 bg-purple-50/70 border border-purple-100 px-2.5 py-1 rounded-lg w-fit">
-                        <span className="text-xs">🎧</span>
-                        <span>DJ : {djs.map(dj => dj?.name).join(', ')}</span>
-                      </div>
-                    )}
                   </div>
-                  {onStartChat && (
-                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto justify-end">
-                      {(() => {
-                        const req = relationshipRequests.find(r => r.establishmentId === est.id && (r.initiatorId === currentUser?.id || r.targetId === currentUser?.id));
-                        if (!req) {
-                          return (
-                            <button
-                              onClick={async () => {
-                                if (!currentUser) {
-                                  setGlobalError({ message: "Veuillez créer un compte ou vous connecter pour rejoindre cet établissement.", type: 'info' });
-                                  if (onNavigate) onNavigate('profile');
-                                  return;
-                                }
-                                if (est.category === 'maquis' || est.category === 'boite_de_nuit') {
-                                  setJoinModalEst(est);
-                                } else {
-                                  try {
-                                    await createRelationshipRequest({ 
-                                      initiatorId: currentUser.id, 
-                                      targetId: est.ownerId, 
-                                      establishmentId: est.id, 
-                                      type: 'client_join',
-                                      requestedRole: 'client'
-                                    });
-                                    alert("Demande d'adhésion envoyée avec succès !");
-                                  } catch (err: any) {
-                                    console.error(err);
-                                    alert(err.message || "Erreur lors de l'envoi de la demande.");
-                                  }
-                                }
-                              }}
-                              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-600 font-bold text-xs px-3 py-2.5 rounded-xl transition-all cursor-pointer"
-                            >
-                              Rejoindre
-                            </button>
-                          );
-                        }
-                        if (req.status === 'en_attente') {
-                          return (
-                            <div className="flex items-center gap-1">
-                              <span className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-yellow-50 text-yellow-600 font-bold text-xs px-2.5 py-2 rounded-xl select-none">
-                                En attente
-                              </span>
-                              <button
-                                type="button"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (window.confirm("Voulez-vous annuler votre demande d'adhésion ?")) {
-                                    try {
-                                      await deleteRelationshipRequest(req.id);
-                                      alert("Demande annulée. Vous pouvez soumettre une nouvelle demande à tout moment.");
-                                    } catch (err) {
-                                      alert("Erreur lors de l'annulation.");
-                                    }
-                                  }
-                                }}
-                                className="bg-gray-100 hover:bg-red-50 text-gray-500 hover:text-red-600 font-bold text-xs px-2 py-2 rounded-xl transition-all cursor-pointer"
-                                title="Annuler ma demande"
-                              >
-                                Annuler
-                              </button>
-                            </div>
-                          );
-                        }
-                        if (req.status === 'acceptee') {
-                          return (
-                            <div className="flex items-center gap-1">
-                              <span className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-green-50 text-green-600 font-bold text-xs px-2.5 py-2 rounded-xl select-none">
-                                Membre ✓
-                              </span>
-                              <button
-                                type="button"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (window.confirm("Voulez-vous vraiment vous retirer de cet établissement ? Vous pourrez refaire une demande à tout moment.")) {
-                                    try {
-                                      await deleteRelationshipRequest(req.id);
-                                      alert("Vous vous êtes retiré de cet établissement avec succès. Vous pouvez soumettre une nouvelle demande quand vous le souhaitez.");
-                                    } catch (err) {
-                                      alert("Erreur lors du retrait.");
-                                    }
-                                  }
-                                }}
-                                className="bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs px-2.5 py-2 rounded-xl transition-all cursor-pointer"
-                                title="Se retirer de cet établissement"
-                              >
-                                Se retirer
-                              </button>
-                            </div>
-                          );
-                        }
-                        return (
-                          <div className="flex items-center gap-1">
-                            <span className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-red-50 text-red-600 font-bold text-xs px-2 py-2 rounded-xl select-none">
-                              Refusé
-                            </span>
-                            <button
-                              type="button"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                try {
-                                  await deleteRelationshipRequest(req.id);
-                                  alert("Vous pouvez maintenant faire une nouvelle demande.");
-                                } catch (err) {
-                                  alert("Erreur lors de la réinitialisation.");
-                                }
-                              }}
-                              className="bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-xs px-2.5 py-2 rounded-xl transition-all cursor-pointer"
-                              title="Faire une nouvelle demande"
-                            >
-                              Réessayer
-                            </button>
-                          </div>
-                        );
-                      })()}
-                      {djs.length > 0 ? (
-                        <>
-                          <button
-                            onClick={() => onStartChat(est.id, 'gerant')}
-                            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-orange-50 hover:bg-orange-100 active:scale-95 text-orange-600 font-bold text-xs px-3 py-2.5 rounded-xl transition-all cursor-pointer"
-                            title="Contacter le Gérant"
-                          >
-                            <MessageSquare className="w-4 h-4" />
-                            Gérant
-                          </button>
-                          <button
-                            onClick={() => onStartChat(est.id, 'dj')}
-                            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-purple-50 hover:bg-purple-100 active:scale-95 text-purple-700 font-bold text-xs px-3 py-2.5 rounded-xl transition-all cursor-pointer"
-                            title="Contacter le DJ"
-                          >
-                            <span>🎧</span>
-                            DJ
-                          </button>
-                        </>
-                      ) : (
+                );
+              })()}
+
+              {/* Pins for filtered establishments */}
+              {sorted.map(est => {
+                const { x, y } = getMapCoords(est.lat, est.lng);
+                const isSelected = selectedMapEst?.id === est.id;
+
+                const getPinColor = (cat: string) => {
+                  switch (cat) {
+                    case 'piscine': return 'bg-blue-500 text-white border-blue-600 shadow-blue-500/20';
+                    case 'hotel': return 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-500/20';
+                    case 'restaurant': return 'bg-amber-500 text-white border-amber-600 shadow-amber-500/20';
+                    case 'salon_coiffure': return 'bg-pink-500 text-white border-pink-600 shadow-pink-500/20';
+                    default: return 'bg-orange-600 text-white border-orange-700 shadow-orange-600/20';
+                  }
+                };
+
+                const getPinIcon = (cat: string) => {
+                  switch (cat) {
+                    case 'piscine': return '🏊';
+                    case 'hotel': return '🏨';
+                    case 'restaurant': return '🍽️';
+                    case 'salon_coiffure': return '💇';
+                    default: return '🍹';
+                  }
+                };
+
+                return (
+                  <button
+                    key={est.id}
+                    onClick={() => setSelectedMapEst(est)}
+                    style={{ left: `${x}%`, top: `${y}%` }}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 z-20 flex flex-col items-center group cursor-pointer transition-transform ${
+                      isSelected ? 'scale-125 z-30' : 'hover:scale-110'
+                    }`}
+                  >
+                    {/* Tooltip on hover */}
+                    <span className="absolute bottom-full mb-1 bg-gray-900/90 backdrop-blur-xs text-[10px] font-black text-white px-2 py-0.5 rounded-lg whitespace-nowrap shadow-md pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                      {est.name}
+                    </span>
+
+                    {/* Styled Pin Marker */}
+                    <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm shadow-md transition-all ${getPinColor(est.category)} ${
+                      isSelected ? 'ring-4 ring-orange-400/50 scale-110' : ''
+                    }`}>
+                      {getPinIcon(est.category)}
+                    </div>
+                  </button>
+                );
+              })}
+
+              {/* Selected Establishment bottom-sheet preview overlay */}
+              {selectedMapEst && (() => {
+                const isFav = favorites.includes(selectedMapEst.id);
+                const distance = userLocation 
+                  ? calculateDistanceKm(userLocation.lat, userLocation.lng, selectedMapEst.lat || 12.368, selectedMapEst.lng || -1.523) 
+                  : null;
+
+                return (
+                  <div className="absolute left-3 right-3 bottom-3 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-2xl p-4 flex gap-4 items-center animate-slideUp z-40 max-w-lg mx-auto">
+                    <img 
+                      src={selectedMapEst.photoUrl} 
+                      alt={selectedMapEst.name} 
+                      className="w-16 h-16 rounded-xl object-cover shrink-0" 
+                      referrerPolicy="no-referrer"
+                    />
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="font-black text-xs text-gray-900 dark:text-white truncate">{selectedMapEst.name}</h4>
                         <button
-                          onClick={() => onStartChat(est.id, 'gerant')}
-                          className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-orange-50 hover:bg-orange-100 active:scale-95 text-orange-600 font-bold text-xs px-3 py-2.5 rounded-xl transition-all cursor-pointer"
+                          onClick={() => toggleFavorite(selectedMapEst.id)}
+                          className={`text-gray-400 hover:text-red-500 cursor-pointer ${isFav ? 'text-red-500' : ''}`}
                         >
-                          <MessageSquare className="w-4 h-4" />
-                          Discuter
+                          <Heart size={14} className={isFav ? 'fill-current' : ''} />
                         </button>
-                      )}
+                      </div>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold mb-1.5">{selectedMapEst.neighborhood}, {selectedMapEst.city}</p>
+                      
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] font-black bg-amber-500 text-white px-1.5 py-0.5 rounded">
+                          ★ {selectedMapEst.rating || '4.8'}
+                        </span>
+                        {distance !== null && (
+                          <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400">
+                            🚗 À {distance} km
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 shrink-0">
                       <button
-                        onClick={() => {
-                          if (!currentUser) {
-                            setGlobalError({ message: "Veuillez créer un compte ou vous connecter pour réserver.", type: 'info' });
-                            if (onNavigate) onNavigate('profile');
-                            return;
-                          }
-                          setSelectedEst(est);
-                        }}
-                        className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-bold text-xs px-3 py-2.5 rounded-xl transition-all"
+                        onClick={() => setResModalEst(selectedMapEst)}
+                        className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[10px] font-black flex items-center justify-center gap-1 cursor-pointer"
                       >
-                        <Calendar className="w-4 h-4" />
-                        Réserver
+                        <Calendar size={12} />
+                        <span>Réserver</span>
+                      </button>
+                      <button
+                        onClick={() => setSelectedMapEst(null)}
+                        className="px-3 py-1.5 bg-gray-100 dark:bg-gray-850 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-xl text-[10px] font-black cursor-pointer"
+                      >
+                        Fermer
                       </button>
                     </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                  </div>
+                );
+              })()}
 
-        {filtered.length === 0 && (
-          <div className="text-center p-8 bg-gray-50 rounded-2xl border border-gray-100 text-gray-500 font-medium">
-            Aucun résultat trouvé.
+            </div>
           </div>
-        )}
-      </div>
+        </div>
       )}
 
-      {selectedEst && (
-        <EstablishmentDetailModal
-          establishment={selectedEst}
-          onClose={() => setSelectedEst(null)}
+      {/* Review Modal */}
+      {ratingEstModal && (
+        <RateVisitedEstablishmentModal
+          isOpen={true}
+          establishment={ratingEstModal}
+          onClose={() => setRatingEstModal(null)}
         />
       )}
 
-      {joinModalEst && (
-        <JoinRoleModal
-          establishment={joinModalEst}
-          onClose={() => setJoinModalEst(null)}
-          onSubmit={async (role, identityPhotoUrl) => {
-            if (!currentUser) return;
-            try {
-              await createRelationshipRequest({ 
-                initiatorId: currentUser.id, 
-                targetId: joinModalEst.ownerId, 
-                establishmentId: joinModalEst.id, 
-                type: 'client_join',
-                requestedRole: role,
-                identityPhotoUrl
-              });
-              alert("Demande d'adhésion envoyée avec succès !");
-              setJoinModalEst(null);
-            } catch (err: any) {
-              console.error(err);
-              alert(err.message || "Erreur lors de l'envoi de la demande.");
-            }
-          }}
-        />
+      {/* Quick Table Reservation Modal */}
+      {resModalEst && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 max-w-md w-full space-y-4 shadow-2xl border border-gray-100 dark:border-gray-800">
+            <h3 className="text-lg font-black text-gray-900 dark:text-white">Réserver une table</h3>
+            <p className="text-xs font-bold text-orange-600">{resModalEst.name}</p>
+
+            {resSuccessMessage ? (
+              <div className="p-4 bg-emerald-50 text-emerald-700 rounded-2xl text-xs font-bold text-center border border-emerald-200 animate-pulse">
+                {resSuccessMessage}
+              </div>
+            ) : (
+              <form onSubmit={handleMakeReservation} className="space-y-3">
+                <div>
+                  <label className="text-xs font-bold text-gray-500">Date de réservation</label>
+                  <input
+                    type="date"
+                    required
+                    value={resDate}
+                    onChange={e => setResDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-xl text-xs font-medium outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs font-bold text-gray-500">Heure</label>
+                    <input
+                      type="time"
+                      required
+                      value={resTime}
+                      onChange={e => setResTime(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-xl text-xs font-medium outline-none focus:border-orange-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500">Nombre de personnes</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      required
+                      value={resGuests}
+                      onChange={e => setResGuests(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-xl text-xs font-medium outline-none focus:border-orange-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setResModalEst(null)}
+                    className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold text-xs rounded-xl cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-orange-600 text-white font-bold text-xs rounded-xl shadow-md shadow-orange-600/15 cursor-pointer"
+                  >
+                    Confirmer la réservation
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

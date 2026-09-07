@@ -1,48 +1,30 @@
 import { useState, useEffect } from 'react';
 
 export function useInstallApp() {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);
 
   useEffect(() => {
-    const checkInstallable = () => {
-      if ((window as any).deferredPWAInstallPrompt) {
-        setIsInstallable(true);
-      } else {
-        setIsInstallable(false);
-      }
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
     };
 
-    // Initial check
-    checkInstallable();
-
-    // Listeners for events fired by index.html script
-    window.addEventListener('pwa-installable', checkInstallable);
-    window.addEventListener('pwa-installed', checkInstallable);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     return () => {
-      window.removeEventListener('pwa-installable', checkInstallable);
-      window.removeEventListener('pwa-installed', checkInstallable);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, []);
 
   const promptInstall = async () => {
-    const promptEvent = (window as any).deferredPWAInstallPrompt;
-    console.log('promptInstall called, promptEvent:', promptEvent);
-    if (!promptEvent) {
-      console.error('No deferred prompt available. Check beforeinstallprompt event handling.');
-      return;
-    }
-    try {
-      console.log('Attempting to prompt...');
-      await promptEvent.prompt();
-      const { outcome } = await promptEvent.userChoice;
-      console.log(`User interaction outcome: ${outcome}`);
-      if (outcome === 'accepted') {
-        (window as any).deferredPWAInstallPrompt = null;
-        setIsInstallable(false);
-      }
-    } catch (error) {
-      console.error('Install prompt error (possibly user dismissed or browser restriction):', error);
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setIsInstallable(false);
+      setDeferredPrompt(null);
     }
   };
 
