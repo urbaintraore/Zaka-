@@ -38,7 +38,7 @@ export function GerantDashboard(props: {
   
   // Sub-tabs
   const [activeSubTab, setActiveSubTab] = useState<
-    'dashboard' | 'management' | 'marketing' | 'rh' | 'pos' | 'stocks' | 'accounting' | 'clients'
+    'dashboard' | 'pos' | 'stocks' | 'accounting' | 'marketing' | 'rh' | 'clients' | 'reviews' | 'faq'
   >('dashboard');
 
   // Active establishment for management
@@ -344,12 +344,17 @@ export function GerantDashboard(props: {
       <div className="flex flex-col gap-4">
         {/* Navigation - Grouped */}
         <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-2 shadow-xs">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
             {[
-              { id: 'dashboard', label: 'Tableau de Bord', icon: Store },
-              { id: 'management', label: 'Gestion (Caisse/Stocks/Compta)', icon: ShoppingBag },
+              { id: 'dashboard', label: 'Dashboard', icon: Store },
+              { id: 'pos', label: 'Caisse', icon: ShoppingBag },
+              { id: 'stocks', label: 'Stocks', icon: Boxes },
+              { id: 'accounting', label: 'Dépenses', icon: TrendingUp },
               { id: 'marketing', label: 'Marketing', icon: Megaphone },
               { id: 'rh', label: 'Personnel', icon: Users },
+              { id: 'clients', label: 'Staff/Clients', icon: Users },
+              { id: 'reviews', label: 'Avis', icon: Star },
+              { id: 'faq', label: 'FAQ', icon: HelpCircle },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -504,57 +509,42 @@ export function GerantDashboard(props: {
         </div>
       )}
 
-      {/* 2. GESTION (POS, STOCKS, COMPTA) TAB */}
-      {(activeSubTab === 'pos' || activeSubTab === 'stocks' || activeSubTab === 'accounting') && (
-        <div className="space-y-8">
+      {/* Caisse Tab */}
+      {activeSubTab === 'pos' && (
+        <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+          <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+            <ShoppingBag size={18} className="text-orange-600" />
+            <span>Point de Vente (POS)</span>
+          </h3>
           {activeEstablishment ? (
-            <div className="space-y-10">
-              <div className="p-4 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/50 rounded-2xl flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase">Établissement</span>
-                  <h4 className="text-sm font-black text-gray-900 dark:text-white">{activeEstablishment.name}</h4>
-                </div>
-                <div className="text-xs text-gray-500">
-                  {activeEstablishment.category}
-                </div>
-              </div>
+            <PointOfSaleView establishmentId={activeEstablishment.id} cashierName={currentUser?.name || "Caissier(e)"} />
+          ) : <p>Veuillez configurer votre établissement.</p>}
+        </div>
+      )}
 
-              {activeSubTab === 'pos' && (
-                <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
-                  <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-                    <ShoppingBag size={18} className="text-orange-600" />
-                    <span>Point de Vente (POS)</span>
-                  </h3>
-                  <PointOfSaleView establishmentId={activeEstablishment.id} cashierName={currentUser?.name || "Caissier(e)"} />
-                </div>
-              )}
+      {/* Stocks Tab */}
+      {activeSubTab === 'stocks' && (
+        <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+          <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+            <Boxes size={18} className="text-orange-600" />
+            <span>Gestion des Stocks</span>
+          </h3>
+          {activeEstablishment ? (
+            <StockManagerView establishmentId={activeEstablishment.id} />
+          ) : <p>Veuillez configurer votre établissement.</p>}
+        </div>
+      )}
 
-              {activeSubTab === 'stocks' && (
-                <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
-                  <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-                    <Boxes size={18} className="text-orange-600" />
-                    <span>Gestion des Stocks</span>
-                  </h3>
-                  <StockManagerView establishmentId={activeEstablishment.id} />
-                </div>
-              )}
-
-              {activeSubTab === 'accounting' && (
-                <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
-                  <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-                    <TrendingUp size={18} className="text-orange-600" />
-                    <span>Comptabilité & Bilan</span>
-                  </h3>
-                  <AccountingView establishmentId={activeEstablishment.id} />
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="text-center py-12 bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800">
-              <Store size={40} className="mx-auto text-gray-400 mb-2" />
-              <p className="text-sm font-bold text-gray-700 dark:text-gray-300">Veuillez d'abord configurer votre établissement.</p>
-            </div>
-          )}
+      {/* Dépenses/Comptabilité Tab */}
+      {activeSubTab === 'accounting' && (
+        <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+          <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+            <TrendingUp size={18} className="text-orange-600" />
+            <span>Comptabilité & Dépenses</span>
+          </h3>
+          {activeEstablishment ? (
+            <AccountingView establishmentId={activeEstablishment.id} />
+          ) : <p>Veuillez configurer votre établissement.</p>}
         </div>
       )}
 
@@ -614,27 +604,48 @@ export function GerantDashboard(props: {
         </div>
       )}
 
-      {/* 4. RELATION CLIENT & STAFF TAB */}
+      {/* Clients & Staff Tab */}
       {activeSubTab === 'clients' && (
-        <div className="space-y-6">
+        <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+          <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+            <Users size={18} className="text-orange-600" />
+            <span>Staff & Clients</span>
+          </h3>
           {activeEstablishment ? (
-            <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
-              <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-                <Users size={18} className="text-orange-600" />
-                <span>Relation Client & Staff : Messagerie, Invitations & Rôles (DJ, Serveur, Caissier)</span>
-              </h3>
-              <ClientsAndRequests 
-                establishmentId={activeEstablishment.id} 
-                onNavigate={props.onNavigate}
-                onStartChatWithConv={props.onStartChatWithConv}
-              />
+            <ClientsAndRequests 
+              establishmentId={activeEstablishment.id} 
+              onNavigate={props.onNavigate}
+              onStartChatWithConv={props.onStartChatWithConv}
+            />
+          ) : <p>Veuillez configurer votre établissement.</p>}
+        </div>
+      )}
+
+      {/* FAQ Tab */}
+      {activeSubTab === 'faq' && (
+        <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+          <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+            <HelpCircle size={18} className="text-orange-600" />
+            <span>Foire Aux Questions</span>
+          </h3>
+          <div className="space-y-3">
+              {faqList.map((item, idx) => (
+                <div key={idx} className="border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden bg-gray-50 dark:bg-gray-950">
+                  <button
+                    onClick={() => setOpenFaqIndex(openFaqIndex === idx ? null : idx)}
+                    className="w-full px-4 py-3.5 text-left font-bold text-xs text-gray-900 dark:text-white flex items-center justify-between cursor-pointer"
+                  >
+                    <span>{item.q}</span>
+                    <span className="text-orange-600 font-bold">{openFaqIndex === idx ? '−' : '+'}</span>
+                  </button>
+                  {openFaqIndex === idx && (
+                    <div className="px-4 pb-4 text-xs text-gray-600 dark:text-gray-300 border-t border-gray-100 dark:border-gray-800 pt-3 leading-relaxed">
+                      {item.a}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-          ) : (
-            <div className="text-center py-12 bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800">
-              <Store size={40} className="mx-auto text-gray-400 mb-2" />
-              <p className="text-sm font-bold text-gray-700 dark:text-gray-300">Veuillez d'abord sélectionner ou créer un établissement.</p>
-            </div>
-          )}
         </div>
       )}
 
