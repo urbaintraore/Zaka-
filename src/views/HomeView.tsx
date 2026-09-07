@@ -21,7 +21,6 @@ import { MapView } from '../components/MapView';
 import { ShareableVisual } from '../components/ShareableVisual';
 import { UserGuideModal } from '../components/UserGuideModal';
 import { CrowdStatusBadge } from '../components/CrowdStatusBadge';
-import { GroupOutingModal } from '../components/GroupOutingModal';
 import { AdExpressWizard } from '../components/AdExpressWizard';
 import { ImageChargementProgressif } from '../components/ImageChargementProgressif';
 import { Rocket, Zap } from 'lucide-react';
@@ -234,7 +233,6 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
   const [filterMemberOnly, setFilterMemberOnly] = useState(false);
   const [showExpired, setShowExpired] = useState(false);
   const [modeMaintenant, setModeMaintenant] = useState(false);
-  const [showGroupOutingModal, setShowGroupOutingModal] = useState(false);
   const [activePubTab, setActivePubTab] = useState<'info' | 'photos' | 'wall'>('info');
   const [mapCategory, setMapCategory] = useState<string>('Tous');
 
@@ -258,9 +256,13 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
   const {
     isListening: isVoiceListening,
     isSupported: isVoiceSupported,
+    interimText: voiceInterimText,
     toggleListening: toggleVoiceSearch
   } = useVoiceSearch({
     onTranscript: (text) => {
+      setSearchQuery(text);
+    },
+    onFinalTranscript: (text) => {
       setSearchQuery(text);
       addSearchTerm(text);
     }
@@ -754,8 +756,34 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
     return 10;
   };
 
-  // Base list of validated establishments
-  const validEstablishments = establishments.filter(e => e.status === 'valide');
+  // Helper to identify fictional, test, or placeholder establishments
+  const isFictionalEstablishment = (e: Establishment): boolean => {
+    const name = (e.name || '').toLowerCase();
+    const id = (e.id || '').toLowerCase();
+    const desc = (e.description || '').toLowerCase();
+    return (
+      Boolean((e as any).isFictif) ||
+      Boolean((e as any).isDummy) ||
+      name.includes('fictif') ||
+      name.includes('fictive') ||
+      name.includes('dummy') ||
+      name.includes('mock') ||
+      name.includes('test') ||
+      name.includes('exemple') ||
+      name.includes('démo') ||
+      name.includes('demo') ||
+      id.startsWith('dummy') ||
+      id.startsWith('test_') ||
+      id.startsWith('mock_') ||
+      desc.includes('établissement fictif') ||
+      desc.includes('etablissement fictif')
+    );
+  };
+
+  // Base list of validated real establishments (excluding all fictional establishments)
+  const validEstablishments = establishments
+    .filter(e => e.status === 'valide')
+    .filter(e => !isFictionalEstablishment(e));
 
   // Filter by selected category (Maquis, Restaurant, Bar, Boîte de nuit / Club, etc.)
   const categoryFilteredEstablishments = validEstablishments.filter(e => {
@@ -1013,12 +1041,6 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
               <Flame className="w-4 h-4 text-amber-300 fill-amber-300" /> 
               {modeMaintenant ? "⚡ Mode Maintenant Actif !" : "⚡ Mode Maintenant"}
             </button>
-            <button 
-              onClick={() => setShowGroupOutingModal(true)}
-              className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-5 py-2.5 rounded-full font-bold active:scale-95 transition-all text-xs flex items-center gap-1.5 cursor-pointer"
-            >
-              <Users className="w-4 h-4 text-orange-200" /> Sortie de Groupe
-            </button>
           </div>
         </div>
 
@@ -1138,9 +1160,20 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
           )}
 
           {isVoiceListening && (
-            <div className="flex items-center gap-2 mt-2 px-3 py-1.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs font-bold text-red-600 dark:text-red-400 animate-pulse">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-              <span>🎙️ Écoute en cours... Parlez maintenant pour rechercher un établissement</span>
+            <div className="flex items-center justify-between gap-2 mt-2 px-3 py-2 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs font-bold text-red-600 dark:text-red-400 animate-pulse">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping shrink-0" />
+                <span className="truncate">
+                  {voiceInterimText ? `🎙️ « ${voiceInterimText} »` : "🎙️ Écoute vocale active... Dites par ex. Maquis, Resto, Bar"}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={toggleVoiceSearch}
+                className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white text-[10px] font-black rounded-lg cursor-pointer shrink-0 transition-colors"
+              >
+                Arrêter
+              </button>
             </div>
           )}
 
@@ -1252,9 +1285,9 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
       {/* Map Interactive */}
       <div className="px-4">
         <MapView 
-          establishments={establishments} 
+          establishments={validEstablishments} 
           onEstClick={(id) => {
-            const est = establishments.find(e => e.id === id);
+            const est = validEstablishments.find(e => e.id === id);
             if (est) setSelectedRankEst(est);
           }}
           selectedCategory={mapCategory}
@@ -2114,6 +2147,12 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchQuery.trim()) {
+                  addSearchTerm(searchQuery);
+                  (e.target as HTMLElement).blur();
+                }
+              }}
               placeholder="Rechercher par nom, description, quartier, spécialité..."
               className="w-full pl-10 pr-20 py-3 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-xs sm:text-sm font-medium outline-none transition-all shadow-xs placeholder:text-gray-400 dark:placeholder:text-gray-500 text-gray-900 dark:text-white"
             />
@@ -2672,10 +2711,6 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
 
       {showGuideModal && (
         <UserGuideModal onClose={() => setShowGuideModal(false)} />
-      )}
-
-      {showGroupOutingModal && (
-        <GroupOutingModal onClose={() => setShowGroupOutingModal(false)} />
       )}
 
       {/* ZAKA Ads Express Wizard Modal */}

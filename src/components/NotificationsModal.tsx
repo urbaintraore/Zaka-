@@ -1,4 +1,5 @@
-import { X, Check, Clock, XCircle, Info, Calendar } from 'lucide-react';
+import { useState } from 'react';
+import { X, Check, Clock, XCircle, Info, Calendar, UserPlus, Users } from 'lucide-react';
 import { useAppStore } from '../store';
 
 interface NotificationsModalProps {
@@ -6,7 +7,18 @@ interface NotificationsModalProps {
 }
 
 export function NotificationsModal({ onClose }: NotificationsModalProps) {
-  const { currentUser, serviceRequests, relationshipRequests, establishments } = useAppStore();
+  const { 
+    currentUser, 
+    serviceRequests, 
+    relationshipRequests, 
+    establishments, 
+    friendships, 
+    users, 
+    acceptFriendRequest, 
+    declineFriendRequest 
+  } = useAppStore();
+
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   if (!currentUser) return null;
 
@@ -28,49 +40,137 @@ export function NotificationsModal({ onClose }: NotificationsModalProps) {
     return false;
   });
 
+  // Demandes d'amitié entrantes
+  const incomingFriendRequests = (friendships || []).filter(
+    f => (f.user1Id === currentUser.id || f.user2Id === currentUser.id) && 
+         f.requesterId !== currentUser.id && 
+         f.status === 'pending'
+  );
+
   const allNotifications = [
-    ...relevantServiceRequests.map(req => ({ type: 'service', data: req, date: new Date(req.date) })),
-    ...relevantRelRequests.map(req => ({ type: 'relation', data: req, date: new Date(req.date) }))
+    ...incomingFriendRequests.map(req => ({ type: 'friend_request' as const, data: req, date: new Date(req.createdAt || Date.now()) })),
+    ...relevantServiceRequests.map(req => ({ type: 'service' as const, data: req, date: new Date(req.date) })),
+    ...relevantRelRequests.map(req => ({ type: 'relation' as const, data: req, date: new Date(req.date) }))
   ].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  const handleAcceptFriend = async (friendshipId: string) => {
+    setActionLoadingId(friendshipId);
+    try {
+      await acceptFriendRequest(friendshipId);
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: "Demande d'amitié acceptée ! Vous êtes désormais connecté(e)s.", type: "success" }
+      }));
+    } catch (err: any) {
+      console.error("Erreur acceptation ami:", err);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleDeclineFriend = async (friendshipId: string) => {
+    setActionLoadingId(friendshipId);
+    try {
+      await declineFriendRequest(friendshipId);
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: "Demande d'amitié refusée.", type: "info" }
+      }));
+    } catch (err: any) {
+      console.error("Erreur refus ami:", err);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh] shadow-2xl">
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-10">
-          <h2 className="font-bold text-lg text-gray-900">Notifications</h2>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh] shadow-2xl border border-gray-100 dark:border-gray-800">
+        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between sticky top-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md z-10">
+          <div className="flex items-center gap-2">
+            <h2 className="font-bold text-lg text-gray-900 dark:text-white">Notifications</h2>
+            {allNotifications.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 font-extrabold text-xs">
+                {allNotifications.length}
+              </span>
+            )}
+          </div>
+          <button onClick={onClose} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
         
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
           {allNotifications.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               <Info className="w-8 h-8 mx-auto mb-2 opacity-50" />
               <p>Aucune notification pour le moment.</p>
             </div>
           ) : (
             allNotifications.map((notif, idx) => {
-              if (notif.type === 'service') {
+              if (notif.type === 'friend_request') {
+                const req = notif.data as any;
+                const sender = users.find(u => u.id === req.requesterId) || {
+                  id: req.requesterId,
+                  name: 'Utilisateur ZAKA',
+                  email: '',
+                  phone: ''
+                };
+                return (
+                  <div key={`friend-${req.id || idx}`} className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 rounded-2xl p-4 border border-amber-200 dark:border-amber-800/40 shadow-xs">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-amber-500 text-white font-black flex items-center justify-center text-sm shrink-0 shadow-sm">
+                        {sender.name ? sender.name.charAt(0).toUpperCase() : <UserPlus className="w-5 h-5" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <p className="text-xs font-black text-gray-900 dark:text-white truncate">{sender.name}</p>
+                          <span className="text-[10px] text-amber-700 dark:text-amber-300 font-semibold bg-amber-100 dark:bg-amber-900/60 px-2 py-0.5 rounded-full">Demande d'ami</span>
+                        </div>
+                        <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                          Souhaite devenir votre ami(e) sur Zaka+ pour partager sorties, discussions et bons plans.
+                        </p>
+                        {sender.phone && (
+                          <p className="text-[10px] text-gray-400 mt-0.5">📞 {sender.phone}</p>
+                        )}
+                        <div className="flex items-center gap-2 mt-3">
+                          <button
+                            onClick={() => handleAcceptFriend(req.id)}
+                            disabled={actionLoadingId === req.id}
+                            className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <Check className="w-3.5 h-3.5" /> Accepter
+                          </button>
+                          <button
+                            onClick={() => handleDeclineFriend(req.id)}
+                            disabled={actionLoadingId === req.id}
+                            className="py-1.5 px-3 bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" /> Refuser
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              } else if (notif.type === 'service') {
                 const req = notif.data as any;
                 const est = establishments.find(e => e.id === req.establishmentId);
                 return (
-                  <div key={idx} className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                  <div key={`srv-${idx}`} className="bg-gray-50 dark:bg-gray-800/60 rounded-2xl p-4 border border-gray-100 dark:border-gray-800">
                     <div className="flex items-start gap-3">
                       <div className={`p-2 rounded-xl shrink-0 ${
-                        req.status === 'validee' ? 'bg-green-100 text-green-600' :
-                        req.status === 'refusee' ? 'bg-red-100 text-red-600' :
-                        'bg-orange-100 text-orange-600'
+                        req.status === 'validee' ? 'bg-green-100 dark:bg-green-950/60 text-green-600' :
+                        req.status === 'refusee' ? 'bg-red-100 dark:bg-red-950/60 text-red-600' :
+                        'bg-orange-100 dark:bg-orange-950/60 text-orange-600'
                       }`}>
                         <Calendar className="w-5 h-5" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-gray-900">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
                           {currentUser.role === 'client' ? `Votre réservation chez ${est?.name || 'Inconnu'}` : `Nouvelle réservation de client`}
                         </p>
-                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">{req.details}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{req.details}</p>
                         {req.managerMessage && (
-                          <p className="text-xs text-gray-600 mt-2 bg-white p-2 rounded-lg border border-gray-100 font-medium">"{req.managerMessage}"</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-300 mt-2 bg-white dark:bg-gray-900 p-2 rounded-lg border border-gray-100 dark:border-gray-800 font-medium">"{req.managerMessage}"</p>
                         )}
                         <p className="text-[10px] text-gray-400 mt-2 font-medium">Statut: <span className="uppercase">{req.status.replace('_', ' ')}</span></p>
                       </div>
@@ -81,14 +181,14 @@ export function NotificationsModal({ onClose }: NotificationsModalProps) {
                 const req = notif.data as any;
                 const est = establishments.find(e => e.id === req.establishmentId);
                 return (
-                  <div key={idx} className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                  <div key={`rel-${idx}`} className="bg-gray-50 dark:bg-gray-800/60 rounded-2xl p-4 border border-gray-100 dark:border-gray-800">
                     <div className="flex items-start gap-3">
-                      <div className="p-2 rounded-xl shrink-0 bg-blue-100 text-blue-600">
+                      <div className="p-2 rounded-xl shrink-0 bg-blue-100 dark:bg-blue-950/60 text-blue-600">
                         <Info className="w-5 h-5" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-gray-900">Demande d'association</p>
-                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">Demande d'association</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
                           {req.type === 'gerant_invite' 
                             ? `Invitation à rejoindre le club de ${est?.name || 'Inconnu'}` 
                             : `Demande d'un client pour rejoindre ${est?.name || 'Inconnu'}`}

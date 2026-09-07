@@ -8,9 +8,10 @@ import { GroupOutingLiveLocation } from './GroupOutingLiveLocation';
 interface GroupOutingModalProps {
   onClose: () => void;
   preselectedEstablishmentId?: string;
+  preselectedFriendId?: string;
 }
 
-export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupOutingModalProps) {
+export function GroupOutingModal({ onClose, preselectedEstablishmentId, preselectedFriendId }: GroupOutingModalProps) {
   const { 
     currentUser, 
     users,
@@ -25,7 +26,9 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
     addReservation 
   } = useAppStore();
 
-  const [activeTab, setActiveTab] = useState<'mes_sorties' | 'calendrier' | 'creer'>('mes_sorties');
+  const [activeTab, setActiveTab] = useState<'mes_sorties' | 'calendrier' | 'creer'>(
+    preselectedFriendId ? 'creer' : 'mes_sorties'
+  );
   const [selectedOutingId, setSelectedOutingId] = useState<string | null>(null);
 
   // Form states
@@ -34,7 +37,9 @@ export function GroupOutingModal({ onClose, preselectedEstablishmentId }: GroupO
   const [date, setDate] = useState('');
   const [time, setTime] = useState('20:00');
   const [note, setNote] = useState('');
-  const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
+  const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>(
+    preselectedFriendId ? [preselectedFriendId] : []
+  );
   const [loading, setLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [convertedReservationId, setConvertedReservationId] = useState<string | null>(null);

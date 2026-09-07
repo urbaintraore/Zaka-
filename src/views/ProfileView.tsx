@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
 import { Role, Category, CATEGORIES_LIST, getCategoryLabel } from '../types';
-import { LogOut, User, Check, X, MessageSquare, Store, Sparkles, Calendar, Download, Star, Megaphone, ShoppingBag, Sun, Moon, Laptop, FileSpreadsheet } from 'lucide-react';
+import { LogOut, User, Check, X, MessageSquare, Store, Sparkles, Calendar, Download, Star, Megaphone, ShoppingBag, Sun, Moon, Laptop, FileSpreadsheet, Users } from 'lucide-react';
+import { GroupOutingModal } from '../components/GroupOutingModal';
 import { GerantDashboard } from './GerantDashboard';
 import { AdminDashboard } from './AdminDashboard';
 import { EntrepriseDashboard } from './EntrepriseDashboard';
@@ -63,6 +64,8 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   const [showExpressAdsModal, setShowExpressAdsModal] = useState(false);
   const [showCashierTerminal, setShowCashierTerminal] = useState(false);
   const [ratingModalEst, setRatingModalEst] = useState<{ id: string; name: string } | null>(null);
+  const [showGroupOutingModal, setShowGroupOutingModal] = useState(false);
+  const [groupOutingPreselectedFriendId, setGroupOutingPreselectedFriendId] = useState<string | undefined>(undefined);
 
   // Profile editing state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -1060,10 +1063,48 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
           establishments={establishments}
           favorites={favorites}
           reservations={reservations}
+          onNavigateToExplore={() => onNavigate?.('home')}
         />
 
+        {/* Sortie en Groupe (ZAKA Social) */}
+        <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-500/10 rounded-3xl p-6 border border-amber-200 dark:border-amber-900/40 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-black shadow-sm shrink-0">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+                Sortie en Groupe
+                <span className="text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-extrabold px-2 py-0.5 rounded-full">
+                  ZAKA Social
+                </span>
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Organisez facilement vos sorties entre ami(e)s, votez pour vos établissements préférés et partagez l'addition en toute sérénité.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              setGroupOutingPreselectedFriendId(undefined);
+              setShowGroupOutingModal(true);
+            }}
+            className="px-5 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl text-xs font-black shadow-sm transition-all flex items-center gap-2 shrink-0 cursor-pointer active:scale-95"
+          >
+            <Users className="w-4 h-4" />
+            Organiser une sortie en groupe
+          </button>
+        </div>
+
         {/* Mes Ami(e)s ZAKA */}
-        <FriendsModule />
+        <FriendsModule 
+          onStartChatWithConv={onStartChatWithConv}
+          onInviteFriendToOuting={(friendId) => {
+            setGroupOutingPreselectedFriendId(friendId);
+            setShowGroupOutingModal(true);
+          }}
+        />
 
         {/* Historique Personnel & Recommandations IA */}
         <PersonalTimelineAndRecs />
@@ -1622,6 +1663,16 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
             isOpen={!!ratingModalEst}
             initialEstablishmentId={ratingModalEst.id}
             onClose={() => setRatingModalEst(null)}
+          />
+        )}
+
+        {showGroupOutingModal && (
+          <GroupOutingModal
+            onClose={() => {
+              setShowGroupOutingModal(false);
+              setGroupOutingPreselectedFriendId(undefined);
+            }}
+            preselectedFriendId={groupOutingPreselectedFriendId}
           />
         )}
 

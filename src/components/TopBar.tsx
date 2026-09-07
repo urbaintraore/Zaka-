@@ -1,22 +1,47 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MapPin, Bell, LogOut, BookOpen, Sun, Moon, HelpCircle } from 'lucide-react';
 import { useAppStore } from '../store';
 import { NotificationsModal } from './NotificationsModal';
 import { UserGuideModal } from './UserGuideModal';
 import { Tab } from './BottomNav';
 import logoImg from '../assets/images/zaka_black_z_logo_1784458806560.jpg';
+import { sendFriendRequestPushNotification } from '../utils/pushNotifications';
 
 interface TopBarProps {
   onNavigate?: (tab: Tab) => void;
 }
 
 export function TopBar({ onNavigate }: TopBarProps) {
-  const { currentUser, logout, serviceRequests, relationshipRequests, establishments, theme, toggleTheme } = useAppStore();
+  const { currentUser, logout, serviceRequests, relationshipRequests, establishments, friendships, users, theme, toggleTheme } = useAppStore();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
+  const prevIncomingRequestsRef = useRef<string[] | null>(null);
 
   const myEsts = establishments.filter(e => e.ownerId === currentUser?.id);
   const myEstIds = myEsts.map(e => e.id);
+
+  const incomingFriendRequests = currentUser ? (friendships || []).filter(
+    f => (f.user1Id === currentUser.id || f.user2Id === currentUser.id) &&
+         f.requesterId !== currentUser.id &&
+         f.status === 'pending'
+  ) : [];
+
+  // Global background listener for incoming friend requests
+  useEffect(() => {
+    if (!currentUser) return;
+    const currentIds = incomingFriendRequests.map(r => r.id);
+    if (prevIncomingRequestsRef.current !== null) {
+      const newlyReceived = incomingFriendRequests.filter(r => !prevIncomingRequestsRef.current!.includes(r.id));
+      if (newlyReceived.length > 0) {
+        newlyReceived.forEach(req => {
+          const reqUser = (users || []).find(u => u.id === req.requesterId);
+          const reqName = reqUser?.name || 'Un membre de ZAKA';
+          sendFriendRequestPushNotification(reqName);
+        });
+      }
+    }
+    prevIncomingRequestsRef.current = currentIds;
+  }, [incomingFriendRequests, users, currentUser]);
 
   let unreadNotifications = 0;
   if (currentUser) {
@@ -32,7 +57,7 @@ export function TopBar({ onNavigate }: TopBarProps) {
       return false;
     });
 
-    unreadNotifications = relevantServiceRequests.length + relevantRelRequests.length;
+    unreadNotifications = relevantServiceRequests.length + relevantRelRequests.length + incomingFriendRequests.length;
   }
 
   return (

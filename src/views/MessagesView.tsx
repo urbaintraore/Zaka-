@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../store';
 import { supabase, isSupabaseConfigured } from './../lib/supabaseClient';
-import { MessageSquare, Send, Paperclip, ChevronLeft, Calendar, FileText, Download, Loader2, X, AlertCircle } from 'lucide-react';
+import { MessageSquare, Send, Paperclip, ChevronLeft, Calendar, FileText, Download, Loader2, X, AlertCircle, UserPlus, Users, Share2, Sparkles, MapPin, Tag, Check, CheckCheck, Search } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { compressImage } from '../utils/imageCompressor';
 import { triggerHapticFeedback } from '../utils/haptics';
@@ -14,6 +14,9 @@ interface Message {
   fileUrl?: string;
   fileName?: string;
   fileType?: string;
+  isRead?: boolean;
+  readAt?: string;
+  status?: 'sending' | 'sent' | 'delivered' | 'read';
 }
 
 interface Conversation {
@@ -41,7 +44,7 @@ interface MessagesViewProps {
 }
 
 export function MessagesView({ onBackToHome, preselectedEstablishmentId, preselectedRecipientType = 'gerant', preselectedConvId, onClearPreselected }: MessagesViewProps) {
-  const { currentUser, establishments, relationshipRequests, users } = useAppStore();
+  const { currentUser, establishments, relationshipRequests, users, friendships, publications } = useAppStore();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -51,6 +54,10 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [attachedFile, setAttachedFile] = useState<{ base64: string; name: string; type: string } | null>(null);
   const [loadingConvs, setLoadingConvs] = useState(true);
+  const [showNewFriendModal, setShowNewFriendModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareTab, setShareTab] = useState<'publications' | 'establishments'>('publications');
+  const [shareSearch, setShareSearch] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,6 +66,121 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
   const myEstIds = myEsts.map(e => e.id);
   const isGerant = currentUser?.role === 'gerant' || currentUser?.role === 'salon_coiffure';
   const isDJChatActive = activeConv && (activeConv as any).recipientType === 'dj';
+
+  // Confirmed friends list
+  const confirmedFriends = (friendships || [])
+    .filter(f => f.status === 'accepted' && (f.user1Id === currentUser?.id || f.user2Id === currentUser?.id))
+    .map(f => {
+      const friendId = f.user1Id === currentUser?.id ? f.user2Id : f.user1Id;
+      const friendUser = users.find(u => u.id === friendId) || {
+        id: friendId,
+        name: 'Ami(e) Zaka',
+        email: '',
+        phone: '',
+        role: 'client' as const
+      };
+      return { friendshipId: f.id, friendUser };
+    });
+
+  // Start or open a direct chat with a confirmed friend
+  const startChatWithFriend = async (friendUser: { id: string; name: string; email?: string; phone?: string }) => {
+    if (!currentUser) return;
+    try {
+      setIsSending(true);
+      // Check existing conversation
+      const existing = conversations.find(c =>
+        (c.establishmentId === 'direct_friend' || c.establishmentId?.startsWith('friend_')) &&
+        ((c.clientId === currentUser.id && c.ownerId === friendUser.id) ||
+         (c.clientId === friendUser.id && c.ownerId === currentUser.id))
+      );
+
+      if (existing) {
+        setActiveConv(existing);
+        setShowNewFriendModal(false);
+        return;
+      }
+
+      const newConvData = {
+        clientId: currentUser.id,
+        clientName: currentUser.name || currentUser.email || 'Ami(e)',
+        establishmentId: 'direct_friend',
+        establishmentName: friendUser.name || 'Ami(e)',
+        ownerId: friendUser.id,
+        lastMessage: "Discussion privée démarrée 👋",
+        lastMessageAt: new Date().toISOString(),
+        lastMessageDate: new Date().toISOString(),
+        lastSenderId: currentUser.id,
+        unreadByClient: false,
+        unreadByGerant: true
+      };
+
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase.from('conversations').insert([newConvData]).select().single();
+        if (!error && data) {
+          setConversations(prev => [data as Conversation, ...prev]);
+          setActiveConv(data as Conversation);
+        } else {
+          const localConv = { id: `conv-friend-${Date.now()}`, ...newConvData } as Conversation;
+          setConversations(prev => [localConv, ...prev]);
+          setActiveConv(localConv);
+        }
+      } else {
+        const localConv = { id: `conv-friend-${Date.now()}`, ...newConvData } as Conversation;
+        setConversations(prev => [localConv, ...prev]);
+        setActiveConv(localConv);
+      }
+      setShowNewFriendModal(false);
+      triggerHapticFeedback(50);
+    } catch (err) {
+      console.error("Erreur startChatWithFriend:", err);
+      setErrorMsg("Impossible d'ouvrir la discussion avec cet ami.");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // Share a publication or establishment directly in active friend chat
+  const handleShareResource = async (resource: { type: 'publication' | 'establishment'; title: string; subtitle?: string; imageUrl?: string }) => {
+    if (!activeConv || !currentUser) return;
+    try {
+      setIsSending(true);
+      const tag = resource.type === 'publication' ? '🎉 Bon Plan / Événement :' : '📍 Recommandation Établissement :';
+      const text = `${tag}\n${resource.title}\n${resource.subtitle || ''}\n(Partagé sur Zaka+)`;
+
+      const msgData: any = {
+        conversationId: activeConv.id,
+        senderId: currentUser.id,
+        senderName: currentUser.name || 'Ami',
+        text: text,
+        createdAt: new Date().toISOString(),
+        ...(resource.imageUrl ? {
+          fileUrl: resource.imageUrl,
+          fileName: resource.title,
+          fileType: 'image/jpeg'
+        } : {})
+      };
+
+      if (isSupabaseConfigured) {
+        await supabase.from('messages').insert([msgData]);
+        await supabase.from('conversations').update({
+          lastMessage: `🎁 ${resource.title}`,
+          lastMessageAt: new Date().toISOString(),
+          lastSenderId: currentUser.id,
+          unreadByClient: activeConv.ownerId === currentUser.id,
+          unreadByGerant: activeConv.clientId === currentUser.id
+        }).eq('id', activeConv.id);
+      }
+
+      setMessages(prev => [...prev, { id: `msg-${Date.now()}`, ...msgData }]);
+      setShowShareModal(false);
+      triggerHapticFeedback(50);
+    } catch (err) {
+      console.error("Erreur handleShareResource:", err);
+      setErrorMsg("Erreur lors du partage de la ressource.");
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   // Automatically scroll to bottom of chat
   useEffect(() => {
@@ -178,11 +300,7 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
       if (isSupabaseConfigured) {
         try {
           let query = supabase.from('conversations').select('*');
-          if (isGerant) {
-            query = query.eq('ownerId', currentUser.id);
-          } else {
-            query = query.or(`clientId.eq.${currentUser.id},djId.eq.${currentUser.id}`);
-          }
+          query = query.or(`clientId.eq.${currentUser.id},ownerId.eq.${currentUser.id},djId.eq.${currentUser.id}`);
 
           const { data, error } = await query;
           if (!error && data && active) {
@@ -210,7 +328,7 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
                 const { data: updatedData } = await supabase
                   .from('conversations')
                   .select('*')
-                  .or(isGerant ? `ownerId.eq.${currentUser.id}` : `clientId.eq.${currentUser.id},djId.eq.${currentUser.id}`);
+                  .or(`clientId.eq.${currentUser.id},ownerId.eq.${currentUser.id},djId.eq.${currentUser.id}`);
                 
                 if (updatedData && active) {
                   const sorted = updatedData as Conversation[];
@@ -296,16 +414,15 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
               markPayload = { unreadByClient: false };
             }
 
-            if (markPayload) {
-              let attempts = 0;
-              while (attempts < 5) {
-                attempts++;
-                const { error: readErr } = await supabase.from('conversations').update(markPayload).eq('id', activeConv.id);
-                if (!readErr) break;
-                if (readErr.code === 'PGRST204' || readErr.message?.includes('schema cache') || readErr.message?.includes('does not exist') || readErr.message?.includes('column')) {
-                  break; // Column doesn't exist in DB, skip non-essential read status update
-                }
-              }
+            // Also mark unread messages as read safely
+            try {
+              await supabase
+                .from('messages')
+                .update({ isRead: true, readAt: new Date().toISOString() })
+                .eq('conversationId', activeConv.id)
+                .neq('senderId', currentUser?.id);
+            } catch {
+              // Ignore if column is not yet in Supabase schema
             }
           } catch (readErr) {
             // Ignore if unread flags column does not exist in schema
@@ -351,6 +468,8 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
         senderName: currentUser.name || 'Utilisateur',
         text: textToSend,
         createdAt: new Date().toISOString(),
+        isRead: false,
+        status: 'sent',
         ...(fileToSend ? {
           fileUrl: fileToSend.base64,
           fileName: fileToSend.name,
@@ -525,11 +644,23 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
             <MessageSquare className="w-5 h-5 text-orange-500" />
             Messagerie
           </h2>
-          {isGerant && (
-            <span className="text-[10px] bg-orange-100 text-orange-700 font-bold px-2.5 py-1 rounded-full uppercase">
-              Espace Gérant
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {confirmedFriends.length > 0 && (
+              <button
+                onClick={() => setShowNewFriendModal(true)}
+                className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                title="Démarrer une discussion privée avec un ami confirmé"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>+ Ami(e)</span>
+              </button>
+            )}
+            {isGerant && (
+              <span className="text-[10px] bg-orange-100 text-orange-700 font-bold px-2.5 py-1 rounded-full uppercase">
+                Espace Gérant
+              </span>
+            )}
+          </div>
         </div>
 
         {errorMsg && (
@@ -555,12 +686,22 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
               <p className="text-xs text-gray-400 leading-relaxed">
                 {isGerant 
                   ? "Vous recevrez des messages ici lorsqu'un client vous contactera." 
-                  : "Allez sur Explorer pour contacter vos établissements favoris !"}
+                  : "Discutez en privé avec vos ami(e)s confirmés ou contactez vos établissements favoris !"}
               </p>
+              {confirmedFriends.length > 0 && (
+                <button
+                  onClick={() => setShowNewFriendModal(true)}
+                  className="mt-3 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer mx-auto"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Discuter avec un ami ({confirmedFriends.length})
+                </button>
+              )}
             </div>
           ) : (
             conversations.map((conv) => {
               const isDJOfConv = conv.djId === currentUser?.id && (conv as any).recipientType === 'dj';
+              const isFriendChat = conv.establishmentId === 'direct_friend' || conv.establishmentId?.startsWith('friend_');
               const isUnread = isDJOfConv
                 ? (conv as any).unreadByDj
                 : isGerant
@@ -568,12 +709,16 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
                 : conv.unreadByClient;
 
               let titleName = isGerant ? conv.clientName : conv.establishmentName;
-              if (isDJOfConv) {
+              if (isFriendChat) {
+                titleName = conv.clientId === currentUser?.id ? conv.establishmentName : conv.clientName;
+              } else if (isDJOfConv) {
                 titleName = conv.clientName;
               }
 
               const isDJChat = (conv as any).recipientType === 'dj';
-              const subName = isDJOfConv 
+              const subName = isFriendChat
+                ? `Ami(e) ZAKA`
+                : isDJOfConv 
                 ? `Demande de son (DJ)` 
                 : isDJChat
                 ? `🎧 DJ de l'établissement`
@@ -595,7 +740,9 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
                 >
                   <div className={cn(
                     "w-12 h-12 rounded-2xl font-bold flex items-center justify-center text-lg shadow-sm border flex-shrink-0",
-                    isDJChat 
+                    isFriendChat
+                      ? "bg-gradient-to-br from-amber-50 to-orange-100 text-amber-700 border-amber-200/40"
+                      : isDJChat 
                       ? "bg-gradient-to-br from-purple-50 to-purple-100 text-purple-600 border-purple-200/20"
                       : "bg-gradient-to-br from-orange-50 to-orange-100 text-orange-600 border-orange-200/20"
                   )}>
@@ -618,8 +765,29 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
                     <p className={cn("text-xs text-gray-400 font-semibold mb-0.5", isDJChat && "text-purple-600/80")}>
                       {subName}
                     </p>
-                    <p className={cn("text-xs text-gray-500 truncate", isUnread && "text-orange-600 font-bold")}>
-                      {conv.lastMessage}
+                    <p className={cn("text-xs text-gray-500 truncate flex items-center gap-1", isUnread && "text-orange-600 font-bold")}>
+                      {conv.lastSenderId === currentUser.id && (() => {
+                        const isFriendChat = conv.establishmentId === 'direct_friend' || conv.establishmentId?.startsWith('friend_');
+                        const isDJOfConv = conv.djId === currentUser?.id && (conv as any).recipientType === 'dj';
+                        const otherHasRead = isDJOfConv 
+                          ? !(conv as any).unreadByClient 
+                          : isGerant 
+                          ? !conv.unreadByClient 
+                          : isFriendChat 
+                          ? (conv.clientId === currentUser.id ? !conv.unreadByGerant : !conv.unreadByClient)
+                          : !conv.unreadByGerant;
+
+                        return (
+                          <span className="shrink-0" title={otherHasRead ? "Lu par votre correspondant" : "Distribué"}>
+                            {otherHasRead ? (
+                              <CheckCheck className="w-3.5 h-3.5 text-sky-500 stroke-[2.5]" />
+                            ) : (
+                              <CheckCheck className="w-3.5 h-3.5 text-gray-400 stroke-[2]" />
+                            )}
+                          </span>
+                        );
+                      })()}
+                      <span className="truncate">{conv.lastMessage}</span>
                     </p>
                   </div>
                   {isUnread && (
@@ -650,13 +818,18 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
               
               {(() => {
                 const isDJOfActive = activeConv.djId === currentUser?.id && (activeConv as any).recipientType === 'dj';
-                const activeTitleName = isDJOfActive
+                const isFriendActive = activeConv.establishmentId === 'direct_friend' || activeConv.establishmentId?.startsWith('friend_');
+                const activeTitleName = isFriendActive
+                  ? (activeConv.clientId === currentUser?.id ? activeConv.establishmentName : activeConv.clientName)
+                  : isDJOfActive
                   ? activeConv.clientName
                   : isGerant
                   ? activeConv.clientName
                   : activeConv.establishmentName;
 
-                const activeSubName = isDJOfActive
+                const activeSubName = isFriendActive
+                  ? "Ami(e) ZAKA connecté(e)"
+                  : isDJOfActive
                   ? "Client (Demande de son DJ)"
                   : (activeConv as any).recipientType === 'dj'
                   ? "Discussion avec le DJ"
@@ -670,7 +843,7 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
                   <>
                     <div className={cn(
                       "w-10 h-10 rounded-xl font-bold flex items-center justify-center text-white",
-                      isDJChat ? "bg-purple-600" : "bg-orange-600"
+                      isFriendActive ? "bg-gradient-to-br from-amber-500 to-orange-600" : isDJChat ? "bg-purple-600" : "bg-orange-600"
                     )}>
                       {activeTitleName.substring(0, 2).toUpperCase()}
                     </div>
@@ -688,6 +861,17 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
                         {activeSubName}
                       </span>
                     </div>
+
+                    {isFriendActive && (
+                      <button
+                        onClick={() => setShowShareModal(true)}
+                        className="ml-auto px-3 py-1.5 bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-amber-800 border border-amber-200/80 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                        title="Partager un bon plan, événement ou établissement avec cet ami"
+                      >
+                        <Share2 className="w-3.5 h-3.5 text-amber-600" />
+                        <span className="hidden sm:inline">Partager un bon plan</span>
+                      </button>
+                    )}
                   </>
                 );
               })()}
@@ -704,6 +888,18 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
               ) : (
                 messages.map((msg) => {
                   const isMe = msg.senderId === currentUser?.id;
+                  const isFriendChat = activeConv.establishmentId === 'direct_friend' || activeConv.establishmentId?.startsWith('friend_');
+                  const otherHasOpened = isGerant
+                    ? !activeConv.unreadByClient
+                    : isFriendChat
+                    ? (activeConv.clientId === currentUser?.id ? !activeConv.unreadByGerant : !activeConv.unreadByClient)
+                    : !activeConv.unreadByGerant;
+
+                  const hasRepliedAfter = activeConv.lastSenderId !== currentUser?.id && new Date(activeConv.lastMessageAt).getTime() >= new Date(msg.createdAt).getTime();
+
+                  const isMsgRead = isMe && Boolean(msg.isRead || (otherHasOpened && new Date(msg.createdAt).getTime() <= new Date(activeConv.lastMessageAt).getTime()) || hasRepliedAfter);
+                  const isMsgDelivered = isMe && !isMsgRead;
+
                   return (
                     <div 
                       key={msg.id} 
@@ -754,13 +950,29 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
                         </p>
                       )}
 
-                      {/* Timestamp */}
-                      <span className={cn(
-                        "text-[9px] block text-right mt-1 opacity-70 font-bold",
-                        isMe ? "text-orange-100" : "text-gray-400"
+                      {/* Timestamp & Read indicators (Double Checkmarks) */}
+                      <div className={cn(
+                        "flex items-center justify-end gap-1 mt-1 font-bold select-none",
+                        isMe ? (isDJChatActive ? "text-purple-100" : "text-orange-100") : "text-gray-400"
                       )}>
-                        {getFormatTime(msg.createdAt)}
-                      </span>
+                        <span className="text-[9px] opacity-80">
+                          {getFormatTime(msg.createdAt)}
+                        </span>
+                        {isMe && (
+                          <span 
+                            className="inline-flex items-center ml-0.5" 
+                            title={isMsgRead ? "Lu par votre correspondant (vu)" : "Distribué (reçu)"}
+                          >
+                            {isMsgRead ? (
+                              <CheckCheck className="w-3.5 h-3.5 text-sky-200 drop-shadow-xs stroke-[2.5]" />
+                            ) : isMsgDelivered ? (
+                              <CheckCheck className="w-3.5 h-3.5 opacity-70 stroke-[2]" />
+                            ) : (
+                              <Check className="w-3.5 h-3.5 opacity-70 stroke-[2]" />
+                            )}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 })
@@ -809,6 +1021,18 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
                 )}
               </button>
 
+              {activeConv && (activeConv.establishmentId === 'direct_friend' || activeConv.establishmentId?.startsWith('friend_')) && (
+                <button
+                  type="button"
+                  disabled={isSending}
+                  onClick={() => setShowShareModal(true)}
+                  className="p-3 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-xl transition-all"
+                  title="Partager un bon plan ou une ressource avec cet ami"
+                >
+                  <Share2 className="w-5 h-5" />
+                </button>
+              )}
+
               <textarea 
                 placeholder="Rédigez votre message..."
                 value={inputText}
@@ -843,6 +1067,221 @@ export function MessagesView({ onBackToHome, preselectedEstablishmentId, presele
           </div>
         )}
       </div>
+
+      {/* Modal: Choisir un ami pour démarrer une discussion privée */}
+      {showNewFriendModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[85vh] border border-gray-100">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-amber-50 to-orange-50">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-gray-900">Discuter avec un(e) ami(e)</h3>
+                  <p className="text-[10px] text-gray-500">Choisissez un(e) ami(e) confirmé(e) pour lancer une discussion privée</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowNewFriendModal(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 divide-y divide-gray-50">
+              {confirmedFriends.length === 0 ? (
+                <div className="text-center py-10 px-4">
+                  <Users className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-gray-700">Aucun ami confirmé pour l'instant</p>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Recherchez des amis par leur nom, e-mail ou numéro de téléphone dans votre Profil pour vous connecter et discuter.
+                  </p>
+                </div>
+              ) : (
+                confirmedFriends.map(({ friendUser }) => (
+                  <div key={friendUser.id} className="py-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-white font-black flex items-center justify-center text-sm shadow-xs flex-shrink-0">
+                        {friendUser.name ? friendUser.name.charAt(0).toUpperCase() : 'A'}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-gray-900 truncate">{friendUser.name}</p>
+                        {friendUser.phone && <p className="text-[10px] text-gray-400">📞 {friendUser.phone}</p>}
+                        {friendUser.email && !friendUser.phone && <p className="text-[10px] text-gray-400 truncate">✉️ {friendUser.email}</p>}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => startChatWithFriend(friendUser)}
+                      className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1 cursor-pointer flex-shrink-0"
+                    >
+                      <MessageSquare className="w-3 h-3" />
+                      <span>Discuter</span>
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Partager un bon plan ou un établissement dans la discussion */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[85vh] border border-gray-100">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-amber-50 to-orange-50">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-bold">
+                  <Share2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-gray-900">Partager une ressource entre ami(e)s</h3>
+                  <p className="text-[10px] text-gray-500">Envoyez une recommandation ou un événement dans cette discussion</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowShareModal(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Filter Tabs & Search */}
+            <div className="p-3 border-b border-gray-100 bg-gray-50 flex flex-col gap-2">
+              <div className="flex rounded-xl bg-gray-200 p-1 text-xs font-bold">
+                <button
+                  onClick={() => setShareTab('publications')}
+                  className={`flex-1 py-1.5 rounded-lg transition-all text-center cursor-pointer ${
+                    shareTab === 'publications' ? 'bg-white text-orange-600 shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  🎉 Soirées & Événements ({publications.length})
+                </button>
+                <button
+                  onClick={() => setShareTab('establishments')}
+                  className={`flex-1 py-1.5 rounded-lg transition-all text-center cursor-pointer ${
+                    shareTab === 'establishments' ? 'bg-white text-orange-600 shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  📍 Établissements ({establishments.filter(e => e.status === 'valide').length})
+                </button>
+              </div>
+
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Rechercher par titre ou lieu..."
+                  value={shareSearch}
+                  onChange={(e) => setShareSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-orange-500"
+                />
+              </div>
+            </div>
+
+            {/* Resource Items List */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+              {shareTab === 'publications' ? (
+                publications
+                  .filter(p => {
+                    const q = shareSearch.toLowerCase();
+                    return (p.title || '').toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q);
+                  })
+                  .slice(0, 15)
+                  .map(pub => {
+                    const est = establishments.find(e => e.id === pub.establishmentId);
+                    const placeName = est ? `${est.name} (${est.neighborhood || est.city})` : 'Ouagadougou';
+                    return (
+                      <div 
+                        key={pub.id} 
+                        className="p-3 rounded-2xl border border-gray-100 hover:border-orange-200 hover:bg-orange-50/20 transition-all flex items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {pub.imageUrl ? (
+                            <img src={pub.imageUrl} alt={pub.title} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold flex-shrink-0">
+                              <Sparkles className="w-5 h-5" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-gray-900 truncate">{pub.title}</p>
+                            <p className="text-[10px] text-gray-500 truncate flex items-center gap-1">
+                              <MapPin className="w-3 h-3 text-orange-500" /> {placeName}
+                              {pub.startDate && <span>• 📅 {pub.startDate}</span>}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleShareResource({
+                            type: 'publication',
+                            title: pub.title,
+                            subtitle: `📍 ${placeName} ${pub.startDate ? `• 📅 ${pub.startDate}` : ''}`,
+                            imageUrl: pub.imageUrl
+                          })}
+                          className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer flex-shrink-0"
+                        >
+                          <Send className="w-3 h-3" />
+                          <span>Envoyer</span>
+                        </button>
+                      </div>
+                    );
+                  })
+              ) : (
+                establishments
+                  .filter(e => e.status === 'valide')
+                  .filter(e => {
+                    const q = shareSearch.toLowerCase();
+                    const loc = `${e.neighborhood || ''} ${e.city || ''}`.toLowerCase();
+                    return (e.name || '').toLowerCase().includes(q) || loc.includes(q);
+                  })
+                  .slice(0, 15)
+                  .map(est => {
+                    const locStr = `${est.neighborhood ? `${est.neighborhood}, ` : ''}${est.city || 'Ouagadougou'}`;
+                    const photo = est.photos && est.photos.length > 0 ? est.photos[0] : undefined;
+                    return (
+                      <div 
+                        key={est.id} 
+                        className="p-3 rounded-2xl border border-gray-100 hover:border-orange-200 hover:bg-orange-50/20 transition-all flex items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {photo ? (
+                            <img src={photo} alt={est.name} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold flex-shrink-0">
+                              <MapPin className="w-5 h-5" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-gray-900 truncate">{est.name}</p>
+                            <p className="text-[10px] text-gray-500 truncate flex items-center gap-1">
+                              <Tag className="w-3 h-3 text-orange-500" /> {est.category} • 📍 {locStr}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleShareResource({
+                            type: 'establishment',
+                            title: est.name,
+                            subtitle: `Catégorie : ${est.category} • 📍 ${locStr}`,
+                            imageUrl: photo
+                          })}
+                          className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer flex-shrink-0"
+                        >
+                          <Send className="w-3 h-3" />
+                          <span>Envoyer</span>
+                        </button>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

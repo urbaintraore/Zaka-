@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { useAppStore } from '../store';
 import { Story, Establishment } from '../types';
 import { X, Play, Heart, Send, Plus, Eye, Award, Volume2, MapPin, Smile, MessageCircle, BarChart3, Star, Trash2 } from 'lucide-react';
+import { StoryEmojiReactionPicker } from './StoryEmojiReactionPicker';
 
 const STATIC_PRESETS = [
   {
@@ -685,42 +686,43 @@ export function StoriesSection({ onStartChat }: { onStartChat?: (estId: string, 
           </div>
 
           {/* Footer Direct Reply & Reactions bar */}
-          <div className="p-4 bg-black/65 backdrop-blur-md border-t border-white/5 z-20 flex flex-col gap-3">
-            {/* Quick reaction emojis */}
-            <div className="flex items-center justify-between px-2">
-              {["🔥", "❤️", "😂", "😮", "🙌", "👑"].map(emoji => (
-                <button
-                  key={emoji}
-                  onClick={() => handleReactToStory(emoji)}
-                  className="text-2xl active:scale-130 hover:scale-115 transition-all cursor-pointer"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
+          {(() => {
+            const currentActiveStory = creatorsList[activeCreatorIndex]?.stories[activeStoryIndex];
+            return (
+              <div className="p-4 bg-black/65 backdrop-blur-md border-t border-white/5 z-20 flex flex-col gap-3">
+                {/* Story Emoji Reactions (Predefined emojis list with custom picker & counts) */}
+                {currentActiveStory && (
+                  <StoryEmojiReactionPicker
+                    currentReaction={currentActiveStory.reactions?.[currentUser?.id || ''] || null}
+                    reactions={currentActiveStory.reactions || {}}
+                    onReact={(emoji) => handleReactToStory(emoji)}
+                  />
+                )}
 
-            {/* Direct message text area */}
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={replyText}
-                onChange={e => {
-                  setReplyText(e.target.value);
-                  setIsPaused(true);
-                }}
-                onBlur={() => setIsPaused(false)}
-                placeholder="Envoyer un message privé..."
-                className="flex-1 bg-white/10 text-white rounded-full px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-orange-500 placeholder-white/50 border border-white/5"
-              />
-              <button
-                onClick={handleSendReply}
-                disabled={!replyText.trim()}
-                className="bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white rounded-full p-2.5 active:scale-90 transition-all cursor-pointer flex-shrink-0"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+                {/* Direct message text area */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={replyText}
+                    onChange={e => {
+                      setReplyText(e.target.value);
+                      setIsPaused(true);
+                    }}
+                    onBlur={() => setIsPaused(false)}
+                    placeholder="Envoyer un message privé..."
+                    className="flex-1 bg-white/10 text-white rounded-full px-4 py-2.5 text-xs outline-none focus:ring-1 focus:ring-orange-500 placeholder-white/50 border border-white/5"
+                  />
+                  <button
+                    onClick={handleSendReply}
+                    disabled={!replyText.trim()}
+                    className="bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white rounded-full p-2.5 active:scale-90 transition-all cursor-pointer flex-shrink-0"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

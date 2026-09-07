@@ -3,14 +3,16 @@ import { triggerHaptic } from '../utils/haptics';
 
 interface UseVoiceSearchProps {
   onTranscript: (text: string) => void;
+  onFinalTranscript?: (text: string) => void;
   lang?: string;
 }
 
-export function useVoiceSearch({ onTranscript, lang = 'fr-FR' }: UseVoiceSearchProps) {
+export function useVoiceSearch({ onTranscript, onFinalTranscript, lang = 'fr-FR' }: UseVoiceSearchProps) {
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [interimText, setInterimText] = useState('');
   const recognitionRef = useRef<any>(null);
+  const lastCapturedTextRef = useRef<string>('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -54,6 +56,8 @@ export function useVoiceSearch({ onTranscript, lang = 'fr-FR' }: UseVoiceSearchP
       } catch {}
     }
 
+    lastCapturedTextRef.current = '';
+
     try {
       const recognition = new SpeechRecognition();
       recognition.lang = lang;
@@ -66,7 +70,7 @@ export function useVoiceSearch({ onTranscript, lang = 'fr-FR' }: UseVoiceSearchP
         triggerHaptic('medium');
         window.dispatchEvent(new CustomEvent('app-toast', {
           detail: {
-            message: "🎙️ Écoute en cours... Dites par exemple « Maquis à Ouaga » ou « Restaurant »",
+            message: "🎙️ Écoute en cours... Dites par exemple « Maquis », « Restaurant » ou « Bar »",
             type: 'info'
           }
         }));
@@ -89,8 +93,16 @@ export function useVoiceSearch({ onTranscript, lang = 'fr-FR' }: UseVoiceSearchP
         const currentText = (finalTranscript || interimTranscript).trim();
         if (currentText) {
           setInterimText(currentText);
+          lastCapturedTextRef.current = currentText;
           onTranscript(currentText);
           triggerHaptic('light');
+        }
+
+        if (finalTranscript.trim()) {
+          const finalText = finalTranscript.trim();
+          lastCapturedTextRef.current = finalText;
+          onTranscript(finalText);
+          onFinalTranscript?.(finalText);
         }
       };
 
@@ -113,6 +125,9 @@ export function useVoiceSearch({ onTranscript, lang = 'fr-FR' }: UseVoiceSearchP
       recognition.onend = () => {
         setIsListening(false);
         setInterimText('');
+        if (lastCapturedTextRef.current && onFinalTranscript) {
+          onFinalTranscript(lastCapturedTextRef.current);
+        }
         triggerHaptic('success');
       };
 
@@ -122,7 +137,7 @@ export function useVoiceSearch({ onTranscript, lang = 'fr-FR' }: UseVoiceSearchP
       console.error('Failed to start speech recognition:', err);
       setIsListening(false);
     }
-  }, [lang, onTranscript]);
+  }, [lang, onTranscript, onFinalTranscript]);
 
   const toggleListening = useCallback(() => {
     if (isListening) {

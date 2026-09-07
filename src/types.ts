@@ -14,6 +14,9 @@ export interface User {
   code_parrainage?: string;
   referralCodeUsed?: string;
   avatar?: string;
+  isOnline?: boolean;
+  lastActive?: string;
+  isFavorite?: boolean;
   entrepriseData?: { sector: string; logo: string; philosophy: string; description: string };
 }
 
