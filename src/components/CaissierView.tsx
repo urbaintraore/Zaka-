@@ -5,11 +5,13 @@ import { useAppStore } from '../store';
 export function CaissierView({ 
   onLogout, 
   onNavigate, 
-  onStartChatWithConv 
+  onStartChatWithConv,
+  initialEstablishmentId
 }: { 
   onLogout?: () => void; 
   onNavigate?: (tab: any) => void; 
   onStartChatWithConv?: (convId: string) => void; 
+  initialEstablishmentId?: string;
 }) {
   const { reservations, updateReservationStatus } = useAppStore();
   const [search, setSearch] = useState('');

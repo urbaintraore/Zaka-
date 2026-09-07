@@ -60,8 +60,8 @@ export function GroupOutingLiveLocation({
 
   // Active locations map
   const rawLocations = outing.liveLocations || {};
-  const activeSharers: GroupOutingLocation[] = Object.values(rawLocations).filter(
-    loc => loc.isSharing
+  const activeSharers: any[] = Object.values(rawLocations).filter(
+    (loc: any) => loc.isSharing
   );
 
   // Sync my sharing state from store

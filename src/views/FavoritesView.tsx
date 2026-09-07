@@ -290,7 +290,7 @@ export function FavoritesView({ onStartChat }: FavoritesViewProps) {
                 className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-750 p-3 flex gap-4 items-start sm:items-center relative"
               >
                 <img 
-                  src={est.photos[0] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=200'} 
+                  src={est.photos?.[0] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=200'} 
                   alt={est.name} 
                   className="w-20 h-20 rounded-xl object-cover flex-shrink-0" 
                 />

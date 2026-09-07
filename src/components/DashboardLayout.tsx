@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store';
-import { Compass, Store, User, Sparkles, Sun, Moon, Bell } from 'lucide-react';
-import { ThemeModeSelector } from './ThemeModeSelector';
+import { Home, Compass, Heart, Briefcase, MessageSquare, User, Sun, Moon, Bell } from 'lucide-react';
 import { NotificationCenterModal } from './NotificationCenterModal';
 import { AnimatePresence, motion } from 'motion/react';
 
 export function DashboardLayout() {
-  const { currentUser, theme, toggleTheme, switchUser, users, notifications } = useAppStore();
+  const { currentUser, theme, toggleTheme, notifications } = useAppStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -29,7 +28,7 @@ export function DashboardLayout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
           
           {/* Logo & Platform Name */}
-          <NavLink to="/explore" className="flex items-center gap-2.5 group">
+          <NavLink to="/" className="flex items-center gap-2.5 group">
             <div className="w-9 h-9 bg-linear-to-tr from-orange-600 to-amber-500 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-md shadow-orange-600/20 group-hover:scale-105 transition-transform">
               Z
             </div>
@@ -44,67 +43,106 @@ export function DashboardLayout() {
           </NavLink>
 
           {/* Nav Tabs for Desktop */}
-          <nav className="hidden md:flex items-center gap-1 bg-gray-100/80 dark:bg-gray-800/80 p-1 rounded-2xl border border-gray-200/60 dark:border-gray-700/60">
+          <nav className="hidden lg:flex items-center gap-1 bg-gray-100/80 dark:bg-gray-800/80 p-1 rounded-2xl border border-gray-200/60 dark:border-gray-700/60">
             <NavLink
-              to="/explore"
+              to="/"
+              end
               className={({ isActive }) =>
-                `px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${
-                  isActive || location.pathname === '/'
-                    ? 'bg-white dark:bg-gray-900 text-orange-600 dark:text-orange-400 shadow-xs'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                }`
-              }
-            >
-              <Compass size={16} />
-              <span>Explorer</span>
-            </NavLink>
-
-            <NavLink
-              to="/my-establishments"
-              className={({ isActive }) =>
-                `px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${
+                `px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
                   isActive
                     ? 'bg-white dark:bg-gray-900 text-orange-600 dark:text-orange-400 shadow-xs'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                 }`
               }
             >
-              <Store size={16} />
-              <span>Mes établissements</span>
+              <Home size={15} />
+              <span>Accueil</span>
+            </NavLink>
+
+            <NavLink
+              to="/explore"
+              className={({ isActive }) =>
+                `px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                  isActive
+                    ? 'bg-white dark:bg-gray-900 text-orange-600 dark:text-orange-400 shadow-xs'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`
+              }
+            >
+              <Compass size={15} />
+              <span>Explorer</span>
+            </NavLink>
+
+            <NavLink
+              to="/favorites"
+              className={({ isActive }) =>
+                `px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                  isActive
+                    ? 'bg-white dark:bg-gray-900 text-orange-600 dark:text-orange-400 shadow-xs'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`
+              }
+            >
+              <Heart size={15} />
+              <span>Favoris</span>
+            </NavLink>
+
+            <NavLink
+              to="/jobs"
+              className={({ isActive }) =>
+                `px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                  isActive
+                    ? 'bg-white dark:bg-gray-900 text-orange-600 dark:text-orange-400 shadow-xs'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`
+              }
+            >
+              <Briefcase size={15} />
+              <span>Emplois</span>
+            </NavLink>
+
+            <NavLink
+              to="/messages"
+              className={({ isActive }) =>
+                `px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                  isActive
+                    ? 'bg-white dark:bg-gray-900 text-orange-600 dark:text-orange-400 shadow-xs'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`
+              }
+            >
+              <MessageSquare size={15} />
+              <span>Messages</span>
             </NavLink>
 
             <NavLink
               to="/profile"
               className={({ isActive }) =>
-                `px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${
+                `px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
                   isActive
                     ? 'bg-white dark:bg-gray-900 text-orange-600 dark:text-orange-400 shadow-xs'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                 }`
               }
             >
-              <User size={16} />
+              <User size={15} />
               <span>Profil</span>
             </NavLink>
           </nav>
 
           {/* Right User Bar & Theme Toggle */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Quick Demo Role Selector */}
-            <div className="hidden sm:flex items-center gap-1 bg-orange-50 dark:bg-orange-950/40 p-1 rounded-xl border border-orange-200/60 dark:border-orange-900/40">
-              <span className="text-[10px] font-bold text-orange-800 dark:text-orange-300 px-2 uppercase">
-                {currentUser?.role || 'visiteur'}
-              </span>
-              <select
-                value={currentUser?.id || ''}
-                onChange={e => switchUser(e.target.value)}
-                className="bg-white dark:bg-gray-900 text-xs font-bold text-gray-800 dark:text-gray-200 px-2 py-1 rounded-lg border border-orange-200/80 dark:border-orange-800/80 outline-none cursor-pointer"
-              >
-                {users.slice(0, 5).map(u => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                ))}
-              </select>
-            </div>
+
+            {currentUser && (
+              <div className="hidden sm:flex items-center gap-2 bg-orange-50 dark:bg-orange-950/40 py-1.5 px-3 rounded-xl border border-orange-200/60 dark:border-orange-900/40">
+                <span className="text-xs font-extrabold text-gray-800 dark:text-gray-200 truncate max-w-[100px]">
+                  {currentUser.name}
+                </span>
+                <span className="text-[9px] font-bold text-orange-800 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/60 px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                  {currentUser.role}
+                </span>
+              </div>
+            )}
 
             {/* Notification Bell */}
             <button
@@ -152,48 +190,91 @@ export function DashboardLayout() {
         </AnimatePresence>
       </main>
 
-      {/* Mobile Bottom Navigation Bar (HashRouter links) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-gray-100 dark:border-gray-800 z-40 py-2 px-4 shadow-lg">
+      {/* Mobile Bottom Navigation Bar (6 official items) */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-gray-100 dark:border-gray-800 z-40 py-2 px-2 shadow-lg">
         <div className="flex items-center justify-around">
           <NavLink
-            to="/explore"
+            to="/"
+            end
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 text-[11px] font-bold transition-colors ${
-                isActive || location.pathname === '/'
-                  ? 'text-orange-600 dark:text-orange-400'
-                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
-              }`
-            }
-          >
-            <Compass size={20} />
-            <span>Explorer</span>
-          </NavLink>
-
-          <NavLink
-            to="/my-establishments"
-            className={({ isActive }) =>
-              `flex flex-col items-center gap-1 text-[11px] font-bold transition-colors ${
+              `flex flex-col items-center gap-0.5 text-[10px] font-bold transition-colors ${
                 isActive
                   ? 'text-orange-600 dark:text-orange-400'
                   : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
               }`
             }
           >
-            <Store size={20} />
-            <span>Établissements</span>
+            <Home size={18} />
+            <span>Accueil</span>
+          </NavLink>
+
+          <NavLink
+            to="/explore"
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-0.5 text-[10px] font-bold transition-colors ${
+                isActive
+                  ? 'text-orange-600 dark:text-orange-400'
+                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+              }`
+            }
+          >
+            <Compass size={18} />
+            <span>Explorer</span>
+          </NavLink>
+
+          <NavLink
+            to="/favorites"
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-0.5 text-[10px] font-bold transition-colors ${
+                isActive
+                  ? 'text-orange-600 dark:text-orange-400'
+                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+              }`
+            }
+          >
+            <Heart size={18} />
+            <span>Favoris</span>
+          </NavLink>
+
+          <NavLink
+            to="/jobs"
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-0.5 text-[10px] font-bold transition-colors ${
+                isActive
+                  ? 'text-orange-600 dark:text-orange-400'
+                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+              }`
+            }
+          >
+            <Briefcase size={18} />
+            <span>Emplois</span>
+          </NavLink>
+
+          <NavLink
+            to="/messages"
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-0.5 text-[10px] font-bold transition-colors ${
+                isActive
+                  ? 'text-orange-600 dark:text-orange-400'
+                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+              }`
+            }
+          >
+            <MessageSquare size={18} />
+            <span>Messages</span>
           </NavLink>
 
           <NavLink
             to="/profile"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 text-[11px] font-bold transition-colors ${
+              `flex flex-col items-center gap-0.5 text-[10px] font-bold transition-colors ${
                 isActive
                   ? 'text-orange-600 dark:text-orange-400'
                   : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
               }`
             }
           >
-            <User size={20} />
+            <User size={18} />
             <span>Profil</span>
           </NavLink>
         </div>

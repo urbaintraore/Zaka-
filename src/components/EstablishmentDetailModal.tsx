@@ -145,7 +145,7 @@ export function EstablishmentDetailModal({ establishment, onClose }: Establishme
         date: data.date,
         time: data.time,
         guestsCount: data.guests,
-        note: data.details
+        notes: data.details
       });
     } else {
       const isAnniv = data.reservationType === 'anniversaire';

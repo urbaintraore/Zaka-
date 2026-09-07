@@ -30,7 +30,6 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   const { 
     currentUser, 
     users,
-    switchUser,
     login, 
     resetPassword,
     register, 
@@ -1829,37 +1828,6 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
         <h2 className="text-2xl font-black text-gray-900 mb-2 text-center">
           {mode === 'login' ? 'Connexion' : 'Créer un compte'}
         </h2>
-        
-        {mode === 'login' && (
-          <div className="mb-6 p-3 bg-orange-50/70 border border-orange-200/80 rounded-2xl">
-            <span className="text-[11px] font-black text-orange-900 uppercase tracking-wider block mb-2 text-center">
-              ⚡ Connexion rapide Démo (Choisir un profil) :
-            </span>
-            <div className="grid grid-cols-1 gap-1.5">
-              {users.slice(0, 5).map(u => (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => switchUser(u.id)}
-                  className="w-full px-3 py-2 bg-white hover:bg-orange-100/60 border border-orange-200/60 text-left rounded-xl transition-all flex items-center justify-between group cursor-pointer shadow-2xs"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-lg bg-orange-100 text-orange-700 font-black text-[11px] flex items-center justify-center">
-                      {u.role === 'admin' ? '👑' : u.role === 'gerant' ? '🏪' : u.role === 'caissier' ? '🛒' : u.role === 'entreprise' ? '🏢' : '👤'}
-                    </span>
-                    <div>
-                      <p className="text-xs font-bold text-gray-900 group-hover:text-orange-900">{u.name}</p>
-                      <p className="text-[10px] font-medium text-gray-500">{u.email || u.phone}</p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 bg-gray-100 text-gray-700 group-hover:bg-orange-600 group-hover:text-white rounded-md transition-colors">
-                    {u.role}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
         
         {/* Auth Method Selector */}
         {!isOtpSent && (

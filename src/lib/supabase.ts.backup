@@ -2,14 +2,15 @@
 import { createClient } from '@supabase/supabase-js';
 import { Establishment, UserProfile, EstablishmentReview } from '../types';
 
-// Read env variables for Supabase securely using standard Vite env access
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder-supabase-url.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key';
+// Read env variables for Supabase
+const env = (import.meta as any).env || {};
+const supabaseUrl = env.VITE_SUPABASE_URL || 'https://placeholder-supabase-url.supabase.co';
+const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
 export const isSupabaseConfigured = Boolean(
-  import.meta.env.VITE_SUPABASE_URL && 
-  import.meta.env.VITE_SUPABASE_ANON_KEY &&
-  import.meta.env.VITE_SUPABASE_URL !== 'https://placeholder-supabase-url.supabase.co'
+  env.VITE_SUPABASE_URL && 
+  env.VITE_SUPABASE_ANON_KEY &&
+  env.VITE_SUPABASE_URL !== 'https://placeholder-supabase-url.supabase.co'
 );
 
 // Initialize Supabase Client
@@ -60,24 +61,6 @@ export async function supabaseGetCurrentUser() {
   return user;
 }
 
-export async function getCurrentUserProfile(): Promise<UserProfile | null> {
-  if (!isSupabaseConfigured) return null;
-  try {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      throw new Error("Aucun utilisateur authentifié dans Supabase Auth");
-    }
-    const profile = await fetchUserProfileFromDb(user.id);
-    if (!profile) {
-      throw new Error(`Profil introuvable dans la table public.users pour l'UUID ${user.id}`);
-    }
-    return profile;
-  } catch (err: any) {
-    console.error("getCurrentUserProfile error:", err);
-    throw err;
-  }
-}
-
 // ==========================================
 // USER PROFILES DATABASE UTILITIES
 // ==========================================
@@ -86,26 +69,12 @@ export async function fetchUserProfileFromDb(userId: string): Promise<UserProfil
   if (!isSupabaseConfigured) return null;
   try {
     const { data, error } = await supabase
-      .from('users')
+      .from('profiles')
       .select('*')
       .eq('id', userId)
       .single();
     if (error) throw error;
-    if (!data) return null;
-    return {
-      id: data.id,
-      name: data.name || '',
-      email: data.email || '',
-      phone: data.phone || '',
-      role: data.role as any,
-      city: data.city || 'Ouagadougou',
-      country: data.country || 'Burkina Faso',
-      avatarUrl: data.avatar || '',
-      points: data.points || 0,
-      code_parrainage: data.code_parrainage || '',
-      zakaPoints: data.zakaPoints || 0,
-      isVerified: data.isVerified || false
-    };
+    return data as UserProfile;
   } catch (err) {
     console.warn('Supabase fetchUserProfileFromDb warning:', err);
     return null;
@@ -116,7 +85,7 @@ export async function saveUserProfileToDb(profile: UserProfile): Promise<boolean
   if (!isSupabaseConfigured) return true;
   try {
     const { error } = await supabase
-      .from('users')
+      .from('profiles')
       .upsert({
         id: profile.id,
         name: profile.name,
@@ -125,11 +94,8 @@ export async function saveUserProfileToDb(profile: UserProfile): Promise<boolean
         role: profile.role,
         city: profile.city,
         country: profile.country,
-        avatar: profile.avatarUrl,
-        points: profile.points || 0,
-        zakaPoints: profile.zakaPoints || 0,
-        code_parrainage: profile.code_parrainage,
-        isVerified: profile.isVerified || false
+        points: profile.points,
+        code_parrainage: profile.code_parrainage
       });
     if (error) throw error;
     return true;

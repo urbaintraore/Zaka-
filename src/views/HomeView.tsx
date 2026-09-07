@@ -1498,7 +1498,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                         <div className="flex flex-col items-end flex-shrink-0">
                           <span className="text-[11px] font-extrabold text-yellow-600 bg-yellow-50 dark:bg-yellow-950/40 px-2.5 py-0.5 rounded-lg flex items-center gap-0.5">
                             <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
-                            {item.rating.toFixed(1)}
+                            {Number(item.rating || 0).toFixed(1)}
                           </span>
                           <span className="text-[9px] text-gray-400 font-bold mt-0.5 uppercase tracking-tight">
                             {item.reviewsCount} avis
@@ -2227,7 +2227,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
               </div>
             ) : (
               filteredEstablishments.map(est => {
-                const imageUrl = est.photos[0] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800';
+                const imageUrl = est.photos?.[0] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800';
                 const effectiveUserId = currentUser ? currentUser.id : 'guest';
                 const isFav = (favorites[effectiveUserId] || []).includes(est.id);
                 const distKm = establishmentDistances[est.id];
@@ -2241,7 +2241,7 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                          <CrowdStatusBadge establishment={est} showControlForOwner={false} />
                        </div>
                        <div className="absolute bottom-3 right-3 flex items-center gap-1 text-yellow-400 font-bold bg-black/50 backdrop-blur-md px-2.5 py-1 rounded-lg text-xs border border-white/10">
-                         <Star className="w-3.5 h-3.5 fill-yellow-400" /> {est.averageRating.toFixed(1)}
+                         <Star className="w-3.5 h-3.5 fill-yellow-400" /> {Number(est.averageRating || 0).toFixed(1)}
                        </div>
 
                        {/* Proximity badge if available */}

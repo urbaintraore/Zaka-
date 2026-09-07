@@ -11,9 +11,24 @@ import {
   Role,
   Category,
   EstablishmentReview,
-  AppNotification
+  AppNotification,
+  Ad,
+  Campaign,
+  AdDailyStat,
+  AdPayment,
+  AdInvoice
 } from './types';
-import { addReviewToDb, fetchReviewsFromDb } from './lib/supabase';
+import { 
+  addReviewToDb, 
+  fetchReviewsFromDb,
+  supabaseSignIn,
+  supabaseSignUp,
+  supabaseSignOut,
+  fetchUserProfileFromDb,
+  saveUserProfileToDb,
+  supabase,
+  getCurrentUserProfile
+} from './lib/supabase';
 
 export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371; // km
@@ -257,23 +272,22 @@ interface AppContextType {
   addReview: (rev: Omit<EstablishmentReview, 'id' | 'createdAt'>) => Promise<void>;
   markNotificationAsRead: (id?: string) => void;
   clearAllNotifications: () => void;
-  addNotification: (notif: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => void;
-  sendManagerInvitation: (establishmentId: string, targetUserId: string, message?: string) => void;
+  addNotification: (notifOrUserId: any, title?: string, message?: string, ...args: any[]) => void;
+  sendManagerInvitation: (establishmentId: string, targetUserId: string, message?: string, ...args: any[]) => void;
   login: (identifier: string, password?: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   register: (userData: any, password?: string, estData?: any, entrepriseData?: any) => Promise<void>;
   logout: () => void;
-  switchUser: (userId: string) => void;
   upgradeToGerant: (estData: any) => Promise<void>;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;
   envoyerCodeOtp: (phone: string, containerId: string) => Promise<void>;
   confirmerCodeOtp: (code: string, details?: any) => Promise<void>;
-  updateReservationStatus: (id: string, status: Reservation['status']) => void;
+  updateReservationStatus: (id: string, status: Reservation['status'], message?: string) => void;
   updateTakeawayOrderStatus: (id: string, status: TakeawayOrder['status']) => void;
   updateRelationshipRequest: (id: string, status: any, ...rest: any[]) => void;
   createConversation: (...args: any[]) => string;
   respondGroupOuting: (id: string, status: 'going' | 'maybe' | 'declined') => void;
-  toggleFavorite: (establishmentId: string) => void;
+  toggleFavorite: (establishmentId: string, userId?: string, ...args: any[]) => void;
   addEstablishment: (est: Omit<Establishment, 'id'>) => void;
   updateEstablishment: (id: string, data: Partial<Establishment>) => void;
   deleteEstablishment: (id: string) => void;
@@ -283,6 +297,85 @@ interface AppContextType {
   acceptFriendRequest: (requestId: string) => void;
   declineFriendRequest: (requestId: string) => void;
   removeFriend: (friendId: string) => void;
+  
+  // ZAKA Ads Store Types
+  ads: Ad[];
+  campaigns: Campaign[];
+  adPayments: AdPayment[];
+  adInvoices: AdInvoice[];
+  adDailyStats: AdDailyStat[];
+  trackAdImpression: (adId: string) => void;
+  trackAdClick: (adId: string) => void;
+  addCampaign: (camp: Omit<Campaign, 'id'>, ads?: any[]) => Promise<string>;
+  processAdPayment: (paymentOrAmount: any, campaignId?: string) => Promise<void>;
+  validateAdPayment: (paymentId: string) => void;
+  validateCampaignByAdmin: (campaignId: string) => void;
+  updateCampaignStatus: (campaignId: string, status: Campaign['status']) => void;
+
+  // Additional Store Types for Recruitment and Friendships
+  friendships: any[];
+  publications: any[];
+  addApplication: (app: any) => Promise<void>;
+  globalError: any;
+  setGlobalError: (err: any) => void;
+
+  // Remaining optional properties requested by components
+  addAdCreativeLibraryItem?: (item: any) => void;
+  favoriteTags?: string[];
+  updateFavoriteTags?: (...args: any[]) => void;
+  saveAllFavoriteTags?: (...args: any[]) => void;
+  createServiceRequest?: (req: any) => Promise<void>;
+  trackPublicationView?: (pubId: string) => void;
+  loading?: boolean;
+  entreprises?: any[];
+  unreadCount?: number;
+  ventes?: any[];
+  stocks?: any[];
+  addStockItem?: (item: any) => Promise<void>;
+  updateStockItem?: (id: string, item: any) => Promise<void>;
+  deleteStockItem?: (id: string) => Promise<void>;
+  recordSale?: (sale: any) => Promise<void>;
+  deleteRelationshipRequest?: (id: string) => Promise<void>;
+  updateServiceRequest?: (id: string, status: any, message?: string) => Promise<void>;
+  createRelationshipRequest?: (req: any) => Promise<void>;
+  toggleDJStatus?: (id: string, ...args: any[]) => Promise<void>;
+  toggleCaissierStatus?: (id: string, ...args: any[]) => Promise<void>;
+  toggleServeurStatus?: (id: string, ...args: any[]) => Promise<void>;
+  staffReviews?: any[];
+  updateStaffReviewStatus?: (id: string, status: any, note?: number, bonusOrSanction?: any) => Promise<void>;
+  staffAttendances?: any[];
+  createStaffAttendance?: (att: any) => Promise<void>;
+  deleteStaffAttendance?: (id: string) => Promise<void>;
+  loyaltyCards?: any[];
+  consumeLoyaltyReward?: (id: string) => Promise<void>;
+  updateCrowdStatus?: (id: string, status: any) => Promise<void>;
+  menusDuJour?: any[];
+  trackEstablishmentView?: (id: string) => Promise<void>;
+  addCarnetEntry?: (entry: any) => Promise<void>;
+  carnetEntrees?: any[];
+  createStaffReview?: (rev: any) => Promise<void>;
+  replyToReview?: (id: string, reply: string) => Promise<void>;
+  updateHairSalonData?: (id: string, data: any) => Promise<void>;
+  zakaRedemptions?: any[];
+  updateLoyaltyConfig?: (id: string, ...args: any[]) => Promise<any>;
+  updateZakaPointsConfig?: (id: string, ...args: any[]) => Promise<any>;
+  redeemZakaPoints?: (id: string, ...args: any[]) => Promise<string>;
+  consumeZakaRedemption?: (id: string) => Promise<void>;
+  addMenuDuJour?: (idOrMenu: any, menu?: any) => Promise<void>;
+  receptionsStock?: any[];
+  inventairesStock?: any[];
+  addStockReception?: (rec: any) => Promise<void>;
+  addStockInventory?: (inv: any) => Promise<void>;
+  adOrganizations?: any[];
+  adAuditLogs?: any[];
+  adRates?: any[];
+  adSupportTickets?: any[];
+  moderateCampaignByAdmin?: (id: string, status: any, reason?: string, comment?: string) => Promise<void>;
+  updateAdRateConfig?: (config: any) => Promise<void>;
+  respondAdSupportTicket?: (id: string, response: string) => Promise<void>;
+  addAdAuditLog?: (log: any) => Promise<void>;
+  adCreatives?: any[];
+  createAdOrganization?: (org: any) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -291,7 +384,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [users, setUsers] = useState<UserProfile[]>(() => {
     try {
       const saved = localStorage.getItem('zaka_users');
-      return saved ? JSON.parse(saved) : INITIAL_USERS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const cleaned = parsed.filter((u: UserProfile) => 
+          !u.name?.toLowerCase().includes('demo') && 
+          !u.email?.toLowerCase().includes('demo') &&
+          !u.name?.toLowerCase().includes('dummy')
+        );
+        if (cleaned.length > 0) return cleaned;
+      }
+      return INITIAL_USERS;
     } catch {
       return INITIAL_USERS;
     }
@@ -300,10 +402,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     try {
       const saved = localStorage.getItem('zaka_current_user');
-      if (saved) return JSON.parse(saved);
-      return INITIAL_USERS[0]; // Default to Ibrahim Ouedraogo if no saved session
+      if (saved) {
+        return JSON.parse(saved);
+      }
+      return null;
     } catch {
-      return INITIAL_USERS[0];
+      return null;
     }
   });
 
@@ -343,6 +447,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
   const [groupOutings, setGroupOutings] = useState<GroupOuting[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [friendships, setFriendships] = useState<any[]>([]);
+  const [publications, setPublications] = useState<any[]>([]);
+  const [globalError, setGlobalError] = useState<any>(null);
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('zaka_favorites');
@@ -361,6 +468,94 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
+  // ZAKA Ads State Declarations
+  const [campaigns, setCampaigns] = useState<Campaign[]>(() => {
+    try {
+      const saved = localStorage.getItem('zaka_campaigns');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [ads, setAds] = useState<Ad[]>(() => {
+    try {
+      const saved = localStorage.getItem('zaka_ads');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [adPayments, setAdPayments] = useState<AdPayment[]>(() => {
+    try {
+      const saved = localStorage.getItem('zaka_ad_payments');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [adInvoices, setAdInvoices] = useState<AdInvoice[]>(() => {
+    try {
+      const saved = localStorage.getItem('zaka_ad_invoices');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [adDailyStats, setAdDailyStats] = useState<AdDailyStat[]>(() => {
+    try {
+      const saved = localStorage.getItem('zaka_ad_daily_stats');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const profile = await fetchUserProfileFromDb(session.user.id);
+          if (profile) {
+            setCurrentUser(profile);
+          } else {
+            setCurrentUser(null);
+          }
+        } else {
+          setCurrentUser(null);
+        }
+      } catch (err) {
+        console.error("Erreur d'initialisation de session Supabase:", err);
+        setCurrentUser(null);
+      }
+    };
+
+    initAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          const profile = await fetchUserProfileFromDb(session.user.id);
+          if (profile) {
+            setCurrentUser(profile);
+          } else {
+            setCurrentUser(null);
+          }
+        } else {
+          setCurrentUser(null);
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem('zaka_favorites', JSON.stringify(favorites));
@@ -377,6 +572,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [notifications]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('zaka_campaigns', JSON.stringify(campaigns));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [campaigns]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('zaka_ads', JSON.stringify(ads));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [ads]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('zaka_ad_payments', JSON.stringify(adPayments));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [adPayments]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('zaka_ad_invoices', JSON.stringify(adInvoices));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [adInvoices]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('zaka_ad_daily_stats', JSON.stringify(adDailyStats));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [adDailyStats]);
+
   const markNotificationAsRead = (id?: string) => {
     if (!id) {
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
@@ -389,17 +624,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications([]);
   };
 
-  const addNotification = (notif: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => {
-    const newNotif: AppNotification = {
-      ...notif,
-      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      createdAt: new Date().toISOString(),
-      read: false
-    };
-    setNotifications(prev => [newNotif, ...prev]);
+  const addNotification = (notifOrUserId: any, title?: string, message?: string, ...args: any[]) => {
+    let finalNotif: AppNotification;
+    if (typeof notifOrUserId === 'string') {
+      finalNotif = {
+        id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        userId: notifOrUserId,
+        title: title || 'Notification',
+        message: message || '',
+        type: 'general',
+        read: false,
+        createdAt: new Date().toISOString()
+      };
+    } else {
+      finalNotif = {
+        ...notifOrUserId,
+        id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        createdAt: new Date().toISOString(),
+        read: false
+      };
+    }
+    setNotifications(prev => [finalNotif, ...prev]);
   };
 
-  const sendManagerInvitation = (establishmentId: string, targetUserId: string, message?: string) => {
+  const sendManagerInvitation = (establishmentId: string, targetUserId: string, message?: string, ...args: any[]) => {
     const est = establishments.find(e => e.id === establishmentId);
     const estName = est ? est.name : 'Un établissement';
     
@@ -502,37 +750,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const setTheme = (t: 'light' | 'dark') => setThemeState(t);
   const toggleTheme = () => setThemeState(prev => (prev === 'light' ? 'dark' : 'light'));
 
-  const switchUser = (userId: string) => {
-    const target = users.find(u => u.id === userId);
-    if (target) {
-      setCurrentUser(target);
-    }
-  };
-
   const login = async (identifier: string, password?: string) => {
+    if (!password) {
+      throw new Error("Un mot de passe est obligatoire pour s'authentifier.");
+    }
     const cleanId = identifier.trim().toLowerCase();
-    const existing = users.find(
-      u => (u.email && u.email.toLowerCase() === cleanId) || (u.phone && u.phone === cleanId)
-    );
-
-    if (existing) {
-      setCurrentUser(existing);
-    } else {
-      // Create new user profile for this identifier
-      const newUser: UserProfile = {
-        id: `u-${Date.now()}`,
-        name: cleanId.includes('@') ? cleanId.split('@')[0].replace('.', ' ') : cleanId,
-        email: cleanId.includes('@') ? cleanId : undefined,
-        phone: !cleanId.includes('@') ? cleanId : undefined,
-        role: 'client',
-        city: 'Ouagadougou',
-        country: 'Burkina Faso',
-        points: 100,
-        code_parrainage: `ZAKA-${Math.floor(1000 + Math.random() * 9000)}`
-      };
-
-      setUsers(prev => [...prev, newUser]);
-      setCurrentUser(newUser);
+    const { data, error } = await supabaseSignIn(cleanId, password);
+    if (error) {
+      throw error;
+    }
+    if (data?.user) {
+      const profile = await fetchUserProfileFromDb(data.user.id);
+      if (profile) {
+        setCurrentUser(profile);
+      } else {
+        throw new Error(`Profil introuvable dans public.users pour l'UUID ${data.user.id}`);
+      }
     }
   };
 
@@ -541,41 +774,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const register = async (userData: any, password?: string, estData?: any, entrepriseData?: any) => {
-    const newUserId = `u-${Date.now()}`;
-    const newUser: UserProfile = {
-      id: newUserId,
-      name: userData.name || 'Nouvel Utilisateur',
-      email: userData.email || undefined,
-      phone: userData.phone || undefined,
-      role: userData.role || 'client',
-      city: userData.city || 'Ouagadougou',
-      country: userData.country || 'Burkina Faso',
-      points: 200,
-      code_parrainage: `ZAKA-${Math.floor(1000 + Math.random() * 9000)}`
-    };
-
-    setUsers(prev => [...prev, newUser]);
-
-    if (userData.role === 'gerant' && estData && estData.name) {
-      const newEst: Establishment = {
-        id: `est-${Date.now()}`,
-        name: estData.name,
-        category: estData.category || 'maquis',
-        description: estData.description || '',
-        photoUrl: estData.photos?.[0] || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=800',
-        neighborhood: estData.neighborhood || 'Centre-ville',
+    if (!password) {
+      throw new Error("Un mot de passe est obligatoire pour créer un compte réel.");
+    }
+    if (!userData.email) {
+      throw new Error("Une adresse e-mail est obligatoire pour s'inscrire réellement.");
+    }
+    
+    const { data, error } = await supabaseSignUp(userData.email, password, userData);
+    if (error) {
+      throw error;
+    }
+    
+    if (data?.user) {
+      const newUser: UserProfile = {
+        id: data.user.id,
+        name: userData.name || userData.email.split('@')[0],
+        email: userData.email,
+        phone: userData.phone || '',
+        role: userData.role || 'client',
         city: userData.city || 'Ouagadougou',
         country: userData.country || 'Burkina Faso',
-        ownerId: newUserId,
-        rating: 5.0
+        points: 200,
+        code_parrainage: `ZAKA-${Math.floor(1000 + Math.random() * 9000)}`
       };
-      setEstablishments(prev => [newEst, ...prev]);
-    }
+      
+      const success = await saveUserProfileToDb(newUser);
+      if (!success) {
+        throw new Error("Impossible d'enregistrer le profil utilisateur dans la table public.users de Supabase.");
+      }
+      
+      setUsers(prev => [...prev.filter(u => u.id !== newUser.id), newUser]);
 
-    setCurrentUser(newUser);
+      if (userData.role === 'gerant' && estData && estData.name) {
+        const newEst: Establishment = {
+          id: `est-${Date.now()}`,
+          name: estData.name,
+          category: estData.category || 'maquis',
+          description: estData.description || '',
+          photoUrl: estData.photos?.[0] || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=800',
+          neighborhood: estData.neighborhood || 'Centre-ville',
+          city: userData.city || 'Ouagadougou',
+          country: userData.country || 'Burkina Faso',
+          ownerId: data.user.id,
+          rating: 5.0
+        };
+        setEstablishments(prev => [newEst, ...prev]);
+      }
+      
+      setCurrentUser(newUser);
+    }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabaseSignOut();
     setCurrentUser(null);
   };
 
@@ -617,12 +869,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (details) {
       await register(details);
     } else if (!currentUser) {
-      const defaultUser = users[0] || INITIAL_USERS[0];
-      setCurrentUser(defaultUser);
+      throw new Error("L'authentification par code nécessite un compte ou une session active.");
     }
   };
 
-  const updateReservationStatus = (id: string, status: Reservation['status']) => {
+  const updateReservationStatus = (id: string, status: Reservation['status'], message?: string) => {
     setReservations(prev => {
       const target = prev.find(r => r.id === id);
       if (target) {
@@ -647,7 +898,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateRelationshipRequest = (id: string, status: any, ...rest: any[]) => {
-    setRelationshipRequests(prev => prev.map(req => req.id === id ? { ...req, status } : req));
+    setRelationshipRequests(prev => prev.map(req => {
+      if (req.id === id) {
+        const updated = { ...req, status };
+        if (status === 'accepted' && req.type === 'friend') {
+          setFriendships(fPrev => {
+            if (fPrev.some(f => (f.user1Id === req.fromUserId && f.user2Id === req.toUserId) || (f.user1Id === req.toUserId && f.user2Id === req.fromUserId))) {
+              return fPrev.map(f => (f.user1Id === req.fromUserId && f.user2Id === req.toUserId) || (f.user1Id === req.toUserId && f.user2Id === req.fromUserId) ? { ...f, status: 'accepted' } : f);
+            }
+            return [...fPrev, {
+              id: `friendship-${Date.now()}`,
+              user1Id: req.fromUserId,
+              user2Id: req.toUserId,
+              status: 'accepted',
+              createdAt: new Date().toISOString()
+            }];
+          });
+        }
+        return updated;
+      }
+      return req;
+    }));
   };
 
   const createConversation = (participantId?: string) => {
@@ -657,7 +928,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const respondGroupOuting = (id: string, status: 'going' | 'maybe' | 'declined') => {};
 
-  const toggleFavorite = (establishmentId: string) => {
+  const toggleFavorite = (establishmentId: string, userId?: string, ...args: any[]) => {
     setFavorites(prev => 
       prev.includes(establishmentId) ? prev.filter(i => i !== establishmentId) : [...prev, establishmentId]
     );
@@ -723,6 +994,173 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const declineFriendRequest = (requestId: string) => updateRelationshipRequest(requestId, 'declined');
   const removeFriend = (friendId: string) => {};
 
+  // ZAKA Ads Store Methods Impl
+  const trackAdImpression = (adId: string) => {
+    setAds(prev => prev.map(ad => ad.id === adId ? { ...ad, impressions: (ad.impressions || 0) + 1 } : ad));
+    const today = new Date().toISOString().split('T')[0];
+    setAdDailyStats(prev => {
+      const match = prev.find(s => s.date === today && s.campaignId === (ads.find(a => a.id === adId)?.campaignId || ''));
+      if (match) {
+        return prev.map(s => s.id === match.id ? { ...s, impressions: s.impressions + 1 } : s);
+      } else {
+        const adObj = ads.find(a => a.id === adId);
+        if (!adObj) return prev;
+        return [...prev, {
+          id: `stat-${Date.now()}`,
+          date: today,
+          campaignId: adObj.campaignId,
+          advertiserId: adObj.advertiserId,
+          impressions: 1,
+          clicks: 0,
+          spend: 0
+        }];
+      }
+    });
+  };
+
+  const trackAdClick = (adId: string) => {
+    setAds(prev => prev.map(ad => ad.id === adId ? { ...ad, clicks: (ad.clicks || 0) + 1 } : ad));
+    const today = new Date().toISOString().split('T')[0];
+    setAdDailyStats(prev => {
+      const match = prev.find(s => s.date === today && s.campaignId === (ads.find(a => a.id === adId)?.campaignId || ''));
+      if (match) {
+        return prev.map(s => s.id === match.id ? { ...s, clicks: s.clicks + 1 } : s);
+      } else {
+        const adObj = ads.find(a => a.id === adId);
+        if (!adObj) return prev;
+        return [...prev, {
+          id: `stat-${Date.now()}`,
+          date: today,
+          campaignId: adObj.campaignId,
+          advertiserId: adObj.advertiserId,
+          impressions: 0,
+          clicks: 1,
+          spend: 0
+        }];
+      }
+    });
+  };
+
+  const addCampaign = async (camp: Omit<Campaign, 'id'>, customAds?: any[]): Promise<string> => {
+    const id = `camp-${Date.now()}`;
+    const newCamp: Campaign = {
+      ...camp,
+      id,
+      createdAt: new Date().toISOString()
+    };
+    setCampaigns(prev => [newCamp, ...prev]);
+
+    if (customAds && customAds.length > 0) {
+      const newAds: Ad[] = customAds.map((cad, index) => ({
+        id: `ad-${Date.now()}-${index}`,
+        campaignId: id,
+        advertiserId: camp.advertiserId,
+        title: cad.title || camp.title,
+        description: cad.description || "Annonce publicitaire propulsée par ZAKA Ads",
+        photoUrl: cad.mediaUrl || cad.photoUrl || "https://images.unsplash.com/photo-1543007630-9710e4a00a20?w=800",
+        mediaUrl: cad.mediaUrl,
+        ctaText: cad.ctaText || "En savoir plus",
+        ctaLink: cad.ctaLink || "https://zaka.bf",
+        status: cad.status || 'pending',
+        placements: cad.placements || ['home_banner'],
+        advertiserName: camp.advertiserName
+      }));
+      setAds(prev => [...newAds, ...prev]);
+    } else {
+      // Create a corresponding default advertisement creative
+      const adId = `ad-${Date.now()}`;
+      const newAd: Ad = {
+        id: adId,
+        campaignId: id,
+        advertiserId: camp.advertiserId,
+        title: camp.title,
+        description: "Annonce publicitaire propulsée par ZAKA Ads",
+        photoUrl: "https://images.unsplash.com/photo-1543007630-9710e4a00a20?w=800",
+        ctaText: "En savoir plus",
+        ctaLink: "https://zaka.bf",
+        status: 'pending',
+        placements: ['home_banner'],
+        advertiserName: camp.advertiserName
+      };
+      setAds(prev => [newAd, ...prev]);
+    }
+
+    return id;
+  };
+
+  const processAdPayment = async (amountOrObject: any, campaignId?: string): Promise<void> => {
+    if (!currentUser) return;
+    const paymentId = `pay-${Date.now()}`;
+    
+    let finalAmount = typeof amountOrObject === 'number' ? amountOrObject : amountOrObject?.amount || 0;
+    let finalCampId = typeof amountOrObject === 'number' ? campaignId : amountOrObject?.campaignId;
+    let method = typeof amountOrObject === 'object' ? amountOrObject?.method || 'orange_money' : 'orange_money';
+    let packName = typeof amountOrObject === 'object' ? amountOrObject?.packName : undefined;
+    let phoneUsed = typeof amountOrObject === 'object' ? amountOrObject?.phoneUsed : undefined;
+    let transactionRef = typeof amountOrObject === 'object' ? amountOrObject?.transactionRef : undefined;
+
+    const newPayment: AdPayment = {
+      id: paymentId,
+      advertiserId: currentUser.id,
+      campaignId: finalCampId,
+      amount: finalAmount,
+      currency: 'XOF',
+      method,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      packName,
+      phoneUsed,
+      transactionRef,
+      advertiserName: currentUser.name
+    };
+    setAdPayments(prev => [newPayment, ...prev]);
+
+    if (finalCampId) {
+      const camp = campaigns.find(c => c.id === finalCampId);
+      const invoiceId = `inv-${Date.now()}`;
+      const newInvoice: AdInvoice = {
+        id: invoiceId,
+        advertiserId: currentUser.id,
+        campaignId: finalCampId,
+        campaignTitle: camp?.title || 'Campagne publicitaire',
+        amount: finalAmount,
+        date: new Date().toISOString().split('T')[0],
+        status: 'non_payee',
+        advertiserName: currentUser.name
+      };
+      setAdInvoices(prev => [newInvoice, ...prev]);
+    }
+  };
+
+  const validateAdPayment = (paymentId: string) => {
+    setAdPayments(prev => {
+      const item = prev.find(p => p.id === paymentId);
+      if (item?.campaignId) {
+        setAdInvoices(iPrev => iPrev.map(inv => inv.campaignId === item.campaignId ? { ...inv, status: 'payee' } : inv));
+        setCampaigns(cPrev => cPrev.map(c => c.id === item.campaignId ? { ...c, status: 'pending_validation' } : c));
+      }
+      return prev.map(p => p.id === paymentId ? { ...p, status: 'valide' } : p);
+    });
+  };
+
+  const validateCampaignByAdmin = (campaignId: string) => {
+    setCampaigns(prev => prev.map(c => c.id === campaignId ? { ...c, status: 'active' } : c));
+    setAds(prev => prev.map(ad => ad.campaignId === campaignId ? { ...ad, status: 'active' } : ad));
+  };
+
+  const updateCampaignStatus = (campaignId: string, status: Campaign['status']) => {
+    setCampaigns(prev => prev.map(c => c.id === campaignId ? { ...c, status } : c));
+    if (status === 'active') {
+      setAds(prev => prev.map(ad => ad.campaignId === campaignId ? { ...ad, status: 'active' } : ad));
+    } else {
+      setAds(prev => prev.map(ad => ad.campaignId === campaignId ? { ...ad, status: 'paused' } : ad));
+    }
+  };
+
+  const addApplication = async (app: any) => {
+    setApplications(prev => [...prev, { ...app, id: `app-${Date.now()}`, date: new Date().toISOString() }]);
+  };
+
   return (
     <AppContext.Provider value={{
       currentUser,
@@ -740,6 +1178,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUserLocation,
       reviews,
       applications,
+      friendships,
+      publications,
+      addApplication,
+      globalError,
+      setGlobalError,
       theme,
       setTheme,
       toggleTheme,
@@ -752,7 +1195,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       resetPassword,
       register,
       logout,
-      switchUser,
       upgradeToGerant,
       updateProfile,
       envoyerCodeOtp,
@@ -771,7 +1213,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       sendFriendRequest,
       acceptFriendRequest,
       declineFriendRequest,
-      removeFriend
+      removeFriend,
+
+      // Default placeholders for requested optional store fields
+      addAdCreativeLibraryItem: () => {},
+      favoriteTags: [],
+      updateFavoriteTags: (...args: any[]) => {},
+      saveAllFavoriteTags: (...args: any[]) => {},
+      createServiceRequest: async () => {},
+      trackPublicationView: () => {},
+      loading: false,
+      entreprises: [],
+      unreadCount: 0,
+      ventes: [],
+      stocks: [],
+      addStockItem: async () => {},
+      updateStockItem: async () => {},
+      deleteStockItem: async () => {},
+      recordSale: async () => {},
+      deleteRelationshipRequest: async () => {},
+      updateServiceRequest: async (id: string, status: any, message?: string) => {},
+      createRelationshipRequest: async () => {},
+      toggleDJStatus: async (id: string, ...args: any[]) => {},
+      toggleCaissierStatus: async (id: string, ...args: any[]) => {},
+      toggleServeurStatus: async (id: string, ...args: any[]) => {},
+      staffReviews: [],
+      updateStaffReviewStatus: async (id: string, status: any, note?: number, bonusOrSanction?: any) => {},
+      staffAttendances: [],
+      createStaffAttendance: async () => {},
+      deleteStaffAttendance: async () => {},
+      loyaltyCards: [],
+      consumeLoyaltyReward: async () => {},
+      updateCrowdStatus: async () => {},
+      menusDuJour: [],
+      trackEstablishmentView: async () => {},
+      addCarnetEntry: async () => {},
+      carnetEntrees: [],
+      createStaffReview: async () => {},
+      replyToReview: async () => {},
+      updateHairSalonData: async () => {},
+      zakaRedemptions: [],
+      updateLoyaltyConfig: async (id: string, ...args: any[]) => {},
+      updateZakaPointsConfig: async (id: string, ...args: any[]) => {},
+      redeemZakaPoints: async (id: string, ...args: any[]) => { return "CODE-REDEEM-" + Math.floor(1000 + Math.random() * 9000); },
+      consumeZakaRedemption: async () => {},
+      addMenuDuJour: async (idOrMenu: any, menu?: any) => {},
+      receptionsStock: [],
+      inventairesStock: [],
+      addStockReception: async () => {},
+      addStockInventory: async () => {},
+      adOrganizations: [],
+      adAuditLogs: [],
+      adRates: [],
+      adSupportTickets: [],
+      moderateCampaignByAdmin: async (id: string, status: any, reason?: string, comment?: string) => {},
+      updateAdRateConfig: async () => {},
+      respondAdSupportTicket: async () => {},
+      addAdAuditLog: async () => {},
+      adCreatives: [],
+      createAdOrganization: async () => {},
+      
+      // ZAKA Ads exports
+      ads,
+      campaigns,
+      adPayments,
+      adInvoices,
+      adDailyStats,
+      trackAdImpression,
+      trackAdClick,
+      addCampaign,
+      processAdPayment,
+      validateAdPayment,
+      validateCampaignByAdmin,
+      updateCampaignStatus
     }}>
       {children}
     </AppContext.Provider>

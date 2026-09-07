@@ -4,9 +4,12 @@ import { X, Sparkles, Send } from 'lucide-react';
 interface AdExpressWizardProps {
   isOpen?: boolean;
   onClose: () => void;
+  prefillEstablishment?: any;
+  prefillPublication?: any;
+  prefillType?: string;
 }
 
-export function AdExpressWizard({ onClose }: AdExpressWizardProps) {
+export function AdExpressWizard({ onClose, prefillEstablishment, prefillPublication, prefillType }: AdExpressWizardProps) {
   const [budget, setBudget] = useState('5000');
   const [days, setDays] = useState('3');
 

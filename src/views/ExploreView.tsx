@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAppStore, calculateDistanceKm } from '../store';
 import { CATEGORIES_LIST, Category, Establishment, getCategoryLabel } from '../types';
-import { Search, MapPin, Star, Calendar, MessageSquare, Tag, Phone, Sparkles, Filter, SlidersHorizontal, Map, Grid, Crosshair, HelpCircle, Heart } from 'lucide-react';
+import { Search, MapPin, Star, Calendar, MessageSquare, Tag, Phone, Sparkles, Filter, SlidersHorizontal, Map, Grid, Crosshair, HelpCircle, Heart, Users, UserPlus, Check, Clock, X } from 'lucide-react';
 import { RateVisitedEstablishmentModal } from '../components/RateVisitedEstablishmentModal';
 
 export function ExploreView() {
-  const { establishments, toggleFavorite, favorites, currentUser, addReservation, userLocation, setUserLocation } = useAppStore();
+  const { establishments, toggleFavorite, favorites, currentUser, addReservation, userLocation, setUserLocation, users, relationshipRequests, sendFriendRequest, acceptFriendRequest, declineFriendRequest, friendships } = useAppStore();
   const [searchTerm, setSearchTerm] = useState('');
+  const [exploreTab, setExploreTab] = useState<'establishments' | 'members'>('establishments');
+  const [memberSearch, setMemberSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'all'>('all');
   const [selectedCity, setSelectedCity] = useState<string>('all');
   const [ratingEstModal, setRatingEstModal] = useState<Establishment | null>(null);
@@ -216,7 +218,190 @@ export function ExploreView() {
         </div>
       </div>
 
-      {/* Advanced Filters Drawer/Panel */}
+      {/* Explore Sub-Tabs: Establishments vs Members & Friendship Requests */}
+      <div className="flex bg-gray-100 dark:bg-gray-850 p-1 rounded-2xl max-w-md mx-auto">
+        <button
+          onClick={() => setExploreTab('establishments')}
+          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            exploreTab === 'establishments'
+              ? 'bg-white dark:bg-gray-900 text-orange-600 shadow-sm font-black'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+          }`}
+        >
+          <MapPin size={15} />
+          <span>Lieux & Établissements</span>
+        </button>
+        <button
+          onClick={() => setExploreTab('members')}
+          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            exploreTab === 'members'
+              ? 'bg-white dark:bg-gray-900 text-orange-600 shadow-sm font-black'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+          }`}
+        >
+          <Users size={15} />
+          <span>Membres & Amis 🤝</span>
+        </button>
+      </div>
+
+      {exploreTab === 'members' ? (
+        <div className="space-y-6">
+          {/* Incoming Friend Requests */}
+          {(() => {
+            const incomingRequests = currentUser ? (relationshipRequests || []).filter(r => r.type === 'friend' && r.toUserId === currentUser.id && r.status === 'pending') : [];
+            if (incomingRequests.length === 0) return null;
+            return (
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 rounded-3xl p-5 border border-amber-200 dark:border-amber-800/40 shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="text-orange-600" size={20} />
+                  <h3 className="text-sm font-black text-gray-900 dark:text-white">Demandes d'amitié reçues ({incomingRequests.length})</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {incomingRequests.map(req => (
+                    <div key={req.id} className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/30 flex items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-orange-600 text-white font-black text-sm flex items-center justify-center shadow-xs">
+                          {req.fromUserName ? req.fromUserName.charAt(0).toUpperCase() : 'U'}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-gray-900 dark:text-white">{req.fromUserName}</p>
+                          <p className="text-[10px] text-gray-500">Souhaite rejoindre votre réseau</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => acceptFriendRequest(req.id)}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                        >
+                          <Check size={14} />
+                          <span>Accepter</span>
+                        </button>
+                        <button
+                          onClick={() => declineFriendRequest(req.id)}
+                          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <X size={14} />
+                          <span>Refuser</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Member Directory */}
+          <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-black text-gray-900 dark:text-white">Annuaire des Membres Zaka+</h3>
+                <p className="text-xs text-gray-500">Explorez la communauté, envoyez des demandes d'amitié et tissez des liens.</p>
+              </div>
+              <div className="w-full sm:w-72 flex items-center gap-2 bg-gray-50 dark:bg-gray-950 px-3.5 py-2.5 rounded-2xl border border-gray-200/80 dark:border-gray-800">
+                <Search size={16} className="text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Rechercher par nom, ville..."
+                  value={memberSearch}
+                  onChange={e => setMemberSearch(e.target.value)}
+                  className="w-full bg-transparent text-xs font-medium outline-none text-gray-900 dark:text-white placeholder:text-gray-400"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+              {(() => {
+                const confirmedFriendIds = new Set(
+                  (friendships || [])
+                    .filter(f => f.status === 'accepted' && (f.user1Id === currentUser?.id || f.user2Id === currentUser?.id))
+                    .map(f => f.user1Id === currentUser?.id ? f.user2Id : f.user1Id)
+                );
+                const sentRequestUserIds = new Set(
+                  (relationshipRequests || [])
+                    .filter(r => r.type === 'friend' && r.fromUserId === currentUser?.id && r.status === 'pending')
+                    .map(r => r.toUserId)
+                );
+                const incomingIds = new Set(
+                  (relationshipRequests || [])
+                    .filter(r => r.type === 'friend' && r.toUserId === currentUser?.id && r.status === 'pending')
+                    .map(r => r.fromUserId)
+                );
+
+                const filteredMembers = (users || []).filter(u => {
+                  if (u.id === currentUser?.id) return false;
+                  return (
+                    (u.name || '').toLowerCase().includes(memberSearch.toLowerCase()) ||
+                    (u.city || '').toLowerCase().includes(memberSearch.toLowerCase()) ||
+                    (u.role || '').toLowerCase().includes(memberSearch.toLowerCase())
+                  );
+                });
+
+                if (filteredMembers.length === 0) {
+                  return (
+                    <div className="col-span-full py-12 text-center text-gray-400 text-xs">
+                      Aucun membre trouvé pour cette recherche.
+                    </div>
+                  );
+                }
+
+                return filteredMembers.map(u => {
+                  const isFriend = confirmedFriendIds.has(u.id);
+                  const hasSent = sentRequestUserIds.has(u.id);
+                  const hasReceived = incomingIds.has(u.id);
+
+                  return (
+                    <div key={u.id} className="bg-gray-50 dark:bg-gray-950 p-4 rounded-2xl border border-gray-200/60 dark:border-gray-800 flex flex-col justify-between gap-3 shadow-2xs">
+                      <div className="flex items-start gap-3">
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-600 text-white font-black text-sm flex items-center justify-center shadow-md shadow-orange-600/10 shrink-0">
+                          {u.name ? u.name.charAt(0).toUpperCase() : 'U'}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-black text-gray-900 dark:text-white truncate">{u.name}</p>
+                          <p className="text-[10px] text-gray-500 capitalize">{u.role || 'client'} • {u.city || 'Ouagadougou'}</p>
+                          {u.phone && <p className="text-[10px] text-gray-400 mt-0.5">📞 {u.phone}</p>}
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-gray-200/60 dark:border-gray-800 flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 px-2.5 py-1 rounded-lg">
+                          ⭐ {u.points || 0} pts
+                        </span>
+
+                        {isFriend ? (
+                          <span className="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-bold text-[11px] rounded-xl flex items-center gap-1">
+                            <Check size={13} />
+                            <span>Ami(e)</span>
+                          </span>
+                        ) : hasSent ? (
+                          <span className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-bold text-[11px] rounded-xl flex items-center gap-1">
+                            <Clock size={13} />
+                            <span>Demande envoyée</span>
+                          </span>
+                        ) : hasReceived ? (
+                          <span className="px-3 py-1.5 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 font-bold text-[11px] rounded-xl">
+                            Demande reçue
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => sendFriendRequest(u.id)}
+                            className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-black text-[11px] rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                          >
+                            <UserPlus size={13} />
+                            <span>Ajouter en ami</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Advanced Filters Drawer/Panel */}
       {showFilters && (
         <div className="p-4 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-3xl grid grid-cols-1 sm:grid-cols-3 gap-4 shadow-sm animate-fadeIn">
           {/* Price Level */}
@@ -714,6 +899,8 @@ export function ExploreView() {
             )}
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );
