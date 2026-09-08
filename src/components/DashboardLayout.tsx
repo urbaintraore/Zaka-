@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store';
-import { Home, Compass, Heart, Briefcase, MessageSquare, User, Sun, Moon, Bell } from 'lucide-react';
+import { Home, Compass, Heart, Briefcase, MessageSquare, User, Sun, Moon, Bell, HelpCircle } from 'lucide-react';
 import { NotificationCenterModal } from './NotificationCenterModal';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -127,6 +127,20 @@ export function DashboardLayout() {
             >
               <User size={15} />
               <span>Profil</span>
+            </NavLink>
+
+            <NavLink
+              to="/help"
+              className={({ isActive }) =>
+                `px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                  isActive
+                    ? 'bg-white dark:bg-gray-900 text-orange-600 dark:text-orange-400 shadow-xs'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`
+              }
+            >
+              <HelpCircle size={15} />
+              <span>Aide / Support</span>
             </NavLink>
           </nav>
 

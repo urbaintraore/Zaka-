@@ -14,12 +14,14 @@ import { AdminDashboard } from './views/AdminDashboard';
 import { HelpView } from './views/HelpView';
 import { ArtistPublicPage } from './views/ArtistPublicPage';
 import { ArtistDashboard } from './views/ArtistDashboard';
+import { PitchDeckView } from './components/PitchDeckView';
 
 export default function App() {
   return (
     <AppProvider>
       <HashRouter>
         <Routes>
+          <Route path="/pitch-deck" element={<PitchDeckView />} />
           <Route path="/" element={<DashboardLayout />}>
             <Route index element={<HomeView />} />
             <Route path="home" element={<HomeView />} />

@@ -198,6 +198,129 @@ export function HelpView({ onNavigate }: HelpViewProps) {
 
   return (
     <div className="min-h-screen pb-24 max-w-4xl mx-auto px-4 pt-4 animate-in fade-in duration-200">
+      {/* Pitch Deck Banner */}
+      <div className="mb-6 bg-gradient-to-r from-orange-600 via-amber-600 to-yellow-600 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-6">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="space-y-2 z-10">
+          <span className="px-3 py-1 bg-black/20 text-white border border-white/20 rounded-full text-[10px] font-black uppercase tracking-widest">
+            Exclusif Investisseurs 2026
+          </span>
+          <h2 className="text-2xl sm:text-3xl font-black tracking-tight">Découvrez le Pitch Deck ZAKA+</h2>
+          <p className="text-xs sm:text-sm text-orange-100 max-w-lg leading-relaxed">
+            Explorez notre vision stratégique, l'analyse détaillée des fonctionnalités pour chaque profil (Client, Gérant, Annonceur, Entreprise, Artiste), nos sources de monétisation et notre plan d'expansion internationale.
+          </p>
+        </div>
+        <div className="z-10 shrink-0 flex flex-col sm:flex-row gap-3">
+          <a
+            href="#/pitch-deck"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-5 py-3 bg-white/20 hover:bg-white/30 text-white font-black text-xs sm:text-sm rounded-2xl backdrop-blur-md transition-all flex items-center justify-center gap-2"
+          >
+            <span>Voir en ligne</span>
+            <ExternalLink size={16} />
+          </a>
+          <button
+            onClick={() => {
+              // Trigger same download logic
+              const htmlContent = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>ZAKA+ Pitch Deck Investisseurs 2026</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #09090b; color: #f97316; margin: 0; padding: 40px; line-height: 1.6; }
+    .container { max-width: 800px; margin: 0 auto; background: #18181b; padding: 40px; border-radius: 24px; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5); }
+    h1 { color: #f97316; font-size: 3rem; margin-bottom: 10px; }
+    h2 { color: #fb923c; border-bottom: 2px solid #27272a; padding-bottom: 10px; margin-top: 40px; }
+    p, li { color: #d4d4d8; font-size: 1.1rem; }
+    .badge { background: rgba(249, 115, 22, 0.2); color: #fb923c; padding: 6px 16px; border-radius: 20px; font-weight: bold; display: inline-block; margin-bottom: 20px; }
+    .card { background: #27272a; padding: 20px; border-radius: 16px; margin-bottom: 16px; border: 1px solid #3f3f46; }
+    .card h3 { color: #fff; margin-top: 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <span class="badge">Pitch Deck Investisseurs 2026</span>
+    <h1>ZAKA+</h1>
+    <p style="font-size: 1.5rem; font-weight: bold; color: #fff;">La Super-App Culturelle, Événementielle & Business d'Afrique</p>
+    <p>Connecter les sorties, les talents, les établissements et les marques en un seul écosystème numérique unifié.</p>
+    
+    <h2>1. Le Problème & L'Opportunité</h2>
+    <div class="card">
+      <h3>Fragmentation de l'offre</h3>
+      <p>Difficulté pour les citadins de découvrir en temps réel les meilleurs spots, soirées, concerts et promotions autour d'eux.</p>
+    </div>
+    <div class="card">
+      <h3>Sous-visibilité des talents</h3>
+      <p>Les artistes locaux, DJs et troupes peinent à monétiser leur art et à être contactés directement par les gérants de bars/clubs.</p>
+    </div>
+    <div class="card">
+      <h3>Gestion hôtelière & de caisse archaïque</h3>
+      <p>Les gérants d'établissements manquent d'outils digitaux modernes pour la gestion des stocks, des ventes, du personnel et des réservations.</p>
+    </div>
+    <div class="card">
+      <h3>Besoins publicitaires non ciblés</h3>
+      <p>Les annonceurs et grandes entreprises recherchent des canaux de publicité hyper-localisés, mesurables et rentables.</p>
+    </div>
+
+    <h2>2. Bénéfices par Profil</h2>
+    <div class="card">
+      <h3>👤 Le Client (Grand Public)</h3>
+      <p>• Géolocalisation interactive des spots autour de soi.<br>• Réseau social et invitations d'amis pour les sorties.<br>• Adhésion aux établissements pour flux en temps réel.<br>• Avis, notes étoilées, gestion du profil et calendrier.</p>
+    </div>
+    <div class="card">
+      <h3>🏪 Le Gérant d'Établissement</h3>
+      <p>• Campagnes d'invitations clients ciblées.<br>• Gestion des ventes, caisses et reçus automatiques.<br>• Suivi en temps réel des stocks et inventaires.<br>• Statistiques d'activité et comptabilité mensuelle.<br>• Publication de promotions et gestion des bookings d'artistes.</p>
+    </div>
+    <div class="card">
+      <h3>🎤 L'Artiste / Talent</h3>
+      <p>• Profil pro avec biographie et genres musicaux.<br>• Liens de streaming (Spotify, Apple Music, YouTube).<br>• Publication d'actualités et stories éphémères (24h).<br>• Gestion des demandes de prestations et cachets.</p>
+    </div>
+    <div class="card">
+      <h3>📢 ZAKA Ads & Annonceurs</h3>
+      <p>• Régie publicitaire hyper-ciblée pour booster les événements et marques.<br>• Suivi en temps réel des impressions, clics et conversions.<br>• Paiement sécurisé intégré.</p>
+    </div>
+
+    <h2>3. Modèle de Monétisation</h2>
+    <div class="card">
+      <h3>Abonnements SaaS Pro</h3>
+      <p>Forfaits mensuels / annuels pour les gérants et entreprises accédant aux outils avancés.</p>
+    </div>
+    <div class="card">
+      <h3>Régie Publicitaire (ZAKA Ads)</h3>
+      <p>Facturation au CPM / CPC pour les campagnes publicitaires et boosts d'événements.</p>
+    </div>
+    <div class="card">
+      <h3>Commissions & Partenariats</h3>
+      <p>Prélèvement sur la billetterie, les bookings d'artistes et partenariats institutionnels.</p>
+    </div>
+
+    <h2>4. Scalabilité & Expansion Internationale</h2>
+    <div class="card">
+      <h3>Expansion Panafricaine</h3>
+      <p>Architecture Cloud robuste (React, Node, Supabase) prête pour le déploiement rapide dans les capitales africaines (Abidjan, Dakar, Lomé, Bamako).</p>
+    </div>
+  </div>
+</body>
+</html>`;
+              const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = 'ZAKA+_Pitch_Deck_2026.html';
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            }}
+            className="px-6 py-3.5 bg-white text-orange-600 font-black text-xs sm:text-sm rounded-2xl shadow-lg hover:bg-orange-50 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <span>Télécharger le Pitch Deck</span>
+            <Download size={16} />
+          </button>
+        </div>
+      </div>
       {/* Hero Header */}
       <div className="bg-gradient-to-br from-orange-500 via-orange-600 to-amber-600 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden mb-6">
         <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
