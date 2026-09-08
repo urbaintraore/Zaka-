@@ -1761,6 +1761,12 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               logo: entLogo,
               philosophy: entPhilosophy,
               description: entDescription
+            } : undefined,
+            role === 'artiste' ? {
+              nomArtiste: estName,
+              categorieArtistique: estCategory,
+              whatsappPro: phone,
+              genres: ['Afrobeat']
             } : undefined
           );
         }
@@ -1939,9 +1945,10 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {mode === 'register' && !isOtpSent && (
             <>
-              <div className="grid grid-cols-2 gap-1.5 mb-2 p-1.5 bg-gray-100/80 rounded-xl">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 mb-2 p-1.5 bg-gray-100/80 rounded-xl">
                 <button type="button" onClick={() => setRole('client')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'client' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>👤 Client</button>
                 <button type="button" onClick={() => setRole('gerant')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'gerant' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>🏪 Gérant</button>
+                <button type="button" onClick={() => setRole('artiste')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'artiste' ? 'bg-white shadow-sm text-orange-600 font-black' : 'text-gray-500 hover:text-gray-700'}`}>🎤 Artiste</button>
                 <button type="button" onClick={() => setRole('annonceur')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'annonceur' ? 'bg-white shadow-sm text-orange-600 font-extrabold' : 'text-gray-500 hover:text-gray-700'}`}>📢 Annonceur</button>
                 <button type="button" onClick={() => setRole('entreprise')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'entreprise' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>🏢 Entreprise</button>
               </div>
@@ -1992,6 +1999,29 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                       {CATEGORIES_LIST.map(cat => (
                         <option key={cat.id} value={cat.id}>{cat.label}</option>
                       ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {role === 'artiste' && (
+                <div className="mt-2 p-4 bg-orange-50/50 rounded-2xl border border-orange-100 flex flex-col gap-4 animate-fadeIn">
+                  <h3 className="font-bold text-gray-900 text-sm border-b border-orange-200/50 pb-2">🎤 Détails de l'Artiste / Talent</h3>
+                  
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Nom d'artiste / Scène *</label>
+                    <input type="text" placeholder="Ex: Smarty, Floby, Dez Altino..." required value={estName} onChange={e => setEstName(e.target.value)} className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Catégorie artistique</label>
+                    <select required value={estCategory} onChange={e => setEstCategory(e.target.value as any)} className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium text-gray-700">
+                      <option value="Chanteur / Chanteuse">Chanteur / Chanteuse</option>
+                      <option value="DJ">DJ</option>
+                      <option value="Troupe de danse">Troupe de danse</option>
+                      <option value="Humoriste">Humoriste</option>
+                      <option value="Musicien live">Musicien live</option>
+                      <option value="Slameur / Poète">Slameur / Poète</option>
                     </select>
                   </div>
                 </div>

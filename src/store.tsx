@@ -279,7 +279,7 @@ interface AppContextType {
   sendManagerInvitation: (establishmentId: string, targetUserId: string, message?: string, ...args: any[]) => void;
   login: (identifier: string, password?: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  register: (userData: any, password?: string, estData?: any, entrepriseData?: any) => Promise<void>;
+  register: (userData: any, password?: string, estData?: any, entrepriseData?: any, artistData?: any) => Promise<void>;
   logout: () => void;
   upgradeToGerant: (estData: any) => Promise<void>;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;

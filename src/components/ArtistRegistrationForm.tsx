@@ -1,95 +1,240 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { Role } from '../types';
+import { Mic, Music, MapPin, Phone, MessageCircle, Image as ImageIcon, Check } from 'lucide-react';
+import { ARTIST_CATEGORIES, ARTIST_GENRES } from '../types';
 
-export const ArtistRegistrationForm: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
-  const [formData, setFormData] = useState({
-    nomArtiste: '',
-    nomComplet: '',
-    phone: '',
-    email: '',
-    password: '',
-    city: 'Ouagadougou',
-    country: 'Burkina Faso',
-    categorie: 'Chanteur / Chanteuse',
-    bio: '',
-    whatsappPro: ''
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+interface ArtistRegistrationFormProps {
+  initialData?: {
+    nomArtiste?: string;
+    nomComplet?: string;
+    categorieArtistique?: string;
+    genres?: string[];
+    biographie?: string;
+    ville?: string;
+    pays?: string;
+    whatsappPro?: string;
+    telephonePro?: string;
+    photoProfil?: string;
+    photoCouverture?: string;
+  };
+  onSubmit: (artistData: any) => void;
+  isLoading?: boolean;
+}
 
-  const handleSubmit = async (e: React.FormEvent) => {
+export const ArtistRegistrationForm: React.FC<ArtistRegistrationFormProps> = ({
+  initialData = {},
+  onSubmit,
+  isLoading = false
+}) => {
+  const [nomArtiste, setNomArtiste] = useState(initialData.nomArtiste || '');
+  const [nomComplet, setNomComplet] = useState(initialData.nomComplet || '');
+  const [categorieArtistique, setCategorieArtistique] = useState(initialData.categorieArtistique || 'Chanteur / Chanteuse');
+  const [selectedGenres, setSelectedGenres] = useState<string[]>(initialData.genres || ['Afrobeat']);
+  const [biographie, setBiographie] = useState(initialData.biographie || '');
+  const [ville, setVille] = useState(initialData.ville || 'Ouagadougou');
+  const [pays, setPays] = useState(initialData.pays || 'Burkina Faso');
+  const [whatsappPro, setWhatsappPro] = useState(initialData.whatsappPro || '');
+  const [telephonePro, setTelephonePro] = useState(initialData.telephonePro || '');
+  const [photoProfil, setPhotoProfil] = useState(initialData.photoProfil || '');
+  const [photoCouverture, setPhotoCouverture] = useState(initialData.photoCouverture || '');
+
+  const toggleGenre = (genre: string) => {
+    setSelectedGenres(prev =>
+      prev.includes(genre) ? prev.filter(g => g !== genre) : [...prev, genre]
+    );
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      // 1. Auth Sign Up
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            name: formData.nomComplet,
-            role: 'artiste',
-            city: formData.city,
-            country: formData.country
-          }
-        }
-      });
-      if (authError) throw authError;
-
-      // 2. Create Public User Profile
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert({
-          id: authData.user?.id,
-          name: formData.nomComplet,
-          email: formData.email,
-          phone: formData.phone,
-          role: 'artiste',
-          city: formData.city,
-          country: formData.country
-        });
-      if (profileError) throw profileError;
-
-      // 3. Create Artist Profile
-      const { error: artistError } = await supabase
-        .from('artist_profiles')
-        .insert({
-          user_id: authData.user?.id,
-          nom_artiste: formData.nomArtiste,
-          categorie_artistique: formData.categorie,
-          biographie: formData.bio,
-          whatsapp_pro: formData.whatsappPro,
-          ville: formData.city,
-          pays: formData.country
-        });
-      if (artistError) throw artistError;
-
-      onComplete();
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de l\'inscription');
-    } finally {
-      setLoading(false);
+    if (!nomArtiste.trim() || !whatsappPro.trim()) {
+      alert("Veuillez renseigner le nom d'artiste et le WhatsApp professionnel.");
+      return;
     }
+
+    onSubmit({
+      nomArtiste,
+      nomComplet,
+      categorieArtistique,
+      genres: selectedGenres,
+      biographie,
+      ville,
+      pays,
+      whatsappPro,
+      telephonePro,
+      photoProfil,
+      photoCouverture
+    });
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 p-6 bg-white rounded-3xl shadow-sm border border-gray-100">
-      <h2 className="text-xl font-black text-gray-900">Inscription Artiste</h2>
-      {error && <p className="text-red-500 text-xs font-bold">{error}</p>}
-      <input type="text" placeholder="Nom d'artiste *" required className="w-full p-3 bg-gray-50 rounded-xl" onChange={e => setFormData({...formData, nomArtiste: e.target.value})} />
-      <input type="text" placeholder="Nom complet" className="w-full p-3 bg-gray-50 rounded-xl" onChange={e => setFormData({...formData, nomComplet: e.target.value})} />
-      <input type="tel" placeholder="Téléphone *" required className="w-full p-3 bg-gray-50 rounded-xl" onChange={e => setFormData({...formData, phone: e.target.value})} />
-      <input type="email" placeholder="Email" className="w-full p-3 bg-gray-50 rounded-xl" onChange={e => setFormData({...formData, email: e.target.value})} />
-      <input type="password" placeholder="Mot de passe *" required className="w-full p-3 bg-gray-50 rounded-xl" onChange={e => setFormData({...formData, password: e.target.value})} />
-      <input type="text" placeholder="Ville *" required className="w-full p-3 bg-gray-50 rounded-xl" onChange={e => setFormData({...formData, city: e.target.value})} />
-      <select className="w-full p-3 bg-gray-50 rounded-xl" onChange={e => setFormData({...formData, categorie: e.target.value})}>
-        {['Chanteur / Chanteuse', 'Musicien', 'DJ', 'Groupe / Orchestre', 'Humoriste', 'Comédien', 'Danseur', 'Slameur', 'Poète', 'MC / Animateur', 'Influenceur culturel', 'Artiste visuel', 'Autre'].map(c => <option key={c} value={c}>{c}</option>)}
-      </select>
-      <textarea placeholder="Biographie" className="w-full p-3 bg-gray-50 rounded-xl" onChange={e => setFormData({...formData, bio: e.target.value})} />
-      <button type="submit" disabled={loading} className="w-full p-4 bg-orange-600 text-white font-black rounded-xl">{loading ? 'Inscription...' : 'S\'inscrire'}</button>
+    <form onSubmit={handleSubmit} className="space-y-4 w-full bg-white dark:bg-gray-900 p-6 rounded-3xl border border-orange-100 dark:border-gray-800 shadow-sm animate-fadeIn">
+      <div className="flex items-center gap-3 border-b border-gray-100 dark:border-gray-800 pb-3">
+        <div className="w-10 h-10 rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-orange-600 flex items-center justify-center font-bold">
+          <Mic size={20} />
+        </div>
+        <div>
+          <h3 className="text-base font-black text-gray-900 dark:text-white">Profil Artiste ZAKA+</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Renseignez vos informations professionnelles pour les gérants et fans.</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Nom d'artiste *</label>
+          <input
+            type="text"
+            required
+            placeholder="Ex: Smarty, Floby, Dez Altino..."
+            value={nomArtiste}
+            onChange={e => setNomArtiste(e.target.value)}
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-900 dark:text-white outline-none focus:border-orange-500"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Nom complet (État civil)</label>
+          <input
+            type="text"
+            placeholder="Prénoms et Nom réels"
+            value={nomComplet}
+            onChange={e => setNomComplet(e.target.value)}
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-900 dark:text-white outline-none focus:border-orange-500"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Catégorie artistique *</label>
+          <select
+            value={categorieArtistique}
+            onChange={e => setCategorieArtistique(e.target.value)}
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-900 dark:text-white outline-none focus:border-orange-500"
+          >
+            {ARTIST_CATEGORIES.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Ville</label>
+            <input
+              type="text"
+              value={ville}
+              onChange={e => setVille(e.target.value)}
+              className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-900 dark:text-white outline-none"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Pays</label>
+            <input
+              type="text"
+              value={pays}
+              onChange={e => setPays(e.target.value)}
+              className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-900 dark:text-white outline-none"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Genres & Styles musicaux</label>
+        <div className="flex flex-wrap gap-1.5">
+          {ARTIST_GENRES.map(genre => {
+            const isSelected = selectedGenres.includes(genre);
+            return (
+              <button
+                key={genre}
+                type="button"
+                onClick={() => toggleGenre(genre)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  isSelected
+                    ? 'bg-orange-600 text-white shadow-xs'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                }`}
+              >
+                {isSelected && <Check size={12} />}
+                <span>{genre}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+            <MessageCircle size={14} /> WhatsApp Professionnel *
+          </label>
+          <input
+            type="tel"
+            required
+            placeholder="+226 70 00 00 00"
+            value={whatsappPro}
+            onChange={e => setWhatsappPro(e.target.value)}
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-900 dark:text-white outline-none focus:border-orange-500"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+            <Phone size={14} /> Téléphone Manager / Contact
+          </label>
+          <input
+            type="tel"
+            placeholder="+226 70 00 00 00"
+            value={telephonePro}
+            onChange={e => setTelephonePro(e.target.value)}
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-900 dark:text-white outline-none focus:border-orange-500"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Biographie / Présentation</label>
+        <textarea
+          rows={3}
+          placeholder="Racontez votre parcours artistique, vos succès et vos projets..."
+          value={biographie}
+          onChange={e => setBiographie(e.target.value)}
+          className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-900 dark:text-white outline-none focus:border-orange-500 resize-none"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Photo de profil (URL)</label>
+          <input
+            type="url"
+            placeholder="https://..."
+            value={photoProfil}
+            onChange={e => setPhotoProfil(e.target.value)}
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-900 dark:text-white outline-none"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Photo de couverture (URL)</label>
+          <input
+            type="url"
+            placeholder="https://..."
+            value={photoCouverture}
+            onChange={e => setPhotoCouverture(e.target.value)}
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-900 dark:text-white outline-none"
+          />
+        </div>
+      </div>
+
+      <div className="pt-2 flex justify-end">
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-black text-xs rounded-xl shadow-md shadow-orange-600/20 cursor-pointer transition-all disabled:opacity-50"
+        >
+          {isLoading ? 'Enregistrement...' : 'Finaliser le compte Artiste'}
+        </button>
+      </div>
     </form>
   );
 };
