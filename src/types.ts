@@ -7,7 +7,8 @@ export type Role =
   | 'salon_coiffure' 
   | 'annonceur'
   | 'dj'
-  | 'partenaire';
+  | 'partenaire'
+  | 'artiste';
 
 export type Category = 
   | 'maquis' 
@@ -668,3 +669,171 @@ export interface StaffPermissions {
   canManageStocks: boolean;
   canViewReviews: boolean;
 }
+
+// ==========================================
+// ARTISTE MODULE TYPES
+// ==========================================
+
+export type ArtistCategory =
+  | 'Chanteur / Chanteuse'
+  | 'Musicien'
+  | 'DJ'
+  | 'Groupe / Orchestre'
+  | 'Humoriste'
+  | 'Comédien'
+  | 'Danseur'
+  | 'Slameur'
+  | 'Poète'
+  | 'MC / Animateur'
+  | 'Influenceur culturel'
+  | 'Artiste visuel'
+  | 'Autre';
+
+export const ARTIST_CATEGORIES: ArtistCategory[] = [
+  'Chanteur / Chanteuse',
+  'Musicien',
+  'DJ',
+  'Groupe / Orchestre',
+  'Humoriste',
+  'Comédien',
+  'Danseur',
+  'Slameur',
+  'Poète',
+  'MC / Animateur',
+  'Influenceur culturel',
+  'Artiste visuel',
+  'Autre'
+];
+
+export const ARTIST_GENRES = [
+  'Afrobeat',
+  'Afropop',
+  'Hip-hop / Rap',
+  'Reggae / Dancehall',
+  'R&B',
+  'Gospel',
+  'Musique traditionnelle',
+  'Musique mandingue',
+  'Musique burkinabè',
+  'Musique africaine',
+  'Jazz',
+  'Acoustique',
+  'DJ / Électro',
+  'Autre'
+];
+
+export type ArtistVerificationStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
+
+export interface ArtistProfile {
+  id: string;
+  userId: string;
+  nomArtiste: string;
+  nomComplet?: string;
+  categorieArtistique: string;
+  genres: string[];
+  biographie?: string;
+  ville: string;
+  pays: string;
+  photoProfil?: string;
+  photoCouverture?: string;
+  whatsappPro?: string;
+  telephonePro?: string;
+  reseauxSociaux?: {
+    instagram?: string;
+    facebook?: string;
+    tiktok?: string;
+    youtube?: string;
+    twitter?: string;
+  };
+  liensMusicaux?: {
+    spotify?: string;
+    appleMusic?: string;
+    audiomack?: string;
+    boomplay?: string;
+    youtubeMusic?: string;
+    soundcloud?: string;
+  };
+  photos?: string[];
+  videos?: { id: string; title: string; url: string; thumbnail?: string }[];
+  verificationStatus: ArtistVerificationStatus;
+  followersCount?: number;
+  bookingsCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ArtistBooking {
+  id: string;
+  artistId: string;
+  artistName?: string;
+  requesterId: string;
+  requesterName: string;
+  requesterPhone: string;
+  requesterWhatsapp?: string;
+  establishmentId?: string;
+  establishmentName?: string;
+  eventId?: string;
+  eventName: string;
+  eventType: string;
+  date: string;
+  time: string;
+  location: string;
+  city: string;
+  budget?: string | number;
+  description: string;
+  estimatedAttendees?: number | string;
+  status: 'pending' | 'in_discussion' | 'accepted' | 'refused' | 'completed' | 'cancelled';
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ArtistEstablishmentRelation {
+  id: string;
+  artistId: string;
+  artistName?: string;
+  establishmentId: string;
+  establishmentName: string;
+  relationType: 'resident' | 'collab' | 'booking';
+  status: 'pending' | 'accepted' | 'refused' | 'terminated';
+  initiatedBy: 'gerant' | 'artist';
+  notes?: string;
+  startDate?: string;
+  endDate?: string;
+  createdAt: string;
+}
+
+export interface ArtistPost {
+  id: string;
+  artistId: string;
+  artistName: string;
+  artistPhoto?: string;
+  type: 'texte' | 'photo' | 'video' | 'affiche' | 'annonce' | 'musique' | 'evenement' | 'promotion' | 'backstage';
+  title?: string;
+  content: string;
+  mediaUrl?: string;
+  likesCount?: number;
+  commentsCount?: number;
+  sharesCount?: number;
+  createdAt: string;
+}
+
+export interface ArtistStory {
+  id: string;
+  artistId: string;
+  artistName: string;
+  artistPhoto?: string;
+  type: 'photo' | 'video' | 'texte' | 'affiche';
+  mediaUrl?: string;
+  caption?: string;
+  viewsCount?: number;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface ArtistFollow {
+  id: string;
+  artistId: string;
+  userId: string;
+  createdAt: string;
+}
+

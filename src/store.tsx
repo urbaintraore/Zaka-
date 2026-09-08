@@ -31,6 +31,7 @@ import {
   supabase,
   getCurrentUserProfile
 } from './lib/supabase';
+import { saveArtistProfile } from './lib/artistService';
 
 export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371; // km
@@ -830,7 +831,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Simulated reset email
   };
 
-  const register = async (userData: any, password?: string, estData?: any, entrepriseData?: any) => {
+  const register = async (userData: any, password?: string, estData?: any, entrepriseData?: any, artistData?: any) => {
     if (!password) {
       throw new Error("Un mot de passe est obligatoire pour créer un compte réel.");
     }
@@ -877,6 +878,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           rating: 5.0
         };
         setEstablishments(prev => [newEst, ...prev]);
+      }
+
+      if (userData.role === 'artiste' && artistData) {
+        try {
+          await saveArtistProfile({
+            userId: data.user.id,
+            nomArtiste: artistData.nomArtiste || newUser.name,
+            nomComplet: artistData.nomComplet || newUser.name,
+            categorieArtistique: artistData.categorieArtistique || 'Chanteur / Chanteuse',
+            genres: artistData.genres || ['Afrobeat'],
+            biographie: artistData.biographie || '',
+            photoProfil: artistData.photoProfil || '',
+            photoCouverture: artistData.photoCouverture || '',
+            whatsappPro: artistData.whatsappPro || newUser.phone,
+            telephonePro: artistData.telephonePro || newUser.phone,
+            ville: newUser.city,
+            pays: newUser.country
+          });
+        } catch (err) {
+          console.error('Error auto-creating artist profile upon registration:', err);
+        }
       }
       
       setCurrentUser(newUser);

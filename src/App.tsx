@@ -12,6 +12,8 @@ import { GerantDashboard } from './views/GerantDashboard';
 import { EntrepriseDashboard } from './views/EntrepriseDashboard';
 import { AdminDashboard } from './views/AdminDashboard';
 import { HelpView } from './views/HelpView';
+import { ArtistPublicPage } from './views/ArtistPublicPage';
+import { ArtistDashboard } from './views/ArtistDashboard';
 
 export default function App() {
   return (
@@ -28,6 +30,8 @@ export default function App() {
             <Route path="profile" element={<ProfileView />} />
             <Route path="my-establishments" element={<GerantDashboard />} />
             <Route path="entreprise-dashboard" element={<EntrepriseDashboard />} />
+            <Route path="artist-dashboard" element={<ArtistDashboard />} />
+            <Route path="artist/:id" element={<ArtistPublicPage />} />
             <Route path="admin-dashboard" element={<AdminDashboard />} />
             <Route path="help" element={<HelpView />} />
             <Route path="*" element={<Navigate to="/" replace />} />
