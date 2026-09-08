@@ -29,6 +29,7 @@ import { exportReservationsToCSV } from '../utils/exportReservationsCsv';
 import { downloadGuidePDF } from '../utils/downloadGuide';
 import { Tab } from '../components/BottomNav';
 import { QuickFeedbackCard } from '../components/QuickFeedbackCard';
+import { FAQComponent } from '../components/FAQComponent';
 
 interface HelpViewProps {
   onNavigate?: (tab: Tab) => void;
@@ -41,6 +42,7 @@ interface FAQItem {
   question: string;
   answer: React.ReactNode;
   tags: string[];
+  profile: 'user' | 'manager';
 }
 
 export function HelpView({ onNavigate }: HelpViewProps) {
@@ -82,29 +84,16 @@ export function HelpView({ onNavigate }: HelpViewProps) {
       categoryLabel: 'Gestion des Réservations',
       question: 'Comment valider ou refuser une demande de réservation client ?',
       tags: ['validation', 'refus', 'confirmation', 'statut', 'client', 'table'],
+      profile: 'manager',
       answer: (
         <div className="space-y-3 text-sm text-gray-750 dark:text-gray-300">
-          <p>
-            Dès qu'un client réserve une table dans votre établissement, vous recevez une notification en temps réel dans votre tableau de bord gérant :
-          </p>
+          <p>Dès qu'un client réserve une table dans votre établissement, vous recevez une notification en temps réel dans votre tableau de bord gérant :</p>
           <ol className="list-decimal list-inside space-y-2 pl-1 font-medium">
-            <li>
-              Rendez-vous dans votre <strong>Profil / Tableau de bord Gérant</strong>, puis cliquez sur l'onglet <strong className="text-orange-600">Réservations</strong>.
-            </li>
-            <li>
-              Dans la section <em>« Demandes en attente »</em>, consultez les informations clés : nom du client, numéro de téléphone, date, heure, nombre de convives et demandes particulières.
-            </li>
-            <li>
-              Cliquez sur <strong className="text-emerald-600">« Valider la réservation »</strong> pour confirmer la réservation. Le client recevra instantanément une notification confirmant sa table.
-            </li>
-            <li>
-              Si vous êtes complet ou indisponible, cliquez sur <strong className="text-red-600">« Refuser »</strong>. Vous pouvez alors renseigner un motif explicatif pour avertir poliment le client.
-            </li>
+            <li>Rendez-vous dans votre <strong>Profil / Tableau de bord Gérant</strong>, puis cliquez sur l'onglet <strong className="text-orange-600">Réservations</strong>.</li>
+            <li>Dans la section <em>« Demandes en attente »</em>, consultez les informations clés : nom du client, numéro de téléphone, date, heure, nombre de convives et demandes particulières.</li>
+            <li>Cliquez sur <strong className="text-emerald-600">« Valider la réservation »</strong> pour confirmer la réservation. Le client recevra instantanément une notification confirmant sa table.</li>
+            <li>Si vous êtes complet ou indisponible, cliquez sur <strong className="text-red-600">« Refuser »</strong>. Vous pouvez alors renseigner un motif explicatif pour avertir poliment le client.</li>
           </ol>
-          <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 p-3 rounded-xl text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
-            <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <span><strong>Conseil Pro :</strong> Répondez aux demandes dans un délai de 15 minutes pour maximiser la satisfaction client et fidéliser vos convives.</span>
-          </div>
         </div>
       )
     },
@@ -114,21 +103,12 @@ export function HelpView({ onNavigate }: HelpViewProps) {
       categoryLabel: 'Rappels 2h & Alertes',
       question: 'Comment fonctionne le rappel automatique par notification 2 heures avant ?',
       tags: ['rappel', '2h', 'notification', 'automatique', 'presence', 'no-show'],
+      profile: 'user',
       answer: (
         <div className="space-y-3 text-sm text-gray-750 dark:text-gray-300">
-          <p>
-            Zaka+ intègre un <strong>moteur automatisé de rappels push</strong> pour limiter considérablement les « No-shows » (clients qui ne se présentent pas) :
-          </p>
+          <p>Zaka+ intègre un <strong>moteur automatisé de rappels push</strong> pour limiter considérablement les « No-shows » :</p>
           <ul className="space-y-2 list-disc list-inside pl-1">
-            <li>
-              Exactement <strong>2 heures (120 minutes)</strong> avant l'heure prévue de la réservation confirmée, l'application envoie une notification push au client avec le nom de votre établissement et l'heure du repas.
-            </li>
-            <li>
-              Le client peut ouvrir la notification en un clic et reconfirmer sa venue ou appeler directement votre établissement.
-            </li>
-            <li>
-              Aucune action manuelle n'est requise de votre part : le système effectue les vérifications et calculs horaires en tâche de fond.
-            </li>
+            <li>Exactement <strong>2 heures (120 minutes)</strong> avant l'heure prévue de la réservation confirmée, l'application envoie une notification push au client.</li>
           </ul>
         </div>
       )
@@ -139,22 +119,10 @@ export function HelpView({ onNavigate }: HelpViewProps) {
       categoryLabel: 'Exports CSV & Statistiques',
       question: 'Comment exporter mes statistiques de réservations au format Excel / CSV ?',
       tags: ['csv', 'excel', 'export', 'statistiques', 'rapport', 'couverts', 'bilan'],
+      profile: 'manager',
       answer: (
         <div className="space-y-3 text-sm text-gray-750 dark:text-gray-300">
-          <p>
-            Vous pouvez télécharger à tout moment un rapport analytique complet de toutes vos réservations :
-          </p>
-          <ol className="list-decimal list-inside space-y-2 pl-1">
-            <li>Depuis votre <strong>Tableau de bord Gérant</strong> ou depuis la section <strong>Paramètres du Profil</strong>, cliquez sur le bouton <strong className="text-emerald-600">« Exporter CSV »</strong>.</li>
-            <li>Le fichier généré est encodé en <strong>UTF-8 avec BOM</strong> pour s'ouvrir sans aucun problème d'accent dans Microsoft Excel, LibreOffice Calc et Numbers.</li>
-            <li>
-              Le fichier contient 2 sections :
-              <ul className="list-disc list-inside pl-4 mt-1 space-y-1 text-xs text-gray-600 dark:text-gray-400">
-                <li><strong>Synthèse mensuelle :</strong> total réservations, taux de confirmation (%), nombre total de couverts/personnes.</li>
-                <li><strong>Tableau détaillé :</strong> listing complet avec noms, numéros de téléphone, dates, heures, statuts et demandes spécifiques.</li>
-              </ul>
-            </li>
-          </ol>
+          <p>Vous pouvez télécharger à tout moment un rapport analytique complet de toutes vos réservations depuis votre <strong>Tableau de bord Gérant</strong> ou depuis la section <strong>Paramètres du Profil</strong>, en cliquant sur le bouton <strong className="text-emerald-600">« Exporter CSV »</strong>.</p>
         </div>
       )
     },
@@ -164,16 +132,10 @@ export function HelpView({ onNavigate }: HelpViewProps) {
       categoryLabel: 'Mode Hors-ligne (IndexedDB)',
       question: 'Comment fonctionne la consultation des établissements hors connexion avec IndexedDB ?',
       tags: ['offline', 'indexeddb', 'hors-ligne', 'cache', 'connexion', 'internet'],
+      profile: 'user',
       answer: (
         <div className="space-y-3 text-sm text-gray-750 dark:text-gray-300">
-          <p>
-            Zaka+ utilise une technologie avancée de <strong>stockage local structuré (IndexedDB)</strong> pour garantir l'accessibilité permanente des données :
-          </p>
-          <ul className="space-y-2 list-disc list-inside pl-1">
-            <li>Tous les établissements, cartes de menus, photos et coordonnées sont sauvegardés automatiquement dans la base de données IndexedDB de votre navigateur.</li>
-            <li>En cas de coupure de réseau ou de faible couverture 3G/4G, l'application bascule automatiquement sur les données stockées en cache local sans bloquer votre navigation.</li>
-            <li>Dès que la connexion internet est rétablie, les informations se synchronisent automatiquement en arrière-plan avec la base de données centrale.</li>
-          </ul>
+          <p>Zaka+ utilise une technologie avancée de <strong>stockage local structuré (IndexedDB)</strong> pour garantir l'accessibilité permanente des données.</p>
         </div>
       )
     },
@@ -183,16 +145,10 @@ export function HelpView({ onNavigate }: HelpViewProps) {
       categoryLabel: 'Gestion des Réservations',
       question: 'Comment gérer la capacité de mon établissement et éviter le surbooking ?',
       tags: ['capacite', 'tables', 'surbooking', 'places', 'affluence'],
+      profile: 'manager',
       answer: (
         <div className="space-y-3 text-sm text-gray-750 dark:text-gray-300">
-          <p>
-            Pour garantir une expérience optimale, vous disposez d'un contrôle total sur les flux de convives :
-          </p>
-          <ul className="space-y-2 list-disc list-inside pl-1">
-            <li><strong>Indicateur d'affluence en direct :</strong> Ajustez le statut de votre établissement (*Calme*, *Moyen*, *Plein*, *Complet*) depuis votre fiche.</li>
-            <li><strong>Contrôle des réservations :</strong> Vous avez l'entière liberté d'accepter ou refuser chaque demande selon la disponibilité de vos tables en salle ou en terrasse.</li>
-            <li><strong>Contact direct :</strong> Vous pouvez appeler ou envoyer un message au client en un clic si un ajustement d'horaire est nécessaire.</li>
-          </ul>
+          <p>Pour garantir une expérience optimale, vous disposez d'un contrôle total sur les flux de convives.</p>
         </div>
       )
     },
@@ -202,17 +158,10 @@ export function HelpView({ onNavigate }: HelpViewProps) {
       categoryLabel: 'Visibilité & Profil',
       question: 'Comment améliorer la note moyenne et la visibilité de mon établissement ?',
       tags: ['avis', 'notes', 'visibilite', 'etoiles', 'reputation', 'boost'],
+      profile: 'manager',
       answer: (
         <div className="space-y-3 text-sm text-gray-750 dark:text-gray-300">
-          <p>
-            Voici les leviers essentiels pour positionner votre établissement parmi les plus populaires sur Zaka+ :
-          </p>
-          <ul className="space-y-2 list-disc list-inside pl-1">
-            <li><strong>Photos de haute qualité :</strong> Publiez des photos lumineuses et appétissantes de votre cadre et de vos spécialités.</li>
-            <li><strong>Menu du Jour :</strong> Mettez à jour quotidiennement votre menu du jour pour apparaître dans les suggestions d'accueil.</li>
-            <li><strong>Validation rapide des réservations :</strong> Les établissements réactifs bénéficient d'un meilleur engagement client et de recommandations prioritaires.</li>
-            <li><strong>Incitation aux avis :</strong> Encouragez vos clients satisfaits à laisser une note 5 étoiles et un commentaire après leur visite.</li>
-          </ul>
+          <p>Voici les leviers essentiels pour positionner votre établissement parmi les plus populaires sur Zaka+.</p>
         </div>
       )
     },
@@ -222,21 +171,10 @@ export function HelpView({ onNavigate }: HelpViewProps) {
       categoryLabel: 'Paramètres & Affichage',
       question: 'Comment activer le mode sombre ou forcer le mode clair ?',
       tags: ['theme', 'sombre', 'clair', 'dark', 'mode', 'systeme'],
+      profile: 'user',
       answer: (
         <div className="space-y-3 text-sm text-gray-750 dark:text-gray-300">
-          <p>
-            Vous pouvez personnaliser le thème d'affichage selon votre confort visuel :
-          </p>
-          <ul className="space-y-2 list-disc list-inside pl-1">
-            <li><strong>Depuis la barre supérieure :</strong> Cliquez sur l'icône Soleil/Lune pour basculer rapidement entre clair et sombre.</li>
-            <li><strong>Depuis les Paramètres du Profil :</strong> Vous avez accès à un sélecteur à 3 options :
-              <ul className="list-disc list-inside pl-4 mt-1 space-y-1 text-xs text-gray-600 dark:text-gray-400">
-                <li><strong>☀️ Clair :</strong> Force le mode jour lumineux.</li>
-                <li><strong>🌙 Sombre :</strong> Force le mode nuit reposant pour les yeux.</li>
-                <li><strong>⚙️ Auto :</strong> Synchronise automatiquement avec le mode de votre smartphone ou ordinateur.</li>
-              </ul>
-            </li>
-          </ul>
+          <p>Vous pouvez personnaliser le thème d'affichage selon votre confort visuel depuis les paramètres de votre profil.</p>
         </div>
       )
     }
@@ -489,61 +427,7 @@ export function HelpView({ onNavigate }: HelpViewProps) {
 
       {/* FAQ Accordion List */}
       <div className="space-y-3 mb-8">
-        {filteredFaq.length === 0 ? (
-          <div className="bg-white dark:bg-gray-950 border border-gray-150 dark:border-gray-800 rounded-3xl p-8 text-center">
-            <AlertCircle className="w-10 h-10 text-orange-400 mx-auto mb-2 opacity-80" />
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white">Aucun résultat trouvé</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-sm mx-auto">
-              Aucune question ne correspond à votre recherche « {searchQuery} ». Essayez un autre mot-clé ou sélectionnez une autre catégorie.
-            </p>
-            <button
-              type="button"
-              onClick={() => { setSearchQuery(''); setSelectedCategory('all'); }}
-              className="mt-4 px-4 py-2 bg-orange-600 text-white font-bold text-xs rounded-xl shadow-xs hover:bg-orange-700 transition-colors"
-            >
-              Réinitialiser la recherche
-            </button>
-          </div>
-        ) : (
-          filteredFaq.map(item => {
-            const isOpen = !!openItems[item.id];
-            return (
-              <div
-                key={item.id}
-                className="bg-white dark:bg-gray-950 border border-gray-150 dark:border-gray-800 rounded-2xl overflow-hidden shadow-xs transition-all"
-              >
-                <button
-                  type="button"
-                  onClick={() => toggleItem(item.id)}
-                  className="w-full p-4.5 sm:p-5 flex items-center justify-between gap-3 text-left hover:bg-gray-50/70 dark:hover:bg-gray-900/50 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-lg bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0 mt-0.5 text-xs font-black">
-                      ?
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-orange-600 dark:text-orange-400 block mb-0.5">
-                        {item.categoryLabel}
-                      </span>
-                      <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-gray-100 leading-snug">
-                        {item.question}
-                      </h3>
-                    </div>
-                  </div>
-                  <div className="p-1 rounded-lg text-gray-400 bg-gray-100 dark:bg-gray-800 shrink-0">
-                    {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </div>
-                </button>
-
-                {isOpen && (
-                  <div className="px-5 pb-5 pt-1 border-t border-gray-100 dark:border-gray-900 animate-in fade-in duration-150">
-                    {item.answer}
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
+        <FAQComponent faqList={faqList as any} />
       </div>
 
       {/* Formulaire de Feedback Rapide (Signalement / Suggestion) */}

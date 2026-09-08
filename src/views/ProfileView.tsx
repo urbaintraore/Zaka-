@@ -500,7 +500,7 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 <GerantDashboard onLogout={logout} onNavigate={onNavigate} onStartChatWithConv={onStartChatWithConv} />
               )
             ) : subView === 'accounting' ? (
-              <AccountingView onBack={() => setSubView('dashboard')} />
+              <AccountingView establishmentId={establishments.find(e => e.ownerId === currentUser?.id || e.gerantId === currentUser?.id)?.id || establishments[0]?.id || ''} onBack={() => setSubView('dashboard')} />
             ) : (
               <div className="p-4 max-w-lg mx-auto flex flex-col gap-6">
                 {/* Profile Card */}

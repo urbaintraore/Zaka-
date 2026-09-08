@@ -109,6 +109,7 @@ export interface Establishment {
   isEntreprise?: boolean;
   currentSong?: any;
   hairSalonData?: any;
+  invitationCode?: string;
 }
 
 export interface Reservation {
@@ -651,4 +652,19 @@ export interface MenuDuJour {
   isAvailable: boolean;
   createdAt: string;
   items?: { name: string; price: number; isAvailable: boolean }[];
+}
+
+export interface ActivityLog {
+  id: string;
+  type: 'recruitment' | 'expense' | 'stock' | 'system';
+  message: string;
+  timestamp: string;
+  establishmentId: string;
+}
+
+export interface StaffPermissions {
+  canAccessPOS: boolean;
+  canViewAccounting: boolean;
+  canManageStocks: boolean;
+  canViewReviews: boolean;
 }

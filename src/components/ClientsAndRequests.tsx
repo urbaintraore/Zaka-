@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAppStore } from '../store';
 import { Check, X, MessageSquare, User, AlertCircle, Info, Send, Loader2, Award, Gift } from 'lucide-react';
 
-export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWithConv }: { establishmentId: string; onNavigate?: (tab: any) => void; onStartChatWithConv?: (convId: string) => void }) {
+export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWithConv, updateEstablishment }: { establishmentId: string; onNavigate?: (tab: any) => void; onStartChatWithConv?: (convId: string) => void; updateEstablishment: any }) {
   const { 
     currentUser, 
     relationshipRequests, 
@@ -27,7 +27,7 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
   } = useAppStore();
 
   const [selectedClientId, setSelectedClientId] = useState('');
-  const [selectedRole, setSelectedRole] = useState<'client' | 'serveur' | 'caissier' | 'dj'>('client');
+  const [selectedRole, setSelectedRole] = useState<'client' | 'serveur' | 'caissier' | 'dj' | 'vigile' | 'cuisinier' | 'fille_menage'>('client');
   const [managerMessage, setManagerMessage] = useState<Record<string, string>>({});
   const [reviewAmounts, setReviewAmounts] = useState<Record<string, string>>({});
   const [reviewBonusTypes, setReviewBonusTypes] = useState<Record<string, 'bonus' | 'sanction'>>({});
@@ -44,8 +44,8 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isSendingInvitation, setIsSendingInvitation] = useState(false);
-
   const est = establishments.find(e => e.id === establishmentId);
+  const [invitationCode, setInvitationCode] = useState(est?.invitationCode || '');
   
   // Filter relationship requests for this establishment
   const estRelRequests = relationshipRequests.filter(r => r.establishmentId === establishmentId);
@@ -177,7 +177,33 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
         </div>
       )}
 
-      {/* 1. Inviter un nouveau client */}
+      {/* Invitation Code Section */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+        <h4 className="font-bold text-gray-900 text-sm mb-1 flex items-center gap-2">
+          <Gift className="w-4 h-4 text-orange-500" />
+          Code d'invitation personnel
+        </h4>
+        <p className="text-xs text-gray-400 mb-4 font-medium">Générez un code unique pour inviter votre personnel à rejoindre l'établissement.</p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            readOnly
+            value={invitationCode}
+            className="flex-1 px-3 py-2 text-xs bg-gray-50 rounded-xl border border-gray-200 outline-none font-bold text-gray-700"
+            placeholder="Cliquez pour générer..."
+          />
+          <button
+            onClick={() => {
+              const code = 'INV-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+              setInvitationCode(code);
+              updateEstablishment(establishmentId, { invitationCode: code });
+            }}
+            className="px-4 py-2 bg-orange-600 text-white font-bold text-xs rounded-xl"
+          >
+            Générer
+          </button>
+        </div>
+      </div>
       <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
         <h4 className="font-bold text-gray-900 text-sm mb-1 flex items-center gap-2">
           <User className="w-4 h-4 text-orange-500" />
@@ -215,6 +241,9 @@ export function ClientsAndRequests({ establishmentId, onNavigate, onStartChatWit
                 <option value="serveur">Rôle : Serveur / Serveuse 🍽️</option>
                 <option value="caissier">Rôle : Caissier 🛒</option>
                 <option value="dj">Rôle : DJ 🎧</option>
+                <option value="vigile">Rôle : Vigile 👮</option>
+                <option value="cuisinier">Rôle : Cuisinier 👨‍🍳</option>
+                <option value="fille_menage">Rôle : Fille de ménage 🧹</option>
               </select>
             </div>
             <div className="flex gap-2 justify-end">

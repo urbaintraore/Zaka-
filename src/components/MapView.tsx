@@ -114,6 +114,9 @@ export function MapView({ establishments, onEstClick, selectedCategory }: MapVie
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
+        markersLayerRef.current = null;
+        routeLayerRef.current = null;
+        userMarkerRef.current = null;
       }
     };
   }, []);

@@ -16,7 +16,9 @@ import {
   Campaign,
   AdDailyStat,
   AdPayment,
-  AdInvoice
+  AdInvoice,
+  ActivityLog,
+  StaffPermissions
 } from './types';
 import { 
   addReviewToDb, 
@@ -315,6 +317,10 @@ interface AppContextType {
   // Additional Store Types for Recruitment and Friendships
   friendships: any[];
   publications: any[];
+  activityLogs: ActivityLog[];
+  addActivityLog: (log: Omit<ActivityLog, 'id' | 'timestamp'>) => void;
+  staffPermissions: Record<string, StaffPermissions>;
+  updateStaffPermissions: (userId: string, permissions: StaffPermissions) => void;
   addApplication: (app: any) => Promise<void>;
   globalError: any;
   setGlobalError: (err: any) => void;
@@ -451,6 +457,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [friendships, setFriendships] = useState<any[]>([]);
   const [publications, setPublications] = useState<any[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [staffPermissions, setStaffPermissions] = useState<Record<string, StaffPermissions>>({});
   const [globalError, setGlobalError] = useState<any>(null);
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
@@ -1210,6 +1218,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setApplications(prev => [...prev, { ...app, id: `app-${Date.now()}`, date: new Date().toISOString() }]);
   };
 
+  const addActivityLog = (log: Omit<ActivityLog, 'id' | 'timestamp'>) => {
+    setActivityLogs(prev => [{ ...log, id: `log-${Date.now()}`, timestamp: new Date().toISOString() }, ...prev]);
+  };
+
+  const updateStaffPermissions = (userId: string, permissions: StaffPermissions) => {
+    setStaffPermissions(prev => ({ ...prev, [userId]: permissions }));
+  };
+
   const addStockItem = async (item: any) => {
     setStocks(prev => [...prev, { ...item, id: `stock-${Date.now()}`, createdAt: new Date().toISOString() }]);
   };
@@ -1265,6 +1281,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       applications,
       friendships,
       publications,
+      activityLogs,
+      addActivityLog,
+      staffPermissions,
+      updateStaffPermissions,
       addApplication,
       globalError,
       setGlobalError,

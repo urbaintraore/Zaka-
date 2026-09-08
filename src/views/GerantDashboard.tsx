@@ -4,12 +4,16 @@ import { Establishment, CATEGORIES_LIST, Category, Publication } from '../types'
 import { 
   Plus, Edit2, Trash2, Store, Calendar, ShoppingBag, LogOut, Star, 
   MessageSquare, TrendingUp, Sparkles, Download, Image as ImageIcon, 
-  Users, Clock, HelpCircle, CheckCircle, Megaphone, FileText, Package, Boxes, AlertTriangle
+  Users, Clock, HelpCircle, CheckCircle, Megaphone, FileText, Package, Boxes, AlertTriangle, Bell
 } from 'lucide-react';
+import { GerantFAB } from '../components/GerantFAB';
+import { ActivityLogComponent } from '../components/ActivityLog';
 import { ZakaAdsManager } from '../components/ads/ZakaAdsManager';
 import { PointOfSaleView } from '../components/PointOfSaleView';
 import { StockManagerView } from '../components/StockManagerView';
 import { AccountingView } from '../components/AccountingView';
+import { StaffPermissionManager } from '../components/StaffPermissionManager';
+import { AddExpenseForm } from '../components/AddExpenseForm';
 import { ClientsAndRequests } from '../components/ClientsAndRequests';
 import { TableauDeBordRH } from '../components/TableauDeBordRH';
 import { AvisUtilisateurs } from '../components/AvisUtilisateurs';
@@ -29,7 +33,10 @@ export function GerantDashboard(props: {
     reservations, 
     takeawayOrders,
     reviews,
-    publications 
+    publications,
+    activityLogs,
+    notifications,
+    relationshipRequests 
   } = useAppStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -38,8 +45,8 @@ export function GerantDashboard(props: {
   
   // Sub-tabs
   const [activeSubTab, setActiveSubTab] = useState<
-    'dashboard' | 'pos' | 'stocks' | 'accounting' | 'marketing' | 'rh' | 'clients' | 'reviews' | 'faq'
-  >('dashboard');
+    'pos' | 'stocks' | 'accounting' | 'reviews' | 'rh'
+  >('pos');
 
   // Active establishment for management
   const activeEstablishment = establishments.find(
@@ -75,6 +82,7 @@ export function GerantDashboard(props: {
 
   // Publication Modal States
   const [showPubModal, setShowPubModal] = useState(false);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [pubTitle, setPubTitle] = useState('');
   const [pubType, setPubType] = useState<'promo' | 'evenement' | 'recrutement' | 'communique'>('promo');
   const [pubContent, setPubContent] = useState('');
@@ -283,6 +291,13 @@ export function GerantDashboard(props: {
           >
             <Download size={18} />
           </button>
+          {/* Notification Badge */}
+          <button className="p-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl relative">
+            <Bell size={18} />
+            {notifications.filter(n => !n.read).length > 0 && (
+              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
+            )}
+          </button>
           {props.onLogout && (
             <button 
               onClick={props.onLogout} 
@@ -294,6 +309,20 @@ export function GerantDashboard(props: {
           )}
         </div>
       </div>
+      <ActivityLogComponent logs={activityLogs.filter(log => log.establishmentId === activeEstablishment?.id)} />
+      <GerantFAB onAction={(action) => {
+        if (action === 'expense') setShowExpenseModal(true);
+        else alert(`Action triggered: ${action}`);
+      }} />
+
+      {/* Expense Modal */}
+      {showExpenseModal && activeEstablishment && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+          <div className="bg-white p-6 rounded-3xl w-full max-w-md">
+            <AddExpenseForm establishmentId={activeEstablishment.id} onClose={() => setShowExpenseModal(false)} />
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -346,15 +375,11 @@ export function GerantDashboard(props: {
         <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-2 shadow-xs">
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
             {[
-              { id: 'dashboard', label: 'Dashboard', icon: Store },
               { id: 'pos', label: 'Caisse', icon: ShoppingBag },
               { id: 'stocks', label: 'Stocks', icon: Boxes },
               { id: 'accounting', label: 'Dépenses', icon: TrendingUp },
-              { id: 'marketing', label: 'Marketing', icon: Megaphone },
-              { id: 'rh', label: 'Personnel', icon: Users },
-              { id: 'clients', label: 'Staff/Clients', icon: Users },
               { id: 'reviews', label: 'Avis', icon: Star },
-              { id: 'faq', label: 'FAQ', icon: HelpCircle },
+              { id: 'rh', label: 'Personnel', icon: Users },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -374,140 +399,6 @@ export function GerantDashboard(props: {
         
         {/* Sub-tabs if needed could be added here */}
       </div>
-
-      {/* 1. TABLEAU DE BORD TAB */}
-      {activeSubTab === 'dashboard' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-              <Store size={18} className="text-orange-600" />
-              <span>Tableau de Bord</span>
-            </h3>
-            { !activeEstablishment && (
-                <button
-                onClick={() => {
-                    setEditingEst(null);
-                    setName('');
-                    setCategory('maquis');
-                    setCreationStep('category');
-                    setShowAddModal(true);
-                }}
-                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-orange-600/15"
-                >
-                <Plus size={16} />
-                <span>Créer mon établissement</span>
-                </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 gap-4">
-            {activeEstablishment && (
-              <div key={activeEstablishment.id} className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 p-5 space-y-4 shadow-xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-2xl bg-orange-100 dark:bg-orange-950 flex items-center justify-center text-orange-600 dark:text-orange-400 font-black overflow-hidden flex-shrink-0">
-                      {activeEstablishment.photoUrl || activeEstablishment.photos?.[0] ? (
-                        <img src={activeEstablishment.photoUrl || activeEstablishment.photos?.[0]} alt={activeEstablishment.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <Store size={28} />
-                      )}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-base font-black text-gray-900 dark:text-white">{activeEstablishment.name}</h4>
-                        <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 text-[10px] font-black rounded-md uppercase tracking-wider">
-                          Validé
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 capitalize mt-0.5">
-                        {activeEstablishment.category} • {activeEstablishment.neighborhood || 'Quartier'}, {activeEstablishment.city || 'Ouagadougou'} {activeEstablishment.country ? `(${activeEstablishment.country})` : ''}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setSelectedEstForBoost(activeEstablishment);
-                        setShowBoostModal(true);
-                      }}
-                      className="px-3.5 py-1.5 bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1"
-                    >
-                      <Sparkles size={14} />
-                      <span>Booster</span>
-                    </button>
-                    <button
-                      onClick={() => startEdit(activeEstablishment)}
-                      className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1"
-                    >
-                      <Edit2 size={14} />
-                      <span>Modifier</span>
-                    </button>
-                    <button
-                      onClick={() => deleteEstablishment(activeEstablishment.id)}
-                      className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1"
-                    >
-                      <Trash2 size={14} />
-                      <span>Supprimer</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                  <div className="p-3 bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-950 text-orange-600 flex items-center justify-center">
-                      <TrendingUp size={16} />
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-gray-400 uppercase font-bold">Affluence</div>
-                      <div className="text-xs font-black text-gray-800 dark:text-gray-200">Normale</div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-600 flex items-center justify-center">
-                      <Star size={16} className="fill-amber-400" />
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-gray-400 uppercase font-bold">Note Client</div>
-                      <div className="text-xs font-black text-gray-800 dark:text-gray-200">
-                        { (() => {
-                          const estReviews = reviews.filter(r => r.establishmentId === activeEstablishment.id);
-                          return estReviews.length > 0 ? `${(estReviews.reduce((s, r) => s + r.rating, 0) / estReviews.length).toFixed(1)} (${estReviews.length})` : 'Aucun avis';
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-600 flex items-center justify-center">
-                      <Calendar size={16} />
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-gray-400 uppercase font-bold">Réservations</div>
-                      <div className="text-xs font-black text-gray-800 dark:text-gray-200">
-                        Ouvertes ({reservations.filter(r => r.establishmentId === activeEstablishment.id).length})
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-gray-50 dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-600 flex items-center justify-center">
-                      <ImageIcon size={16} />
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-gray-400 uppercase font-bold">Galerie</div>
-                      <div className="text-xs font-black text-gray-800 dark:text-gray-200">
-                        {activeEstablishment.photos?.length || 0} photo{(activeEstablishment.photos?.length || 0) > 1 ? 's' : ''}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Caisse Tab */}
       {activeSubTab === 'pos' && (
@@ -548,349 +439,36 @@ export function GerantDashboard(props: {
         </div>
       )}
 
-      {/* 3. PUBLICATIONS TAB */}
-      {activeSubTab === 'marketing' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-                <Megaphone size={18} className="text-orange-600" />
-                <span>Publications : Promo / Bon Plan, Évènement, Recrutement, Communiqué</span>
-              </h3>
-              <p className="text-xs text-gray-500 mt-0.5">Diffusez vos annonces pour Maquis, Bars, Restaurants, Hôtels, Boîtes et Salons de coiffure/beauté.</p>
-            </div>
-            {activeEstablishment && (
-              <button
-                onClick={() => setShowPubModal(true)}
-                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-orange-600/15"
-              >
-                <Plus size={16} />
-                <span>Nouvelle Publication</span>
-              </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {myPublications.length > 0 ? (
-              myPublications.map(pub => (
-                <div key={pub.id} className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 p-5 space-y-3 shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="px-2.5 py-1 bg-orange-50 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 font-black text-[10px] rounded-lg uppercase tracking-wider">
-                      {pub.type || 'Promo'}
-                    </span>
-                    <button
-                      onClick={() => handleDeletePublication(pub.id)}
-                      className="text-gray-400 hover:text-red-600 font-bold text-xs cursor-pointer"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                  {pub.imageUrl && (
-                    <div className="w-full h-36 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-950">
-                      <img src={pub.imageUrl} alt={pub.title} className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                  <h4 className="text-sm font-black text-gray-900 dark:text-white">{pub.title}</h4>
-                  <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-3">{pub.description}</p>
-                </div>
-              ))
-            ) : (
-              <div className="col-span-2 text-center py-12 bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800">
-                <Megaphone size={36} className="mx-auto text-gray-400 mb-2" />
-                <p className="text-xs font-bold text-gray-600 dark:text-gray-400">Aucune publication active pour le moment. Cliquez sur "Nouvelle Publication" pour en créer une.</p>
-              </div>
-            )}
-          </div>
+      {/* Avis Tab */}
+      {activeSubTab === 'reviews' && (
+        <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+          <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+            <Star size={18} className="text-orange-600" />
+            <span>Avis Clients</span>
+          </h3>
+          {activeEstablishment ? (
+            <AvisUtilisateurs establishmentId={activeEstablishment.id} />
+          ) : <p>Veuillez configurer votre établissement.</p>}
         </div>
       )}
 
-      {/* Clients & Staff Tab */}
-      {activeSubTab === 'clients' && (
+      {/* Personnel Tab */}
+      {activeSubTab === 'rh' && (
         <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
           <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
             <Users size={18} className="text-orange-600" />
-            <span>Staff & Clients</span>
+            <span>Staff & Permissions</span>
           </h3>
+          <StaffPermissionManager staffMembers={relationshipRequests.filter(r => r.status === 'accepted').map(r => ({ id: r.fromUserId, name: r.fromUserName }))} />
           {activeEstablishment ? (
-            <ClientsAndRequests 
+            <TableauDeBordRH 
               establishmentId={activeEstablishment.id} 
-              onNavigate={props.onNavigate}
-              onStartChatWithConv={props.onStartChatWithConv}
+              establishmentName={activeEstablishment.name} 
             />
           ) : <p>Veuillez configurer votre établissement.</p>}
         </div>
       )}
 
-      {/* FAQ Tab */}
-      {activeSubTab === 'faq' && (
-        <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
-          <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-            <HelpCircle size={18} className="text-orange-600" />
-            <span>Foire Aux Questions</span>
-          </h3>
-          <div className="space-y-3">
-              {faqList.map((item, idx) => (
-                <div key={idx} className="border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden bg-gray-50 dark:bg-gray-950">
-                  <button
-                    onClick={() => setOpenFaqIndex(openFaqIndex === idx ? null : idx)}
-                    className="w-full px-4 py-3.5 text-left font-bold text-xs text-gray-900 dark:text-white flex items-center justify-between cursor-pointer"
-                  >
-                    <span>{item.q}</span>
-                    <span className="text-orange-600 font-bold">{openFaqIndex === idx ? '−' : '+'}</span>
-                  </button>
-                  {openFaqIndex === idx && (
-                    <div className="px-4 pb-4 text-xs text-gray-600 dark:text-gray-300 border-t border-gray-100 dark:border-gray-800 pt-3 leading-relaxed">
-                      {item.a}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-        </div>
-      )}
-
-      {/* 5. POINTAGE & RH TAB */}
-      {activeSubTab === 'rh' && (
-        <div className="space-y-6">
-          {activeEstablishment ? (
-            <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
-              <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-                <Clock size={18} className="text-orange-600" />
-                <span>Système de Pointage du Personnel & Export de Rapport (RH)</span>
-              </h3>
-              <TableauDeBordRH 
-                establishmentId={activeEstablishment.id} 
-                establishmentName={activeEstablishment.name} 
-              />
-            </div>
-          ) : (
-            <div className="text-center py-12 bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800">
-              <Store size={40} className="mx-auto text-gray-400 mb-2" />
-              <p className="text-sm font-bold text-gray-700 dark:text-gray-300">Veuillez d'abord sélectionner ou créer un établissement.</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Add / Edit Establishment Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 max-w-xl w-full space-y-5 border border-gray-200 dark:border-gray-800 shadow-2xl my-8">
-            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-4">
-              <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
-                <span>{editingEst ? 'Modifier l\'établissement' : 'Nouvel Établissement'}</span>
-              </h3>
-              <button 
-                onClick={() => setShowAddModal(false)}
-                className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            {(!activeEstablishment || editingEst) && (
-              <form onSubmit={handleSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
-                {(!editingEst && creationStep === 'category') ? (
-                  <div>
-                    <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Choisir le type d'établissement</label>
-                    <select
-                      value={category}
-                      onChange={e => setCategory(e.target.value as Category)}
-                      className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
-                    >
-                      {CATEGORIES_LIST.map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <>
-                    <div>
-                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Nom de l'établissement</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Ex: Le Verdun, VIP Club..."
-                        value={name}
-                        onChange={e => setName(e.target.value)}
-                        className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Description de l'établissement (optionnel)</label>
-                      <textarea
-                        rows={3}
-                        placeholder="Décrivez brièvement votre établissement..."
-                        value={description}
-                        onChange={e => setDescription(e.target.value)}
-                        className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Image de couverture (URL ou fichier)</label>
-                      <div className="flex gap-2 mt-1">
-                        <input
-                          type="url"
-                          placeholder="https://images.unsplash.com/..."
-                          value={photoUrl}
-                          onChange={e => setPhotoUrl(e.target.value)}
-                          className="flex-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
-                        />
-                        <label className="px-3 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-2xl text-xs font-bold cursor-pointer flex items-center gap-1.5 whitespace-nowrap">
-                          📁 Choisir
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            className="hidden" 
-                            onChange={e => {
-                              if (e.target.files && e.target.files[0]) {
-                                const file = e.target.files[0];
-                                const reader = new FileReader();
-                                reader.onload = (uploadEvent) => {
-                                  if (uploadEvent.target?.result) {
-                                    setPhotoUrl(uploadEvent.target.result as string);
-                                  }
-                                };
-                                reader.readAsDataURL(file);
-                              }
-                            }} 
-                          />
-                        </label>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Pays</label>
-                        <input
-                          type="text"
-                          value={country}
-                          onChange={e => setCountry(e.target.value)}
-                          className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Ville</label>
-                        <input
-                          type="text"
-                          value={city}
-                          onChange={e => setCity(e.target.value)}
-                          className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Quartier</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: KOURITENGA, Ouaga 2000"
-                        value={neighborhood}
-                        onChange={e => setNeighborhood(e.target.value)}
-                        className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none focus:border-orange-500"
-                      />
-                    </div>
-                  </>
-                )}
-
-                <div className="pt-3 border-t border-gray-100 dark:border-gray-800">
-                  <button
-                    type="submit"
-                    className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl cursor-pointer shadow-lg shadow-orange-600/20"
-                  >
-                    {(!editingEst && creationStep === 'category') ? 'Suivant' : (editingEst ? 'Mettre à jour l\'établissement' : 'Créer l\'établissement')}
-                  </button>
-                </div>
-              </form>
-            )}</div>
-        </div>
-      )}
-
-      {/* New Publication Modal */}
-      {showPubModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 max-w-lg w-full space-y-4 border border-gray-200 dark:border-gray-800 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
-              <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-                <Megaphone className="text-orange-600" size={18} />
-                <span>Nouvelle Publication</span>
-              </h3>
-              <button onClick={() => setShowPubModal(false)} className="text-gray-400 font-bold text-lg cursor-pointer">✕</button>
-            </div>
-            <form onSubmit={handleCreatePublication} className="space-y-4">
-              <div>
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Type de publication</label>
-                <select
-                  value={pubType}
-                  onChange={e => setPubType(e.target.value as any)}
-                  className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none"
-                >
-                  <option value="promo">Promo / Bon Plan</option>
-                  <option value="evenement">Évènement</option>
-                  <option value="recrutement">Recrutement</option>
-                  <option value="communique">Communiqué</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Titre de l'annonce</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Soirée Live DJ ce samedi !"
-                  value={pubTitle}
-                  onChange={e => setPubTitle(e.target.value)}
-                  className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Contenu / Description</label>
-                <textarea
-                  rows={4}
-                  required
-                  placeholder="Détails de l'offre, de l'événement ou du poste..."
-                  value={pubContent}
-                  onChange={e => setPubContent(e.target.value)}
-                  className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">URL de l'image (optionnel)</label>
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/..."
-                  value={pubMediaUrl}
-                  onChange={e => setPubMediaUrl(e.target.value)}
-                  className="w-full mt-1 px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white rounded-2xl text-xs font-medium outline-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl cursor-pointer shadow-lg shadow-orange-600/20"
-              >
-                Publier l'annonce
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Boost Modal */}
-      {showBoostModal && selectedEstForBoost && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 max-w-lg w-full space-y-4 border border-gray-200 dark:border-gray-800 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
-              <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-                <Sparkles className="text-orange-600" size={18} />
-                <span>Booster {selectedEstForBoost.name}</span>
-              </h3>
-              <button onClick={() => setShowBoostModal(false)} className="text-gray-400 font-bold text-lg cursor-pointer">✕</button>
-            </div>
-            <ZakaAdsManager />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
