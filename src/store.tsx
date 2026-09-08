@@ -318,6 +318,8 @@ interface AppContextType {
   // Additional Store Types for Recruitment and Friendships
   friendships: any[];
   publications: any[];
+  events: any[];
+  addEvent: (ev: any) => void;
   activityLogs: ActivityLog[];
   addActivityLog: (log: Omit<ActivityLog, 'id' | 'timestamp'>) => void;
   staffPermissions: Record<string, StaffPermissions>;
@@ -458,6 +460,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [friendships, setFriendships] = useState<any[]>([]);
   const [publications, setPublications] = useState<any[]>([]);
+  const [events, setEvents] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('zaka_events');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const addEvent = (ev: any) => {
+    setEvents(prev => {
+      const updated = [ev, ...prev];
+      try {
+        localStorage.setItem('zaka_events', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [staffPermissions, setStaffPermissions] = useState<Record<string, StaffPermissions>>({});
   const [globalError, setGlobalError] = useState<any>(null);
@@ -1414,7 +1434,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       processAdPayment,
       validateAdPayment,
       validateCampaignByAdmin,
-      updateCampaignStatus
+      updateCampaignStatus,
+      events,
+      addEvent
     }}>
       {children}
     </AppContext.Provider>

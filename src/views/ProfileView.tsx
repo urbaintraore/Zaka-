@@ -6,6 +6,7 @@ import { GroupOutingModal } from '../components/GroupOutingModal';
 import { GerantDashboard } from './GerantDashboard';
 import { AdminDashboard } from './AdminDashboard';
 import { EntrepriseDashboard } from './EntrepriseDashboard';
+import { ArtistDashboard } from './ArtistDashboard';
 import { CaissierView } from '../components/CaissierView';
 import { ZakaAdsDashboard } from '../components/ZakaAdsDashboard';
 import { useInstallApp } from '../hooks/useInstallApp';
@@ -232,6 +233,10 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
     const assignedCashierEsts = establishments.filter(e => cashierRequests.some(r => r.establishmentId === e.id));
     const isAssignedCashier = !isOwnerOrGerant && cashierRequests.length > 0;
     const isCashierUser = !isOwnerOrGerant && ((currentUser.role as any) === 'caissier' || isAssignedCashier || (currentUser as any).isCaissier === true);
+
+    if (currentUser.role === 'artiste') {
+      return <ArtistDashboard onLogout={logout} />;
+    }
 
     // 1. DEDICATED CASHIER EXPERIENCE (FOR CASHIER ROLE ONLY, NOT GERANTS/ADMINS)
     // Cashiers must NEVER access ZAKA Ads or advertisement creation
