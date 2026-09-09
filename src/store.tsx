@@ -250,6 +250,26 @@ const INITIAL_USERS: UserProfile[] = [
     city: 'Ouagadougou',
     country: 'Burkina Faso',
     points: 1000
+  },
+  {
+    id: 'u-artist-smart-key',
+    name: 'Smarty (Artiste)',
+    email: 'artiste@zaka.bf',
+    phone: '+226 70 00 00 01',
+    role: 'artiste',
+    city: 'Ouagadougou',
+    country: 'Burkina Faso',
+    points: 1200
+  },
+  {
+    id: 'u-artist-dj-flo',
+    name: 'DJ Flo Mix',
+    email: 'djflo@zaka.bf',
+    phone: '+226 76 00 00 02',
+    role: 'artiste',
+    city: 'Ouagadougou',
+    country: 'Burkina Faso',
+    points: 980
   }
 ];
 

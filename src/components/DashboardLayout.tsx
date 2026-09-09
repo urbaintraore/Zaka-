@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store';
-import { Home, Compass, Heart, Briefcase, MessageSquare, User, Sun, Moon, Bell, HelpCircle } from 'lucide-react';
+import { Home, Compass, Heart, Briefcase, MessageSquare, User, Sun, Moon, Bell, HelpCircle, Mic } from 'lucide-react';
 import { NotificationCenterModal } from './NotificationCenterModal';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -129,6 +129,22 @@ export function DashboardLayout() {
               <span>Profil</span>
             </NavLink>
 
+            {currentUser?.role === 'artiste' && (
+              <NavLink
+                to="/artist-dashboard"
+                className={({ isActive }) =>
+                  `px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                    isActive
+                      ? 'bg-white dark:bg-gray-900 text-orange-600 dark:text-orange-400 shadow-xs'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`
+                }
+              >
+                <Mic size={15} />
+                <span>Espace Artiste</span>
+              </NavLink>
+            )}
+
             <NavLink
               to="/help"
               className={({ isActive }) =>
@@ -157,6 +173,21 @@ export function DashboardLayout() {
                 </span>
               </div>
             )}
+
+            {/* Aide / Support Quick Access */}
+            <NavLink
+              to="/help"
+              className={({ isActive }) =>
+                `p-2.5 rounded-xl transition-colors cursor-pointer flex items-center justify-center ${
+                  isActive 
+                    ? 'bg-orange-600 text-white shadow-xs' 
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400'
+                }`
+              }
+              title="Aide & Support (Pitch Deck)"
+            >
+              <HelpCircle size={18} />
+            </NavLink>
 
             {/* Notification Bell */}
             <button

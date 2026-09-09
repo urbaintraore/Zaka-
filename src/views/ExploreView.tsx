@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppStore, calculateDistanceKm } from '../store';
-import { CATEGORIES_LIST, Category, Establishment, getCategoryLabel } from '../types';
-import { Search, MapPin, Star, Calendar, MessageSquare, Tag, Phone, Sparkles, Filter, SlidersHorizontal, Map, Grid, Crosshair, HelpCircle, Heart, Users, UserPlus, Check, Clock, X } from 'lucide-react';
+import { CATEGORIES_LIST, Category, Establishment, getCategoryLabel, ArtistProfile } from '../types';
+import { Search, MapPin, Star, Calendar, MessageSquare, Tag, Phone, Sparkles, Filter, SlidersHorizontal, Map, Grid, Crosshair, HelpCircle, Heart, Users, UserPlus, Check, Clock, X, Mic, Music, ArrowRight, ExternalLink } from 'lucide-react';
 import { RateVisitedEstablishmentModal } from '../components/RateVisitedEstablishmentModal';
+import { fetchAllArtists } from '../lib/artistService';
 
 export function ExploreView() {
+  const navigate = useNavigate();
   const { establishments, toggleFavorite, favorites, currentUser, addReservation, userLocation, setUserLocation, users, relationshipRequests, sendFriendRequest, acceptFriendRequest, declineFriendRequest, friendships } = useAppStore();
   const [searchTerm, setSearchTerm] = useState('');
-  const [exploreTab, setExploreTab] = useState<'establishments' | 'members'>('establishments');
+  const [exploreTab, setExploreTab] = useState<'establishments' | 'members' | 'artists'>('establishments');
+  const [artistsList, setArtistsList] = useState<ArtistProfile[]>([]);
+  const [artistCategoryFilter, setArtistCategoryFilter] = useState('Tous');
   const [memberSearch, setMemberSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'all'>('all');
   const [selectedCity, setSelectedCity] = useState<string>('all');
@@ -36,6 +41,10 @@ export function ExploreView() {
       setSortBy('distance');
     }
   }, [userLocation]);
+
+  useEffect(() => {
+    fetchAllArtists().then(list => setArtistsList(list));
+  }, []);
 
   const handleActivateGeolocation = () => {
     if (navigator.geolocation) {
@@ -218,29 +227,40 @@ export function ExploreView() {
         </div>
       </div>
 
-      {/* Explore Sub-Tabs: Establishments vs Members & Friendship Requests */}
-      <div className="flex bg-gray-100 dark:bg-gray-850 p-1 rounded-2xl max-w-md mx-auto">
+      {/* Explore Sub-Tabs: Establishments vs Members vs Artists */}
+      <div className="flex bg-gray-100 dark:bg-gray-850 p-1 rounded-2xl max-w-lg mx-auto">
         <button
           onClick={() => setExploreTab('establishments')}
-          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
             exploreTab === 'establishments'
               ? 'bg-white dark:bg-gray-900 text-orange-600 shadow-sm font-black'
               : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
           }`}
         >
           <MapPin size={15} />
-          <span>Lieux & Établissements</span>
+          <span className="truncate">Lieux</span>
         </button>
         <button
           onClick={() => setExploreTab('members')}
-          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+          className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
             exploreTab === 'members'
               ? 'bg-white dark:bg-gray-900 text-orange-600 shadow-sm font-black'
               : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
           }`}
         >
           <Users size={15} />
-          <span>Membres & Amis 🤝</span>
+          <span className="truncate">Membres</span>
+        </button>
+        <button
+          onClick={() => setExploreTab('artists')}
+          className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            exploreTab === 'artists'
+              ? 'bg-white dark:bg-gray-900 text-orange-600 shadow-sm font-black'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+          }`}
+        >
+          <Mic size={15} />
+          <span className="truncate">Artistes 🎤</span>
         </button>
       </div>
 
@@ -397,6 +417,128 @@ export function ExploreView() {
                 });
               })()}
             </div>
+          </div>
+        </div>
+      ) : exploreTab === 'artists' ? (
+        <div className="space-y-6">
+          {/* Artist Promotion / Header Banner */}
+          <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-500 rounded-3xl p-6 text-white shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2.5 py-1 rounded-full inline-block mb-2">
+                🎤 Scène Artistique Zaka+
+              </span>
+              <h3 className="text-xl sm:text-2xl font-black">Découvrez & Réservez les Talents</h3>
+              <p className="text-xs sm:text-sm text-orange-100 mt-1 max-w-xl">
+                Chanteurs, DJs, humoristes, groupes live : trouvez les meilleurs artistes pour animer vos événements, soirées privées et établissements.
+              </p>
+            </div>
+            {currentUser?.role === 'artiste' ? (
+              <button
+                onClick={() => navigate('/artist-dashboard')}
+                className="px-5 py-3 bg-white text-orange-600 hover:bg-orange-50 rounded-2xl text-xs font-black uppercase tracking-wide transition-all shadow-md flex items-center gap-2 cursor-pointer flex-shrink-0"
+              >
+                <Mic size={16} />
+                <span>Mon Espace Artiste</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate('/profile')}
+                className="px-5 py-3 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white rounded-2xl text-xs font-black uppercase tracking-wide transition-all border border-white/30 flex items-center gap-2 cursor-pointer flex-shrink-0"
+              >
+                <span>Vous êtes artiste ? Rejoignez-nous</span>
+              </button>
+            )}
+          </div>
+
+          {/* Artist Category Filter Pills */}
+          <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
+            {['Tous', 'Chanteur / Chanteuse', 'DJ', 'Troupe de danse', 'Humoriste', 'Musicien live', 'Slameur / Poète'].map(cat => (
+              <button
+                key={cat}
+                onClick={() => setArtistCategoryFilter(cat)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                  artistCategoryFilter === cat
+                    ? 'bg-orange-600 text-white shadow-xs font-black'
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Artist Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {artistsList
+              .filter(a => artistCategoryFilter === 'Tous' || a.categorieArtistique === artistCategoryFilter)
+              .filter(a => !searchTerm || a.nomArtiste.toLowerCase().includes(searchTerm.toLowerCase()) || (a.biographie && a.biographie.toLowerCase().includes(searchTerm.toLowerCase())))
+              .map(art => (
+                <div
+                  key={art.id}
+                  className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col group"
+                >
+                  <div className="relative h-44 overflow-hidden bg-gray-100 dark:bg-gray-850">
+                    <img
+                      src={art.photoProfil || art.photoCouverture || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=600'}
+                      alt={art.nomArtiste}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                    
+                    <div className="absolute top-3 left-3">
+                      <span className="bg-orange-600 text-white text-[10px] font-black uppercase px-2.5 py-1 rounded-lg shadow-xs flex items-center gap-1">
+                        <Mic size={10} />
+                        {art.categorieArtistique}
+                      </span>
+                    </div>
+
+                    {art.verificationStatus === 'verified' && (
+                      <div className="absolute top-3 right-3">
+                        <span className="bg-blue-500 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1">
+                          ✓ Vérifié
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="absolute bottom-3 left-4 right-4 text-white">
+                      <h4 className="text-lg font-black tracking-tight">{art.nomArtiste}</h4>
+                      <p className="text-xs text-orange-200 flex items-center gap-1">
+                        <MapPin size={11} /> {art.ville}, {art.pays}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 flex-1 flex flex-col justify-between gap-3">
+                    <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-2">
+                      {art.biographie}
+                    </p>
+
+                    {art.genres && art.genres.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {art.genres.slice(0, 3).map((g, idx) => (
+                          <span key={idx} className="text-[10px] font-bold bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-md">
+                            {g}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
+                      <div className="text-[11px] font-bold text-gray-500 dark:text-gray-400">
+                        <span className="font-extrabold text-gray-900 dark:text-white">{art.followersCount || 0}</span> abonnés
+                      </div>
+
+                      <button
+                        onClick={() => navigate(`/artist/${art.id}`)}
+                        className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-black rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <span>Voir profil</span>
+                        <ArrowRight size={13} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
           </div>
         </div>
       ) : (

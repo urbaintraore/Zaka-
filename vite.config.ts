@@ -8,6 +8,12 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 3000,
   },
+  resolve: {
+    dedupe: ['react', 'react-dom', 'react-is'],
+  },
+  optimizeDeps: {
+    include: ['react-is', 'recharts'],
+  },
   build: {
     outDir: 'dist',
     sourcemap: false,
