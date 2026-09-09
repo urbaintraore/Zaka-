@@ -68,9 +68,18 @@ export function PointOfSaleView({ establishmentId, cashierName }: PointOfSaleVie
   };
 
   // Categorize drink/food
-  const getItemCategory = (name: string): 'bieres' | 'liqueurs' | 'softs' | 'nourriture' => {
-    const n = name.toLowerCase();
-    if (n.includes('poulet') || n.includes('poisson') || n.includes('grill') || n.includes('frite') || n.includes('attiéké') || n.includes('alloco') || n.includes('plat') || n.includes('brochette') || n.includes('viande') || n.includes('porc') || n.includes('riz')) {
+  const getItemCategory = (item: StockItem): 'bieres' | 'liqueurs' | 'softs' | 'nourriture' => {
+    if (item.itemType === 'plat' || item.itemType === 'menu') {
+      return 'nourriture';
+    }
+    const n = item.name.toLowerCase();
+    if (
+      n.includes('poulet') || n.includes('poisson') || n.includes('grill') || 
+      n.includes('frite') || n.includes('attiéké') || n.includes('alloco') || 
+      n.includes('plat') || n.includes('brochette') || n.includes('viande') || 
+      n.includes('porc') || n.includes('riz') || n.includes('menu') || 
+      n.includes('soupe') || n.includes('burger') || n.includes('portion')
+    ) {
       return 'nourriture';
     }
     if (n.includes('whisky') || n.includes('vodka') || n.includes('gin') || n.includes('rhum') || n.includes('cognac') || n.includes('champagne') || n.includes('liqueur') || n.includes('pastis') || n.includes('tequila') || n.includes('vin') || n.includes('ricard')) {
@@ -84,11 +93,11 @@ export function PointOfSaleView({ establishmentId, cashierName }: PointOfSaleVie
 
   // Filter stocks by search query & category
   const filteredStocks = useMemo(() => {
-    return estStocks.filter(drink => {
-      const matchesSearch = drink.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return estStocks.filter(item => {
+      const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
       if (!matchesSearch) return false;
       if (selectedCategory === 'all') return true;
-      return getItemCategory(drink.name) === selectedCategory;
+      return getItemCategory(item) === selectedCategory;
     });
   }, [estStocks, searchQuery, selectedCategory]);
 
@@ -539,13 +548,23 @@ export function PointOfSaleView({ establishmentId, cashierName }: PointOfSaleVie
                     >
                       <div>
                         <div className="flex items-start justify-between gap-1">
-                          <div>
-                            <span className="text-xs font-black text-gray-900 dark:text-white line-clamp-1">
-                              {drink.name}
-                            </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              {drink.itemType === 'plat' || drink.itemType === 'menu' ? (
+                                <span className="text-xs">🍽️</span>
+                              ) : null}
+                              <span className="text-xs font-black text-gray-900 dark:text-white line-clamp-1">
+                                {drink.name}
+                              </span>
+                            </div>
                             {drink.volume && (
                               <span className="text-[10px] font-bold text-gray-400 block">
                                 {drink.volume}
+                              </span>
+                            )}
+                            {drink.description && (
+                              <span className="text-[10px] text-gray-400 dark:text-gray-500 line-clamp-1 block">
+                                {drink.description}
                               </span>
                             )}
                           </div>
@@ -568,7 +587,12 @@ export function PointOfSaleView({ establishmentId, cashierName }: PointOfSaleVie
                             ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 animate-pulse'
                             : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
                         }`}>
-                          {isOutOfStock ? "Rupture" : `${drink.quantity} un. (${Math.floor(drink.quantity / (drink.unitsPerCase || drink.unites_par_caisse || 12))} cse${Math.floor(drink.quantity / (drink.unitsPerCase || drink.unites_par_caisse || 12)) > 1 ? 's' : ''})`}
+                          {isOutOfStock 
+                            ? "Rupture" 
+                            : (drink.itemType === 'plat' || drink.itemType === 'menu')
+                              ? `${drink.quantity} ${drink.unit || (drink.quantity > 1 ? 'portions' : 'portion')}`
+                              : `${drink.quantity} un. (${Math.floor(drink.quantity / (drink.unitsPerCase || drink.unites_par_caisse || 12))} cse${Math.floor(drink.quantity / (drink.unitsPerCase || drink.unites_par_caisse || 12)) > 1 ? 's' : ''})`
+                          }
                         </span>
                         
                         <div className="w-7 h-7 rounded-full bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400 flex items-center justify-center hover:bg-orange-100 dark:hover:bg-orange-900/30">

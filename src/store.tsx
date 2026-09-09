@@ -18,7 +18,10 @@ import {
   AdPayment,
   AdInvoice,
   ActivityLog,
-  StaffPermissions
+  StaffPermissions,
+  StockItem,
+  StockReception,
+  StockInventory
 } from './types';
 import { 
   addReviewToDb, 
@@ -194,6 +197,142 @@ const INITIAL_ESTABLISHMENTS: Establishment[] = [
     ownerId: 'u-2',
     lat: 11.178,
     lng: -4.296
+  }
+];
+
+const INITIAL_STOCKS: StockItem[] = [
+  // Plats & Menus pour Le Maquis Bambou (est-1) & Restaurants
+  {
+    id: 'stock-plat-1',
+    establishmentId: 'est-1',
+    name: 'Poulet Bicyclette Braisé Spécial',
+    quantity: 20,
+    minQuantity: 5,
+    price: 4000,
+    purchasePrice: 2600,
+    category: 'grillades',
+    itemType: 'plat',
+    unit: 'plat',
+    preparationTimeMinutes: 25,
+    isMenuDuJour: true,
+    description: 'Poulet local bicyclette assaisonné aux épices sahéliennes, piment doux et oignons confits',
+    photoUrl: 'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?auto=format&fit=crop&q=80&w=600',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'stock-plat-2',
+    establishmentId: 'est-1',
+    name: 'Poisson Capitaine Braisé Kankankan',
+    quantity: 15,
+    minQuantity: 4,
+    price: 5000,
+    purchasePrice: 3200,
+    category: 'grillades',
+    itemType: 'plat',
+    unit: 'plat',
+    preparationTimeMinutes: 30,
+    description: 'Capitaine frais mariné aux aromates locaux, servi avec attiéké et piment écrasé',
+    photoUrl: 'https://images.unsplash.com/photo-1534939561126-855b8675edd7?auto=format&fit=crop&q=80&w=600',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'stock-plat-3',
+    establishmentId: 'est-1',
+    name: 'Riz Gras au Mouton (Marmite Africaine)',
+    quantity: 25,
+    minQuantity: 5,
+    price: 3000,
+    purchasePrice: 1800,
+    category: 'plats_resistance',
+    itemType: 'plat',
+    unit: 'portion',
+    preparationTimeMinutes: 10,
+    isMenuDuJour: true,
+    description: 'Riz rouge cuisiné au bouillon de viande de mouton tendre avec légumes frais et soumbala',
+    photoUrl: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&q=80&w=600',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'stock-plat-4',
+    establishmentId: 'est-1',
+    name: 'Brochettes de Filet de Bœuf (Portion de 5)',
+    quantity: 35,
+    minQuantity: 8,
+    price: 2500,
+    purchasePrice: 1500,
+    category: 'grillades',
+    itemType: 'plat',
+    unit: 'portion',
+    preparationTimeMinutes: 15,
+    description: 'Brochettes marinées aux épices kankankan grillées au feu de bois avec oignons émincés',
+    photoUrl: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=600',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'stock-plat-5',
+    establishmentId: 'est-1',
+    name: 'Menu Gourmand Express (Plat + Boisson)',
+    quantity: 18,
+    minQuantity: 3,
+    price: 4500,
+    purchasePrice: 2800,
+    category: 'menu_complet',
+    itemType: 'menu',
+    unit: 'menu',
+    preparationTimeMinutes: 20,
+    isMenuDuJour: true,
+    description: 'Poulet braisé ou poisson frit au choix + portion de frites/alloco + 1 boisson fraîche 33cl',
+    photoUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=600',
+    createdAt: new Date().toISOString()
+  },
+  // Boissons pour est-1
+  {
+    id: 'stock-boisson-1',
+    establishmentId: 'est-1',
+    name: 'Brakina',
+    quantity: 48,
+    minQuantity: 12,
+    price: 1000,
+    purchasePrice: 650,
+    category: 'bieres',
+    itemType: 'boisson',
+    volume: '65cl',
+    unitsPerCase: 12,
+    unites_par_caisse: 12,
+    stock_faible: 12,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'stock-boisson-2',
+    establishmentId: 'est-1',
+    name: 'Beaufort Lager',
+    quantity: 36,
+    minQuantity: 12,
+    price: 1200,
+    purchasePrice: 750,
+    category: 'bieres',
+    itemType: 'boisson',
+    volume: '50cl',
+    unitsPerCase: 12,
+    unites_par_caisse: 12,
+    stock_faible: 12,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'stock-boisson-3',
+    establishmentId: 'est-1',
+    name: 'Coca-Cola',
+    quantity: 30,
+    minQuantity: 8,
+    price: 700,
+    purchasePrice: 450,
+    category: 'softs',
+    itemType: 'boisson',
+    volume: '33cl',
+    unitsPerCase: 24,
+    unites_par_caisse: 24,
+    stock_faible: 8,
+    createdAt: new Date().toISOString()
   }
 ];
 
@@ -730,12 +869,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const [applications, setApplications] = useState<any[]>([]);
 
-  const [stocks, setStocks] = useState<any[]>(() => {
+  const [stocks, setStocks] = useState<StockItem[]>(() => {
     try {
       const saved = localStorage.getItem('zaka_stocks');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const hasPlats = parsed.some((s: any) => s.itemType === 'plat' || s.itemType === 'menu');
+          if (!hasPlats) {
+            return [...parsed, ...INITIAL_STOCKS.filter(is => is.itemType === 'plat' || is.itemType === 'menu')];
+          }
+          return parsed;
+        }
+      }
+      return INITIAL_STOCKS;
     } catch {
-      return [];
+      return INITIAL_STOCKS;
     }
   });
 

@@ -463,8 +463,14 @@ export interface StockItem {
   price: number;
   purchasePrice?: number;
   category?: string;
+  itemType?: 'boisson' | 'plat' | 'menu';
   unit?: string;
   volume?: string;
+  description?: string;
+  preparationTimeMinutes?: number;
+  isMenuDuJour?: boolean;
+  photoUrl?: string;
+  allergens?: string[];
   unitsPerCase?: number;
   unites_par_caisse?: number;
   stock_faible?: number;
