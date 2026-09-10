@@ -35,6 +35,7 @@ import {
   getCurrentUserProfile
 } from './lib/supabase';
 import { saveArtistProfile } from './lib/artistService';
+import { saveBeautySalon } from './lib/beautyService';
 
 export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371; // km
@@ -438,9 +439,10 @@ interface AppContextType {
   sendManagerInvitation: (establishmentId: string, targetUserId: string, message?: string, ...args: any[]) => void;
   login: (identifier: string, password?: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  register: (userData: any, password?: string, estData?: any, entrepriseData?: any, artistData?: any) => Promise<void>;
+  register: (userData: any, password?: string, estData?: any, entrepriseData?: any, artistData?: any, salonData?: any) => Promise<void>;
   logout: () => void;
   upgradeToGerant: (estData: any) => Promise<void>;
+  upgradeToSalonCoiffure?: (salonData: any) => Promise<void>;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;
   envoyerCodeOtp: (phone: string, containerId: string) => Promise<void>;
   confirmerCodeOtp: (code: string, details?: any) => Promise<void>;
@@ -1020,7 +1022,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Simulated reset email
   };
 
-  const register = async (userData: any, password?: string, estData?: any, entrepriseData?: any, artistData?: any) => {
+  const register = async (userData: any, password?: string, estData?: any, entrepriseData?: any, artistData?: any, salonData?: any) => {
     if (!password) {
       throw new Error("Un mot de passe est obligatoire pour créer un compte réel.");
     }
@@ -1069,6 +1071,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setEstablishments(prev => [newEst, ...prev]);
       }
 
+      if (userData.role === 'salon_coiffure' && salonData) {
+        try {
+          await saveBeautySalon({
+            userId: data.user.id,
+            nom: salonData.nom || salonData.name || newUser.name,
+            typeEtablissement: salonData.typeEtablissement || salonData.typeSalon || 'coiffure_femme',
+            description: salonData.description || '',
+            quartier: salonData.quartier || salonData.neighborhood || 'Centre-ville',
+            adresse: salonData.adresse || '',
+            ville: userData.city || 'Ouagadougou',
+            pays: userData.country || 'Burkina Faso',
+            telephone: salonData.telephone || salonData.phone || newUser.phone || '+22600000000',
+            whatsapp: salonData.whatsapp || newUser.phone || '',
+            photoProfil: salonData.photoProfil || 'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&q=80&w=600',
+            photoCouverture: salonData.photoCouverture || 'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&q=80&w=1200',
+            photosGalerie: salonData.photosGalerie || [],
+            aDomicile: Boolean(salonData.aDomicile),
+            accepteSansRdv: salonData.accepteSansRdv !== false,
+            estVerifie: true
+          });
+        } catch (err) {
+          console.error('Error auto-creating beauty salon upon registration:', err);
+        }
+      }
+
       if (userData.role === 'artiste' && artistData) {
         try {
           await saveArtistProfile({
@@ -1104,6 +1131,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updatedUser: UserProfile = { ...currentUser, role: 'gerant' };
       setCurrentUser(updatedUser);
       setUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+      await saveUserProfileToDb(updatedUser);
 
       if (estData && estData.name) {
         const newEst: Establishment = {
@@ -1119,6 +1147,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           rating: 5.0
         };
         setEstablishments(prev => [newEst, ...prev]);
+      }
+    }
+  };
+
+  const upgradeToSalonCoiffure = async (salonData: any) => {
+    if (currentUser) {
+      const updatedUser: UserProfile = { ...currentUser, role: 'salon_coiffure' };
+      setCurrentUser(updatedUser);
+      setUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+      await saveUserProfileToDb(updatedUser);
+
+      if (salonData && (salonData.nom || salonData.name)) {
+        try {
+          await saveBeautySalon({
+            userId: currentUser.id,
+            nom: salonData.nom || salonData.name,
+            typeEtablissement: salonData.typeEtablissement || salonData.typeSalon || 'coiffure_femme',
+            description: salonData.description || '',
+            quartier: salonData.quartier || salonData.neighborhood || 'Centre-ville',
+            adresse: salonData.adresse || '',
+            ville: currentUser.city || 'Ouagadougou',
+            pays: currentUser.country || 'Burkina Faso',
+            telephone: salonData.telephone || salonData.phone || currentUser.phone || '+22600000000',
+            whatsapp: salonData.whatsapp || currentUser.phone || '',
+            photoProfil: salonData.photoProfil || 'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&q=80&w=600',
+            photoCouverture: salonData.photoCouverture || 'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&q=80&w=1200',
+            photosGalerie: salonData.photosGalerie || [],
+            aDomicile: Boolean(salonData.aDomicile),
+            accepteSansRdv: salonData.accepteSansRdv !== false,
+            estVerifie: true
+          });
+        } catch (err) {
+          console.error('Error auto-creating beauty salon on upgrade:', err);
+        }
       }
     }
   };
@@ -1512,6 +1574,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       register,
       logout,
       upgradeToGerant,
+      upgradeToSalonCoiffure,
       updateProfile,
       envoyerCodeOtp,
       confirmerCodeOtp,

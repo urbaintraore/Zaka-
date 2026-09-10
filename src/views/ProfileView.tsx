@@ -37,7 +37,8 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
     resetPassword,
     register, 
     logout, 
-    upgradeToGerant, 
+    upgradeToGerant,
+    upgradeToSalonCoiffure, 
     updateProfile,
     envoyerCodeOtp, 
     confirmerCodeOtp,
@@ -153,6 +154,16 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
   const [estNeighborhood, setEstNeighborhood] = useState('');
   const [estGeolocation, setEstGeolocation] = useState('');
 
+  // Salon Coiffure registration details
+  const [isUpgradingToSalon, setIsUpgradingToSalon] = useState(false);
+  const [salonType, setSalonType] = useState('coiffure_femme');
+  const [salonPhone, setSalonPhone] = useState('');
+  const [salonWhatsapp, setSalonWhatsapp] = useState('');
+  const [salonAddress, setSalonAddress] = useState('');
+  const [salonDescription, setSalonDescription] = useState('');
+  const [salonHomeService, setSalonHomeService] = useState(false);
+  const [salonWalkIn, setSalonWalkIn] = useState(true);
+
   // Entreprise registration details
   const [entSector, setEntSector] = useState('Boisson & Brasserie');
   const [entLogo, setEntLogo] = useState('');
@@ -198,6 +209,30 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
       setIsUpgrading(false);
     } catch (err: any) {
       setError(err.message || 'Erreur lors de la mise à niveau');
+    }
+  };
+
+  const handleUpgradeToSalon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    try {
+      if (upgradeToSalonCoiffure) {
+        await upgradeToSalonCoiffure({
+          nom: estName,
+          typeEtablissement: salonType,
+          description: salonDescription || 'Salon de coiffure et soins de beauté',
+          neighborhood: estNeighborhood || 'Centre-ville',
+          adresse: salonAddress,
+          telephone: salonPhone || currentUser?.phone || phone || '+22600000000',
+          whatsapp: salonWhatsapp || salonPhone || currentUser?.phone || phone || '',
+          photoProfil: estPhotoUrl || undefined,
+          aDomicile: salonHomeService,
+          accepteSansRdv: salonWalkIn
+        });
+      }
+      setIsUpgradingToSalon(false);
+    } catch (err: any) {
+      setError(err.message || 'Erreur lors de la mise à niveau vers Salon de Beauté');
     }
   };
 
@@ -808,11 +843,51 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               <div className="mt-4 px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full text-xs font-bold uppercase tracking-wider">
                 {isAssignedCashier 
                   ? `Compte Caissier • ${assignedCashierEsts.map(e => e.name).join(', ') || 'Établissement'}`
-                  : `Compte ${(currentUser.role as any) === 'gerant' ? 'Gérant' : (currentUser.role as any) === 'admin' ? 'Administrateur' : (currentUser.role as any) === 'caissier' ? 'Caissier' : 'Client'}`
+                  : `Compte ${(currentUser.role as any) === 'gerant' ? 'Gérant' : (currentUser.role as any) === 'salon_coiffure' ? '💇 Salon de Coiffure & Beauté' : (currentUser.role as any) === 'artiste' ? '🎤 Artiste' : (currentUser.role as any) === 'annonceur' ? '📢 Annonceur' : (currentUser.role as any) === 'entreprise' ? '🏢 Entreprise' : (currentUser.role as any) === 'admin' ? 'Administrateur' : (currentUser.role as any) === 'caissier' ? 'Caissier' : 'Client'}`
                 }
               </div>
 
               <div className="mt-8 w-full flex flex-col gap-3">
+                {(currentUser.role as any) === 'salon_coiffure' && (
+                  <button 
+                    onClick={() => {
+                      if (onNavigate) {
+                        onNavigate('beauty_salons');
+                      } else {
+                        window.location.href = '/beauty-dashboard';
+                      }
+                    }} 
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-gradient-to-r from-rose-600 to-pink-600 text-white font-black rounded-xl hover:opacity-95 transition-all cursor-pointer shadow-lg shadow-rose-500/25 active:scale-[0.99]"
+                  >
+                    <Store className="w-5 h-5 text-white" />
+                    <span>💇 Ouvrir mon Espace Salon (Agenda & RDV)</span>
+                  </button>
+                )}
+
+                {currentUser.role === 'client' && (
+                  <div className="w-full p-4 bg-orange-50/70 dark:bg-orange-950/20 border border-orange-200/80 dark:border-orange-900/40 rounded-2xl flex flex-col gap-2.5">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                      <span className="text-xs font-black uppercase tracking-wide text-orange-900 dark:text-orange-200">Devenir Professionnel Partenaire</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                      <button
+                        onClick={() => setIsUpgrading(true)}
+                        className="flex items-center justify-center gap-2 px-3 py-2.5 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 font-bold text-xs rounded-xl border border-gray-200 dark:border-gray-700 hover:border-orange-500 transition-all cursor-pointer shadow-xs"
+                      >
+                        <Store className="w-4 h-4 text-orange-600" />
+                        <span>Gérant Établissement</span>
+                      </button>
+                      <button
+                        onClick={() => setIsUpgradingToSalon(true)}
+                        className="flex items-center justify-center gap-2 px-3 py-2.5 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-bold text-xs rounded-xl border border-rose-200 dark:border-rose-900/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-all cursor-pointer shadow-xs"
+                      >
+                        <Sparkles className="w-4 h-4 text-rose-600" />
+                        <span>💇 Salon de Beauté</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {isAssignedCashier && (
                   <button 
                     onClick={() => setShowCashierTerminal(true)} 
@@ -1777,6 +1852,18 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               categorieArtistique: estCategory,
               whatsappPro: phone,
               genres: ['Afrobeat']
+            } : undefined,
+            role === 'salon_coiffure' ? {
+              nom: estName,
+              typeEtablissement: salonType,
+              description: salonDescription || 'Salon de coiffure et soins de beauté',
+              neighborhood: estNeighborhood || 'Centre-ville',
+              adresse: salonAddress,
+              telephone: salonPhone || phone || '+22600000000',
+              whatsapp: salonWhatsapp || salonPhone || phone || '',
+              photoProfil: estPhotoUrl || undefined,
+              aDomicile: salonHomeService,
+              accepteSansRdv: salonWalkIn
             } : undefined
           );
         }
@@ -1828,6 +1915,18 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                 logo: entLogo,
                 philosophy: entPhilosophy,
                 description: entDescription
+              } : undefined,
+              salonData: role === 'salon_coiffure' ? {
+                nom: estName,
+                typeEtablissement: salonType,
+                description: salonDescription || 'Salon de coiffure et soins de beauté',
+                neighborhood: estNeighborhood || 'Centre-ville',
+                adresse: salonAddress,
+                telephone: salonPhone || phone || '+22600000000',
+                whatsapp: salonWhatsapp || salonPhone || phone || '',
+                photoProfil: estPhotoUrl || undefined,
+                aDomicile: salonHomeService,
+                accepteSansRdv: salonWalkIn
               } : undefined,
               referralCodeUsed
             });
@@ -1955,9 +2054,10 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {mode === 'register' && !isOtpSent && (
             <>
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 mb-2 p-1.5 bg-gray-100/80 rounded-xl">
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mb-2 p-1.5 bg-gray-100/80 dark:bg-gray-800 rounded-xl">
                 <button type="button" onClick={() => setRole('client')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'client' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>👤 Client</button>
                 <button type="button" onClick={() => setRole('gerant')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'gerant' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>🏪 Gérant</button>
+                <button type="button" onClick={() => setRole('salon_coiffure')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'salon_coiffure' ? 'bg-white shadow-sm text-rose-600 font-black' : 'text-gray-500 hover:text-gray-700'}`}>💇 Salon Beauté</button>
                 <button type="button" onClick={() => setRole('artiste')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'artiste' ? 'bg-white shadow-sm text-orange-600 font-black' : 'text-gray-500 hover:text-gray-700'}`}>🎤 Artiste</button>
                 <button type="button" onClick={() => setRole('annonceur')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'annonceur' ? 'bg-white shadow-sm text-orange-600 font-extrabold' : 'text-gray-500 hover:text-gray-700'}`}>📢 Annonceur</button>
                 <button type="button" onClick={() => setRole('entreprise')} className={`py-2 text-xs font-bold rounded-lg transition-all ${role === 'entreprise' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}>🏢 Entreprise</button>
@@ -1995,12 +2095,12 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
               )}
 
               {role === 'gerant' && (
-                <div className="mt-2 p-4 bg-orange-50/50 rounded-2xl border border-orange-100 flex flex-col gap-4">
+                <div className="mt-2 p-4 bg-orange-50/50 rounded-2xl border border-orange-100 flex flex-col gap-4 animate-fadeIn">
                   <h3 className="font-bold text-gray-900 text-sm border-b border-orange-200/50 pb-2">Détails de l'établissement</h3>
                   
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-gray-500 ml-1">Nom de l'établissement / Salon</label>
-                    <input type="text" placeholder="Nom du lieu ou du salon" required value={estName} onChange={e => setEstName(e.target.value)} className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" />
+                    <label className="text-xs font-bold text-gray-500 ml-1">Nom de l'établissement</label>
+                    <input type="text" placeholder="Nom du lieu (Maquis, Bar, Resto...)" required value={estName} onChange={e => setEstName(e.target.value)} className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:border-orange-500 outline-none font-medium" />
                   </div>
 
                   <div className="flex flex-col gap-1">
@@ -2010,6 +2110,123 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
                         <option key={cat.id} value={cat.id}>{cat.label}</option>
                       ))}
                     </select>
+                  </div>
+                </div>
+              )}
+
+              {role === 'salon_coiffure' && (
+                <div className="mt-2 p-4 bg-rose-50/50 dark:bg-rose-950/20 rounded-2xl border border-rose-100 dark:border-rose-900/40 flex flex-col gap-4 animate-fadeIn">
+                  <div className="flex items-center justify-between border-b border-rose-200/50 dark:border-rose-900/40 pb-2">
+                    <h3 className="font-bold text-gray-900 dark:text-white text-sm">💇 Détails du Salon de Coiffure / Beauté</h3>
+                    <span className="text-[10px] bg-rose-100 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200 font-extrabold px-2 py-0.5 rounded-full uppercase">Espace Salon</span>
+                  </div>
+                  
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Nom de l'établissement / Salon *</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: Glamour Beauté & Spa, Barbershop VIP..." 
+                      required 
+                      value={estName} 
+                      onChange={e => setEstName(e.target.value)} 
+                      className="w-full px-4 py-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 focus:border-rose-500 outline-none font-medium text-gray-900 dark:text-white" 
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Type d'activité Beauté</label>
+                    <select 
+                      required 
+                      value={salonType} 
+                      onChange={e => setSalonType(e.target.value)} 
+                      className="w-full px-4 py-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 focus:border-rose-500 outline-none font-medium text-gray-700 dark:text-gray-200"
+                    >
+                      <option value="coiffure_femme">💇 Salon de Coiffure Femmes</option>
+                      <option value="coiffure_homme">✂️ Coiffure Hommes</option>
+                      <option value="barbershop">💈 Barbershop Moderne</option>
+                      <option value="mixte">💇‍♀️💇‍♂️ Salon Mixte (Hommes & Femmes)</option>
+                      <option value="tresse_locks">✨ Tresses, Nattes & Locks</option>
+                      <option value="onglerie">💅 Onglerie & Manucure/Pédicure</option>
+                      <option value="spa_massage">🌿 Spa & Massages Bien-être</option>
+                      <option value="autre">🌟 Institut de Beauté Polyvalent</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-bold text-gray-500 ml-1">Quartier *</label>
+                      <input 
+                        type="text" 
+                        placeholder="Ex: Ouaga 2000, 1200 Logements" 
+                        required 
+                        value={estNeighborhood} 
+                        onChange={e => setEstNeighborhood(e.target.value)} 
+                        className="w-full px-4 py-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 focus:border-rose-500 outline-none font-medium text-gray-900 dark:text-white" 
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-bold text-gray-500 ml-1">Téléphone RDV</label>
+                      <input 
+                        type="tel" 
+                        placeholder="+22670000000" 
+                        value={salonPhone} 
+                        onChange={e => setSalonPhone(e.target.value)} 
+                        className="w-full px-4 py-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 focus:border-rose-500 outline-none font-medium text-gray-900 dark:text-white" 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">WhatsApp de RDV (Optionnel)</label>
+                    <input 
+                      type="tel" 
+                      placeholder="+22670000000" 
+                      value={salonWhatsapp} 
+                      onChange={e => setSalonWhatsapp(e.target.value)} 
+                      className="w-full px-4 py-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 focus:border-rose-500 outline-none font-medium text-gray-900 dark:text-white" 
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Adresse ou point de repère</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: Avenue Babanguida, à côté de..." 
+                      value={salonAddress} 
+                      onChange={e => setSalonAddress(e.target.value)} 
+                      className="w-full px-4 py-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 focus:border-rose-500 outline-none font-medium text-gray-900 dark:text-white" 
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-500 ml-1">Description & Services</label>
+                    <textarea 
+                      placeholder="Présentez votre salon, les soins capillaires, manucure..." 
+                      value={salonDescription} 
+                      onChange={e => setSalonDescription(e.target.value)} 
+                      className="w-full px-4 py-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 focus:border-rose-500 outline-none font-medium min-h-[75px] text-gray-900 dark:text-white" 
+                    />
+                  </div>
+
+                  <div className="p-3 bg-white dark:bg-gray-800 rounded-xl border border-rose-100 dark:border-rose-900/30 flex flex-col gap-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={salonHomeService} 
+                        onChange={e => setSalonHomeService(e.target.checked)} 
+                        className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 accent-rose-600"
+                      />
+                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Prestations à domicile disponibles</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={salonWalkIn} 
+                        onChange={e => setSalonWalkIn(e.target.checked)} 
+                        className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 accent-rose-600"
+                      />
+                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Clients acceptés sans rendez-vous</span>
+                    </label>
                   </div>
                 </div>
               )}

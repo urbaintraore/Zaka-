@@ -65,8 +65,17 @@ export function AdminDashboard({ onLogout }: { onLogout?: () => void }) {
                 <p className="text-xs font-bold text-gray-900">{u.name}</p>
                 <p className="text-[10px] text-gray-500">{u.email || u.phone}</p>
               </div>
-              <span className="px-2.5 py-1 bg-purple-100 text-purple-800 text-[10px] font-bold rounded-lg uppercase">
-                {u.role}
+              <span className={`px-2.5 py-1 text-[10px] font-bold rounded-lg uppercase ${
+                u.role === 'admin' ? 'bg-purple-100 text-purple-800' :
+                u.role === 'gerant' ? 'bg-orange-100 text-orange-800' :
+                u.role === 'salon_coiffure' ? 'bg-rose-100 text-rose-800 font-extrabold' :
+                u.role === 'artiste' ? 'bg-indigo-100 text-indigo-800' :
+                u.role === 'annonceur' ? 'bg-amber-100 text-amber-800' :
+                u.role === 'entreprise' ? 'bg-blue-100 text-blue-800' :
+                u.role === 'caissier' ? 'bg-teal-100 text-teal-800' :
+                'bg-gray-100 text-gray-700'
+              }`}>
+                {u.role === 'salon_coiffure' ? '💇 Salon Coiffure / Beauté' : u.role}
               </span>
             </div>
           ))}
