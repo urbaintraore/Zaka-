@@ -23,7 +23,7 @@ export function useBeautyBooking({
   preselectedServiceId,
   onSuccess
 }: UseBeautyBookingOptions) {
-  const { currentUser } = useAppStore();
+  const { currentUser, addNotification } = useAppStore();
 
   // Selected state
   const [selectedServiceId, setSelectedServiceId] = useState<string>(preselectedServiceId || '');
@@ -209,6 +209,39 @@ export function useBeautyBooking({
 
       setCreatedAppointment(newAppointment);
       setSuccess(true);
+
+      // Notification dans l'application pour le salon de beauté (système existant ZAKA+)
+      const targetSalonUserId = salon.userId || 'u-pro-salon';
+      addNotification({
+        userId: targetSalonUserId,
+        title: `Nouveau RDV : ${selectedService.nom} 💇✨`,
+        message: `${clientName.trim()} a réservé pour le ${selectedDate} à ${selectedTimeSlot}${aDomicile ? ' (à domicile)' : ''}. Prestation : ${selectedService.nom} (${selectedService.prixFcfa.toLocaleString('fr-FR')} FCFA). Téléphone : ${clientPhone.trim()}.`,
+        type: 'reservation_update',
+        linkTab: 'beauty',
+        relatedId: newAppointment.id
+      });
+
+      // Notification pour le client
+      if (currentUser?.id) {
+        addNotification({
+          userId: currentUser.id,
+          title: `Rendez-vous réservé chez ${salon.nom} ✨`,
+          message: `Votre demande pour "${selectedService.nom}" le ${selectedDate} à ${selectedTimeSlot} a été transmise au salon.`,
+          type: 'reservation_update',
+          linkTab: 'beauty',
+          relatedId: newAppointment.id
+        });
+      }
+
+      // Alerte in-app immédiate
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('app-toast', {
+          detail: {
+            message: `✨ Rendez-vous réservé chez ${salon.nom} ! Une alerte a été transmise au salon.`,
+            type: 'success'
+          }
+        }));
+      }
 
       if (onSuccess) {
         onSuccess(newAppointment);

@@ -29,6 +29,8 @@ import {
 } from '../lib/beautyService';
 import { useAppStore } from '../store';
 import { BeautySalonPublicView } from '../components/beauty/BeautySalonPublicView';
+import { uploadToSupabaseStorage, deleteFromSupabaseStorage } from '../lib/supabaseStorage';
+import { isSupabaseConfigured } from '../lib/supabaseClient';
 import {
   Calendar,
   Clock,
@@ -60,7 +62,10 @@ import {
   CalendarClock,
   Download,
   Settings,
-  X
+  X,
+  Image as ImageIcon,
+  UploadCloud,
+  ExternalLink
 } from 'lucide-react';
 
 interface BeautyDashboardViewProps {
@@ -72,6 +77,7 @@ export type BeautyDashboardNav =
   | 'pending'          // Demandes en attente
   | 'all_appointments' // Tous les rendez-vous
   | 'services'         // Catalogue des prestations
+  | 'gallery'          // Galerie & Réalisations photos
   | 'clients'          // Répertoire clients
   | 'reviews'          // Avis et notes
   | 'settings';        // Paramètres & Horaires
@@ -115,6 +121,19 @@ export function BeautyDashboardView({ onLogout }: BeautyDashboardViewProps = {})
   // Settings & Profile state
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileSuccessMsg, setProfileSuccessMsg] = useState('');
+
+  // Gallery Management State
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [galleryUploadError, setGalleryUploadError] = useState<string | null>(null);
+  const [gallerySuccessMsg, setGallerySuccessMsg] = useState<string | null>(null);
+  const [deletingPhotoIndex, setDeletingPhotoIndex] = useState<number | null>(null);
+  const galleryFileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // WhatsApp Reschedule Proposal Modal State
+  const [proposingAppointment, setProposingAppointment] = useState<BeautyAppointment | null>(null);
+  const [proposalDate, setProposalDate] = useState<string>('');
+  const [proposalTime, setProposalTime] = useState<string>('14:00');
+  const [proposalReason, setProposalReason] = useState<string>('');
 
   // Initial Onboarding state for new salon
   const [newSalonForm, setNewSalonForm] = useState({
@@ -375,6 +394,185 @@ export function BeautyDashboardView({ onLogout }: BeautyDashboardViewProps = {})
     const phone = cleanPhone.startsWith('226') ? cleanPhone : `226${cleanPhone}`;
     const message = `Bonjour ${appointment.nomClient}, ici votre salon ${salon?.nom}. Nous vous contactons concernant votre rendez-vous du ${appointment.dateRdv} à ${appointment.heureRdv}.`;
     return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  };
+
+  // WhatsApp confirmation message & direct action
+  const getWhatsAppConfirmLink = (appointment: BeautyAppointment) => {
+    const cleanPhone = appointment.telephoneClient.replace(/\D/g, '');
+    const phone = cleanPhone.startsWith('226') ? cleanPhone : `226${cleanPhone}`;
+    const message = `Bonjour ${appointment.nomClient}, c'est votre salon ${salon?.nom} ! ✨\n\nNous avons le plaisir de vous CONFIRMER votre rendez-vous pour : "${appointment.serviceNom || 'votre prestation'}"\n📅 Date : ${appointment.dateRdv}\n⏰ Heure : ${appointment.heureRdv}${appointment.aDomicile ? '\n🏡 Prestation à domicile' : ''}\n💰 Montant : ${formatFcfa(appointment.prixTotalFcfa || 0)}\n\nMerci de votre confiance et à très bientôt chez ${salon?.nom} !`;
+    return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  };
+
+  const handleConfirmViaWhatsApp = async (appointment: BeautyAppointment) => {
+    // 1. Mettre à jour le statut du rendez-vous
+    if (appointment.statut !== 'confirme') {
+      await handleUpdateStatus(appointment.id, 'confirme');
+    }
+    // 2. Ouvrir WhatsApp avec le message pré-rempli
+    const link = getWhatsAppConfirmLink(appointment);
+    window.open(link, '_blank', 'noopener,noreferrer');
+  };
+
+  // Proposer un nouvel horaire via WhatsApp
+  const handleOpenRescheduleProposal = (appointment: BeautyAppointment) => {
+    setProposingAppointment(appointment);
+    setProposalDate(appointment.dateRdv);
+    setProposalTime(appointment.heureRdv);
+    setProposalReason('');
+  };
+
+  const getWhatsAppProposalMessage = (appointment: BeautyAppointment, newDate: string, newTime: string, reason?: string) => {
+    const reasonText = reason && reason.trim() ? ` (${reason.trim()})` : '';
+    return `Bonjour ${appointment.nomClient}, ici votre salon ${salon?.nom} ✨\n\nConcernant votre demande de rendez-vous pour "${appointment.serviceNom || 'votre prestation'}" initialement souhaitée le ${appointment.dateRdv} à ${appointment.heureRdv} : ce créneau n'est malheureusement pas disponible${reasonText}.\n\n👉 Nous vous proposons à la place : le ${newDate} à ${newTime}.\n\nCe nouvel horaire vous conviendrait-il ? Merci de nous confirmer en répondant à ce message ! 🙏✨`;
+  };
+
+  const handleSendRescheduleProposal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!proposingAppointment || !proposalDate || !proposalTime) return;
+
+    const cleanPhone = proposingAppointment.telephoneClient.replace(/\D/g, '');
+    const phone = cleanPhone.startsWith('226') ? cleanPhone : `226${cleanPhone}`;
+    const message = getWhatsAppProposalMessage(proposingAppointment, proposalDate, proposalTime, proposalReason);
+
+    const link = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+
+    window.dispatchEvent(
+      new CustomEvent('app-toast', {
+        detail: {
+          message: `💬 Proposition d'horaire transmise via WhatsApp à ${proposingAppointment.nomClient} !`,
+          type: 'success'
+        }
+      })
+    );
+
+    window.open(link, '_blank', 'noopener,noreferrer');
+    setProposingAppointment(null);
+  };
+
+  // Gestion de la Galerie Photo (Upload Supabase + Suppression)
+  const fileToDataUrl = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleUploadGalleryPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !salon) return;
+
+    setIsUploadingPhoto(true);
+    setGalleryUploadError(null);
+
+    try {
+      const currentGallery = [...(salon.photosGalerie || [])];
+      const newUrls: string[] = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+
+        if (file.size > 8 * 1024 * 1024) {
+          throw new Error(`L'image ${file.name} dépasse la limite de 8 Mo.`);
+        }
+
+        let uploadedUrl = '';
+
+        if (isSupabaseConfigured) {
+          const fileExt = file.name.split('.').pop() || 'jpg';
+          const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const storagePath = `salons/${salon.id}/gallery_${Date.now()}_${i}_${safeName}`;
+
+          const result = await uploadToSupabaseStorage('establishments', storagePath, file, {
+            contentType: file.type || `image/${fileExt}`
+          });
+
+          if (result.error) {
+            console.warn('[Gallery] Supabase storage upload warning, fallback to DataURL:', result.error);
+            uploadedUrl = await fileToDataUrl(file);
+          } else {
+            uploadedUrl = result.url;
+          }
+        } else {
+          uploadedUrl = await fileToDataUrl(file);
+        }
+
+        if (uploadedUrl) {
+          newUrls.push(uploadedUrl);
+        }
+      }
+
+      if (newUrls.length > 0) {
+        const updatedGallery = [...currentGallery, ...newUrls];
+        const updatedSalon = await updateBeautySalon(salon.id, {
+          photosGalerie: updatedGallery
+        });
+        setSalon(updatedSalon);
+        setGallerySuccessMsg(`${newUrls.length} réalisation(s) ajoutée(s) à votre galerie.`);
+        setTimeout(() => setGallerySuccessMsg(null), 4000);
+
+        window.dispatchEvent(
+          new CustomEvent('app-toast', {
+            detail: {
+              message: `📸 ${newUrls.length} photo(s) ajoutée(s) à votre galerie !`,
+              type: 'success'
+            }
+          })
+        );
+      }
+    } catch (err: any) {
+      console.error('[Gallery] Erreur upload:', err);
+      setGalleryUploadError(err?.message || "Erreur lors de l'upload de la photo.");
+    } finally {
+      setIsUploadingPhoto(false);
+      if (galleryFileInputRef.current) {
+        galleryFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDeleteGalleryPhoto = async (photoUrl: string, index: number) => {
+    if (!salon) return;
+    if (!window.confirm("Voulez-vous vraiment supprimer cette photo de votre galerie de réalisations ?")) {
+      return;
+    }
+
+    setDeletingPhotoIndex(index);
+    try {
+      if (isSupabaseConfigured && photoUrl.includes('establishments')) {
+        try {
+          const parts = photoUrl.split('/establishments/');
+          if (parts.length > 1) {
+            const rawPath = decodeURIComponent(parts[1].split('?')[0]);
+            await deleteFromSupabaseStorage('establishments', [rawPath]);
+          }
+        } catch (storageErr) {
+          console.warn('[Gallery] Storage delete warning:', storageErr);
+        }
+      }
+
+      const updatedGallery = (salon.photosGalerie || []).filter((_, i) => i !== index);
+      const updatedSalon = await updateBeautySalon(salon.id, {
+        photosGalerie: updatedGallery
+      });
+      setSalon(updatedSalon);
+
+      window.dispatchEvent(
+        new CustomEvent('app-toast', {
+          detail: {
+            message: 'Photo retirée de votre galerie.',
+            type: 'info'
+          }
+        })
+      );
+    } catch (err: any) {
+      console.error('[Gallery] Erreur suppression:', err);
+      alert("Erreur lors de la suppression de la photo.");
+    } finally {
+      setDeletingPhotoIndex(null);
+    }
   };
 
   if (loading) {
@@ -684,7 +882,28 @@ export function BeautyDashboardView({ onLogout }: BeautyDashboardViewProps = {})
               </span>
             </button>
 
-            {/* 5. Clients du salon */}
+            {/* 5. Galerie & Réalisations photos */}
+            <button
+              id="beauty-nav-gallery-btn"
+              onClick={() => setActiveNav('gallery')}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeNav === 'gallery'
+                  ? 'bg-rose-600 text-white shadow-sm font-black'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <ImageIcon className="w-4 h-4" />
+                <span>Galerie & Réalisations</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${
+                activeNav === 'gallery' ? 'bg-white/20 text-white' : 'text-gray-400 bg-gray-100 dark:bg-gray-800'
+              }`}>
+                {salon.photosGalerie?.length || 0}
+              </span>
+            </button>
+
+            {/* 6. Clients du salon */}
             <button
               onClick={() => setActiveNav('clients')}
               className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -926,15 +1145,36 @@ export function BeautyDashboardView({ onLogout }: BeautyDashboardViewProps = {})
                           <span className="hidden sm:inline">{appointment.telephoneClient}</span>
                         </a>
 
+                        {/* WhatsApp Actions */}
+                        {appointment.statut === 'en_attente' && (
+                          <button
+                            onClick={() => handleConfirmViaWhatsApp(appointment)}
+                            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm cursor-pointer"
+                            title="Confirmer le RDV et ouvrir WhatsApp avec le message de confirmation"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <Check className="w-3 h-3 text-emerald-200" />
+                            <span className="hidden sm:inline">Confirmer WhatsApp</span>
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => handleOpenRescheduleProposal(appointment)}
+                          className="p-2 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer"
+                          title="Proposer un autre horaire au client via WhatsApp"
+                        >
+                          <CalendarClock className="w-3.5 h-3.5 text-amber-500" />
+                          <span className="hidden sm:inline">Autre horaire</span>
+                        </button>
+
                         <a
                           href={getWhatsAppClientLink(appointment)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-2 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-1"
-                          title="WhatsApp direct avec message pré-rempli"
+                          title="Message WhatsApp rapide"
                         >
                           <MessageCircle className="w-3.5 h-3.5 text-emerald-500" />
-                          <span className="hidden sm:inline">WhatsApp</span>
                         </a>
 
                         {/* Status Change Buttons */}
@@ -1045,25 +1285,34 @@ export function BeautyDashboardView({ onLogout }: BeautyDashboardViewProps = {})
                         )}
                       </div>
 
-                      {/* Immediate Confirmation Buttons */}
-                      <div className="flex items-center gap-2">
-                        <a
-                          href={getWhatsAppClientLink(appointment)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm"
+                      {/* Immediate Confirmation & WhatsApp Buttons */}
+                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end">
+                        <button
+                          onClick={() => handleConfirmViaWhatsApp(appointment)}
+                          className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm cursor-pointer"
+                          title="Confirmer immédiatement le RDV et notifier le client avec les détails complets par WhatsApp"
                         >
                           <MessageCircle className="w-4 h-4" />
-                          <span>WhatsApp</span>
-                        </a>
+                          <Check className="w-3.5 h-3.5 text-emerald-200" />
+                          <span>Confirmer WhatsApp</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleOpenRescheduleProposal(appointment)}
+                          className="px-3 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm cursor-pointer"
+                          title="Proposer une autre date ou un autre horaire par message WhatsApp pré-rempli"
+                        >
+                          <CalendarClock className="w-4 h-4" />
+                          <span>Proposer un autre horaire</span>
+                        </button>
 
                         <button
                           onClick={() => handleUpdateStatus(appointment.id, 'confirme')}
                           disabled={updatingAppId === appointment.id}
-                          className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm cursor-pointer"
+                          className="px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm cursor-pointer"
                         >
                           <Check className="w-4 h-4" />
-                          <span>Confirmer le RDV</span>
+                          <span>Confirmer direct</span>
                         </button>
 
                         <button
@@ -1156,6 +1405,13 @@ export function BeautyDashboardView({ onLogout }: BeautyDashboardViewProps = {})
                       >
                         <Phone className="w-3.5 h-3.5 text-rose-500" />
                       </a>
+                      <button
+                        onClick={() => handleOpenRescheduleProposal(appointment)}
+                        className="p-2 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 text-amber-700 rounded-xl text-xs font-bold cursor-pointer"
+                        title="Proposer un autre horaire par WhatsApp"
+                      >
+                        <CalendarClock className="w-3.5 h-3.5" />
+                      </button>
                       <a
                         href={getWhatsAppClientLink(appointment)}
                         target="_blank"
@@ -1282,7 +1538,199 @@ export function BeautyDashboardView({ onLogout }: BeautyDashboardViewProps = {})
         )}
 
         {/* ----------------------------------------------------------------------- */}
-        {/* VIEW 5: FICHIER CLIENTS                                                */}
+        {/* VIEW 5: GALERIE & RÉALISATIONS (GESTION DES PHOTOS DU SALON)            */}
+        {/* ----------------------------------------------------------------------- */}
+        {activeNav === 'gallery' && (
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
+                  <ImageIcon className="w-5 h-5 text-rose-500" />
+                  <span>Galerie de vos réalisations ({salon.photosGalerie?.length || 0})</span>
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Ajoutez les plus belles photos de vos coiffures, tresses, manucures ou soins. Vos clients les verront dans l'onglet Galerie de votre fiche publique.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsPreviewOpen(true)}
+                  className="px-3 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 text-gray-700 dark:text-gray-300 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Voir le rendu public"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Aperçu client</span>
+                </button>
+
+                <button
+                  id="beauty-add-photos-btn"
+                  onClick={() => galleryFileInputRef.current?.click()}
+                  disabled={isUploadingPhoto}
+                  className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isUploadingPhoto ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Téléchargement...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-4 h-4" />
+                      <span>Ajouter des photos</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Hidden native file input */}
+            <input
+              type="file"
+              ref={galleryFileInputRef}
+              multiple
+              accept="image/png,image/jpeg,image/webp,image/jpg"
+              onChange={handleUploadGalleryPhoto}
+              className="hidden"
+            />
+
+            {/* Success or Error messages */}
+            {gallerySuccessMsg && (
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 rounded-2xl flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{gallerySuccessMsg}</span>
+              </div>
+            )}
+
+            {galleryUploadError && (
+              <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-2xl flex items-center gap-2 text-xs font-bold text-red-700 dark:text-red-300">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{galleryUploadError}</span>
+              </div>
+            )}
+
+            {/* Drag & Drop / Click Upload Box */}
+            <div
+              onClick={() => !isUploadingPhoto && galleryFileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-3xl p-6 sm:p-8 text-center transition-all cursor-pointer ${
+                isUploadingPhoto
+                  ? 'border-rose-300 bg-rose-50/50 dark:bg-rose-950/20 opacity-75'
+                  : 'border-gray-200 dark:border-gray-800 hover:border-rose-400 dark:hover:border-rose-600 bg-white dark:bg-gray-900 hover:shadow-sm'
+              }`}
+            >
+              <div className="max-w-md mx-auto space-y-3">
+                <div className="w-14 h-14 bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
+                  {isUploadingPhoto ? (
+                    <div className="w-6 h-6 border-2 border-rose-600 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <UploadCloud className="w-7 h-7" />
+                  )}
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-black text-gray-900 dark:text-white">
+                    {isUploadingPhoto
+                      ? 'Téléversement en cours sur Supabase Storage...'
+                      : 'Cliquez pour sélectionner vos photos ou déposez-les ici'}
+                  </h4>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Formats acceptés : PNG, JPG, JPEG, WEBP. Jusqu'à 8 Mo par image.
+                  </p>
+                </div>
+
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg text-[11px] font-bold">
+                  <Sparkles className="w-3.5 h-3.5 text-rose-500" />
+                  <span>Sélection multiple supportée</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Photos Grid */}
+            {(!salon.photosGalerie || salon.photosGalerie.length === 0) ? (
+              <div className="bg-white dark:bg-gray-900 p-8 rounded-3xl text-center border border-gray-100 dark:border-gray-800 space-y-2">
+                <ImageIcon className="w-10 h-10 text-gray-300 mx-auto" />
+                <h4 className="text-sm font-black text-gray-700 dark:text-gray-300">
+                  Votre galerie est actuellement vide
+                </h4>
+                <p className="text-xs text-gray-500 max-w-md mx-auto">
+                  Présentez votre talent ! Les salons ayant une galerie de réalisations active attirent significativement plus de nouveaux clients dans leur ville.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>{salon.photosGalerie.length} réalisation(s) affichée(s)</span>
+                  <span className="text-[11px] text-gray-400">Survolez une photo pour la supprimer ou l'agrandir</span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                  {salon.photosGalerie.map((photoUrl, idx) => (
+                    <div
+                      key={`${photoUrl}-${idx}`}
+                      className="group relative aspect-square rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-800 shadow-sm"
+                    >
+                      <img
+                        src={photoUrl}
+                        alt={`Réalisation ${idx + 1} - ${salon.nom}`}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+
+                      {/* Badge photo # */}
+                      <span className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur-sm text-white text-[10px] font-black rounded-md">
+                        #{idx + 1}
+                      </span>
+
+                      {/* Overlay Actions on Hover */}
+                      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2">
+                        <a
+                          href={photoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2.5 bg-white/90 hover:bg-white text-gray-900 rounded-xl shadow-lg transition-transform active:scale-95 cursor-pointer"
+                          title="Voir en taille réelle"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+
+                        <button
+                          onClick={() => handleDeleteGalleryPhoto(photoUrl, idx)}
+                          disabled={deletingPhotoIndex === idx}
+                          className="p-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-lg transition-transform active:scale-95 cursor-pointer disabled:opacity-50"
+                          title="Supprimer cette photo"
+                        >
+                          {deletingPhotoIndex === idx ? (
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Growth tip banner */}
+            <div className="p-4 bg-gradient-to-r from-rose-50 to-amber-50 dark:from-rose-950/20 dark:to-amber-950/20 border border-rose-100 dark:border-rose-900/40 rounded-2xl flex items-start gap-3 text-xs">
+              <Sparkles className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-black text-gray-900 dark:text-white block">
+                  Astuce visibilité ZAKA+ Beauty
+                </span>
+                <p className="text-gray-600 dark:text-gray-300 mt-0.5 leading-relaxed">
+                  Prenez des photos sous une bonne lumière naturelle montrant le résultat final (avant/après, détails des mèches, coiffure sous plusieurs angles). Les clients aiment voir la netteté des finitions !
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ----------------------------------------------------------------------- */}
+        {/* VIEW 6: FICHIER CLIENTS                                                */}
         {/* ----------------------------------------------------------------------- */}
         {activeNav === 'clients' && (
           <div className="space-y-4">
@@ -1755,6 +2203,123 @@ export function BeautyDashboardView({ onLogout }: BeautyDashboardViewProps = {})
                   className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black"
                 >
                   {editingService ? 'Mettre à jour' : 'Ajouter'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL PROPOSITION DE NOUVEL HORAIRE VIA WHATSAPP                         */}
+      {/* ========================================================================= */}
+      {proposingAppointment && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-lg w-full border border-gray-100 dark:border-gray-800 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-5 bg-gradient-to-r from-amber-500 to-rose-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="w-5 h-5" />
+                <h3 className="font-black text-sm">Proposer un nouvel horaire</h3>
+              </div>
+              <button
+                onClick={() => setProposingAppointment(null)}
+                className="p-1 rounded-lg hover:bg-white/20 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSendRescheduleProposal} className="p-5 space-y-4 text-xs">
+              {/* Client & Current RDV Info */}
+              <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-gray-900 dark:text-white text-sm">
+                    {proposingAppointment.nomClient}
+                  </span>
+                  <span className="text-[11px] font-bold text-gray-500">
+                    {proposingAppointment.telephoneClient}
+                  </span>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300">
+                  Prestation : <strong>{proposingAppointment.serviceNom || 'Prestation'}</strong> ({formatFcfa(proposingAppointment.prixTotalFcfa || 0)})
+                </p>
+                <p className="text-amber-700 dark:text-amber-400 font-bold">
+                  Créneau demandé initialement : le {proposingAppointment.dateRdv} à {proposingAppointment.heureRdv}
+                </p>
+              </div>
+
+              {/* Date & Time fields */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-gray-700 dark:text-gray-300 font-bold mb-1">
+                    Nouvelle date proposée *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    min={new Date().toISOString().split('T')[0]}
+                    value={proposalDate}
+                    onChange={e => setProposalDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:border-rose-500 font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 dark:text-gray-300 font-bold mb-1">
+                    Nouvel horaire proposé *
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={proposalTime}
+                    onChange={e => setProposalTime(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:border-rose-500 font-semibold"
+                  />
+                </div>
+              </div>
+
+              {/* Motif optionnel */}
+              <div>
+                <label className="block text-gray-700 dark:text-gray-300 font-bold mb-1">
+                  Motif ou précision (optionnel)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Créneau déjà réservé, salon exceptionnellement fermé le matin..."
+                  value={proposalReason}
+                  onChange={e => setProposalReason(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:border-rose-500"
+                />
+              </div>
+
+              {/* Live Preview of message */}
+              <div className="space-y-1">
+                <span className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                  Aperçu du message WhatsApp envoyé
+                </span>
+                <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 rounded-xl text-gray-800 dark:text-gray-200 text-[11px] leading-relaxed whitespace-pre-line font-medium">
+                  {getWhatsAppProposalMessage(proposingAppointment, proposalDate || 'JJ/MM/AAAA', proposalTime || 'HH:MM', proposalReason)}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setProposingAppointment(null)}
+                  className="px-4 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 rounded-xl text-gray-700 dark:text-gray-300 font-bold cursor-pointer"
+                >
+                  Annuler
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black flex items-center gap-2 shadow-sm cursor-pointer"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Envoyer la proposition sur WhatsApp</span>
                 </button>
               </div>
             </form>

@@ -16,6 +16,7 @@ import {
 } from '../../lib/beautyService';
 import { useBeautyBooking } from '../../hooks/useBeautyBooking';
 import { useAppStore } from '../../store';
+import { HeartButton } from '../HeartButton';
 import {
   MapPin,
   Star,
@@ -34,7 +35,9 @@ import {
   Plus,
   Send,
   User,
-  Heart
+  Heart,
+  Image as ImageIcon,
+  ExternalLink
 } from 'lucide-react';
 
 interface BeautySalonPublicViewProps {
@@ -45,14 +48,35 @@ interface BeautySalonPublicViewProps {
 export function BeautySalonPublicView({ salon: propSalon, onBack }: BeautySalonPublicViewProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { currentUser } = useAppStore();
+  const { currentUser, favorites, toggleFavorite } = useAppStore();
 
   const [salon, setSalon] = useState<BeautySalon | null>(propSalon || null);
   const [services, setServices] = useState<BeautyService[]>([]);
   const [reviews, setReviews] = useState<BeautyReview[]>([]);
   const [loading, setLoading] = useState(!propSalon);
-  const [activeTab, setActiveTab] = useState<'services' | 'horaires' | 'avis'>('services');
+  const [activeTab, setActiveTab] = useState<'services' | 'galerie' | 'horaires' | 'avis'>('services');
   const [selectedCategory, setSelectedCategory] = useState<string>('tous');
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+
+  // Favorites state and action
+  const isFavorite = Boolean(salon && Array.isArray(favorites) && favorites.includes(salon.id));
+
+  const handleToggleFavorite = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!salon) return;
+    toggleFavorite(salon.id);
+    const willBeFav = !isFavorite;
+    window.dispatchEvent(
+      new CustomEvent('app-toast', {
+        detail: {
+          message: willBeFav
+            ? `❤️ "${salon.nom}" ajouté à vos favoris ZAKA+ !`
+            : `"${salon.nom}" retiré de vos favoris.`,
+          type: willBeFav ? 'success' : 'info'
+        }
+      })
+    );
+  };
 
   // Booking Modal State
   const [isBookingOpen, setIsBookingOpen] = useState(false);
@@ -246,6 +270,21 @@ export function BeautySalonPublicView({ salon: propSalon, onBack }: BeautySalonP
 
           <div className="flex items-center gap-2">
             <button
+              id="beauty-salon-favorite-header-btn"
+              type="button"
+              onClick={handleToggleFavorite}
+              className={`p-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                isFavorite
+                  ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 font-bold ring-1 ring-rose-300 dark:ring-rose-800'
+                  : 'text-gray-600 dark:text-gray-300 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40'
+              }`}
+              title={isFavorite ? "Retirer de vos favoris ZAKA+" : "Ajouter à vos favoris ZAKA+"}
+            >
+              <Heart className={`w-4 h-4 transition-transform active:scale-125 ${isFavorite ? "fill-rose-500 text-rose-500" : ""}`} />
+              <span className="text-xs hidden sm:inline">{isFavorite ? "Favori" : "Sauvegarder"}</span>
+            </button>
+
+            <button
               onClick={handleShare}
               className="p-2 text-gray-600 dark:text-gray-300 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition-colors cursor-pointer"
               title="Partager ce salon"
@@ -279,15 +318,23 @@ export function BeautySalonPublicView({ salon: propSalon, onBack }: BeautySalonP
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
-            {/* Badges in hero */}
+            {/* Badges & HeartButton in hero */}
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
               <span className="px-3 py-1 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md rounded-full text-xs font-black text-rose-600 shadow-sm">
                 {BEAUTY_TYPE_LABELS[salon.typeEtablissement]?.label || salon.typeEtablissement}
               </span>
-              <div className="flex items-center gap-1.5 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-xs font-bold text-amber-300">
-                <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
-                <span>{salon.noteMoyenne.toFixed(1)}</span>
-                <span className="text-white/60 text-[10px]">({salon.totalAvis} avis)</span>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-xs font-bold text-amber-300">
+                  <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                  <span>{salon.noteMoyenne.toFixed(1)}</span>
+                  <span className="text-white/60 text-[10px]">({salon.totalAvis} avis)</span>
+                </div>
+                <div id="beauty-salon-favorite-hero-container">
+                  <HeartButton
+                    isFavorite={isFavorite}
+                    onClick={handleToggleFavorite}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -385,10 +432,10 @@ export function BeautySalonPublicView({ salon: propSalon, onBack }: BeautySalonP
         </div>
 
         {/* Section Navigation Tabs */}
-        <div className="flex bg-gray-100 dark:bg-gray-850 p-1 rounded-2xl max-w-md mx-auto">
+        <div className="flex bg-gray-100 dark:bg-gray-850 p-1 rounded-2xl max-w-lg mx-auto">
           <button
             onClick={() => setActiveTab('services')}
-            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`flex-1 py-2.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'services'
                 ? 'bg-white dark:bg-gray-900 text-rose-600 shadow-sm font-black'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
@@ -399,20 +446,32 @@ export function BeautySalonPublicView({ salon: propSalon, onBack }: BeautySalonP
           </button>
 
           <button
+            onClick={() => setActiveTab('galerie')}
+            className={`flex-1 py-2.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeTab === 'galerie'
+                ? 'bg-white dark:bg-gray-900 text-rose-600 shadow-sm font-black'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+            }`}
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            <span>Réalisations ({salon.photosGalerie?.length || 0})</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('horaires')}
-            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`flex-1 py-2.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'horaires'
                 ? 'bg-white dark:bg-gray-900 text-rose-600 shadow-sm font-black'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
             }`}
           >
             <Clock className="w-3.5 h-3.5" />
-            <span>Horaires & Lieu</span>
+            <span>Horaires</span>
           </button>
 
           <button
             onClick={() => setActiveTab('avis')}
-            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`flex-1 py-2.5 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'avis'
                 ? 'bg-white dark:bg-gray-900 text-rose-600 shadow-sm font-black'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
@@ -520,7 +579,76 @@ export function BeautySalonPublicView({ salon: propSalon, onBack }: BeautySalonP
           </div>
         )}
 
-        {/* TAB 2: Horaires d'Ouverture & Localisation */}
+        {/* TAB 2: Galerie de Réalisations */}
+        {activeTab === 'galerie' && (
+          <div className="space-y-4">
+            <div className="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-rose-500" />
+                  <span>Nos Réalisations & Styles</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Découvrez les créations et travaux récents réalisés par l'équipe de {salon.nom}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleOpenBooking()}
+                className="py-2 px-3.5 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0 transition-all active:scale-98"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Prendre rendez-vous</span>
+              </button>
+            </div>
+
+            {salon.photosGalerie && salon.photosGalerie.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {salon.photosGalerie.map((photoUrl, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => setSelectedPhoto(photoUrl)}
+                    className="group relative aspect-square rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 shadow-xs cursor-pointer"
+                  >
+                    <img
+                      src={photoUrl}
+                      alt={`Réalisation ${idx + 1} - ${salon.nom}`}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="px-3 py-1.5 bg-white/90 dark:bg-gray-900/90 text-gray-900 dark:text-white rounded-full text-xs font-black shadow-md flex items-center gap-1">
+                        <ExternalLink className="w-3 h-3 text-rose-500" />
+                        <span>Agrandir</span>
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-gray-900 p-10 rounded-3xl text-center border border-gray-100 dark:border-gray-800">
+                <div className="w-14 h-14 bg-rose-50 dark:bg-rose-950/40 text-rose-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <ImageIcon className="w-7 h-7" />
+                </div>
+                <h4 className="text-sm font-black text-gray-800 dark:text-white">
+                  Galerie en cours de mise à jour
+                </h4>
+                <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+                  Le salon n'a pas encore publié de photos de ses réalisations. Vous pouvez toujours réserver l'une de leurs prestations ci-dessous.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('services')}
+                  className="mt-4 px-4 py-2 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 text-xs font-black rounded-xl cursor-pointer"
+                >
+                  Voir le catalogue des prestations
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: Horaires d'Ouverture & Localisation */}
         {activeTab === 'horaires' && (
           <div className="bg-white dark:bg-gray-900 p-5 sm:p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-6">
             <div>
@@ -955,6 +1083,49 @@ export function BeautySalonPublicView({ salon: propSalon, onBack }: BeautySalonP
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+      {/* Lightbox for Gallery Photos */}
+      {selectedPhoto && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setSelectedPhoto(null)}
+        >
+          <div
+            className="relative max-w-2xl w-full max-h-[90vh] flex flex-col items-center"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setSelectedPhoto(null)}
+              className="absolute -top-12 right-0 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors cursor-pointer"
+              title="Fermer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <img
+              src={selectedPhoto}
+              alt={`Réalisation - ${salon.nom}`}
+              className="max-h-[75vh] w-auto max-w-full object-contain rounded-2xl shadow-2xl"
+            />
+
+            <div className="mt-4 flex items-center justify-between w-full px-2 text-white">
+              <span className="text-xs font-bold text-gray-300">
+                Réalisation par {salon.nom}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedPhoto(null);
+                  handleOpenBooking();
+                }}
+                className="py-2 px-4 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer transition-transform active:scale-95"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Prendre RDV pour ce style</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
