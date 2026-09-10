@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store';
-import { Home, Compass, Heart, Briefcase, MessageSquare, User, Sun, Moon, Bell, HelpCircle, Mic } from 'lucide-react';
+import { Home, Compass, Heart, Briefcase, MessageSquare, User, Sun, Moon, Bell, HelpCircle, Mic, Sparkles, Store } from 'lucide-react';
 import { NotificationCenterModal } from './NotificationCenterModal';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -71,6 +71,20 @@ export function DashboardLayout() {
             >
               <Compass size={15} />
               <span>Explorer</span>
+            </NavLink>
+
+            <NavLink
+              to="/beauty"
+              className={({ isActive }) =>
+                `px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                  isActive
+                    ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-xs'
+                    : 'text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40'
+                }`
+              }
+            >
+              <Sparkles size={15} />
+              <span>Beauty</span>
             </NavLink>
 
             <NavLink
@@ -145,6 +159,22 @@ export function DashboardLayout() {
               </NavLink>
             )}
 
+            {currentUser?.role === 'salon_coiffure' && (
+              <NavLink
+                to="/beauty-dashboard"
+                className={({ isActive }) =>
+                  `px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                    isActive
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'text-rose-600 dark:text-rose-400 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40'
+                  }`
+                }
+              >
+                <Store size={15} />
+                <span>Mon Salon</span>
+              </NavLink>
+            )}
+
             <NavLink
               to="/help"
               className={({ isActive }) =>
@@ -173,6 +203,22 @@ export function DashboardLayout() {
                 </span>
               </div>
             )}
+
+            {/* ZAKA Beauty Quick Access */}
+            <NavLink
+              to="/beauty"
+              className={({ isActive }) =>
+                `p-2 sm:px-3 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-black ${
+                  isActive 
+                    ? 'bg-rose-600 text-white shadow-xs' 
+                    : 'bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200/60 dark:border-rose-900/40'
+                }`
+              }
+              title="ZAKA Beauty - Salons, Coiffure & Spas"
+            >
+              <Sparkles size={16} />
+              <span className="hidden sm:inline">Beauty</span>
+            </NavLink>
 
             {/* Aide / Support Quick Access */}
             <NavLink

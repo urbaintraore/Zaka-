@@ -1,6 +1,6 @@
 {
   "name": "Zaka+",
-  "description": "Découverte, réservation et avis sur les établissements et sorties au Burkina Faso.",
+  "description": "Découverte, sorties, réservations d'établissements et services de beauté ZAKA Beauty au Burkina Faso.",
   "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

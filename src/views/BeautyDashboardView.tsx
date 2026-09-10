@@ -1,0 +1,1789 @@
+import React, { useState, useEffect } from 'react';
+import {
+  BeautySalon,
+  BeautySalonType,
+  BeautyService,
+  BeautyServiceCategory,
+  BeautyAppointment,
+  BeautyAppointmentStatus,
+  BeautyReview,
+  BeautySalonClient,
+  BeautyOpeningHours
+} from '../types';
+import {
+  fetchBeautySalonByUserId,
+  saveBeautySalon,
+  updateBeautySalon,
+  fetchSalonServices,
+  saveBeautyService,
+  updateBeautyService,
+  deleteBeautyService,
+  fetchSalonAppointments,
+  updateAppointmentStatus,
+  fetchSalonReviews,
+  replyToBeautyReview,
+  fetchSalonClients,
+  formatFcfa,
+  BEAUTY_TYPE_LABELS,
+  BEAUTY_CATEGORY_LABELS
+} from '../lib/beautyService';
+import { useAppStore } from '../store';
+import { BeautySalonPublicView } from '../components/beauty/BeautySalonPublicView';
+import {
+  Calendar,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Phone,
+  MessageCircle,
+  Plus,
+  Edit2,
+  Trash2,
+  Users,
+  Star,
+  Store,
+  Sparkles,
+  Eye,
+  LogOut,
+  AlertCircle,
+  Check,
+  MapPin,
+  RefreshCw,
+  Send,
+  SlidersHorizontal,
+  Home,
+  ShieldCheck,
+  ChevronRight,
+  TrendingUp,
+  Inbox,
+  CalendarCheck,
+  CalendarClock,
+  Download,
+  Settings,
+  X
+} from 'lucide-react';
+
+interface BeautyDashboardViewProps {
+  onLogout?: () => void;
+}
+
+export type BeautyDashboardNav =
+  | 'today'            // Rendez-vous du jour
+  | 'pending'          // Demandes en attente
+  | 'all_appointments' // Tous les rendez-vous
+  | 'services'         // Catalogue des prestations
+  | 'clients'          // Répertoire clients
+  | 'reviews'          // Avis et notes
+  | 'settings';        // Paramètres & Horaires
+
+export function BeautyDashboardView({ onLogout }: BeautyDashboardViewProps = {}) {
+  const { currentUser } = useAppStore();
+  const [salon, setSalon] = useState<BeautySalon | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeNav, setActiveNav] = useState<BeautyDashboardNav>('today');
+
+  // Preview modal for public view
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  // Appointments state
+  const [appointments, setAppointments] = useState<BeautyAppointment[]>([]);
+  const [statusFilter, setStatusFilter] = useState<BeautyAppointmentStatus | 'tous'>('tous');
+  const [updatingAppId, setUpdatingAppId] = useState<string | null>(null);
+
+  // Services state
+  const [services, setServices] = useState<BeautyService[]>([]);
+  const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
+  const [editingService, setEditingService] = useState<BeautyService | null>(null);
+  const [serviceForm, setServiceForm] = useState({
+    nom: '',
+    description: '',
+    categorie: 'coiffure' as BeautyServiceCategory,
+    dureeMinutes: 45,
+    prixFcfa: 5000,
+    estPopulaire: false,
+    estActif: true
+  });
+
+  // Clients state
+  const [clients, setClients] = useState<BeautySalonClient[]>([]);
+
+  // Reviews state
+  const [reviews, setReviews] = useState<BeautyReview[]>([]);
+  const [replyingReviewId, setReplyingReviewId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
+
+  // Settings & Profile state
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileSuccessMsg, setProfileSuccessMsg] = useState('');
+
+  // Initial Onboarding state for new salon
+  const [newSalonForm, setNewSalonForm] = useState({
+    nom: '',
+    typeEtablissement: 'coiffure_femme' as BeautySalonType,
+    telephone: currentUser?.phone || '',
+    whatsapp: currentUser?.phone || '',
+    ville: 'Ouagadougou',
+    quartier: '',
+    adresse: '',
+    description: '',
+    accepteSansRdv: true,
+    aDomicile: false
+  });
+  const [isCreatingSalon, setIsCreatingSalon] = useState(false);
+
+  useEffect(() => {
+    loadSalonData();
+  }, [currentUser?.id]);
+
+  const loadSalonData = async () => {
+    if (!currentUser?.id) return;
+    setLoading(true);
+    try {
+      const salonData = await fetchBeautySalonByUserId(currentUser.id);
+      setSalon(salonData);
+
+      if (salonData) {
+        const [appts, srvs, revs, clis] = await Promise.all([
+          fetchSalonAppointments(salonData.id),
+          fetchSalonServices(salonData.id),
+          fetchSalonReviews(salonData.id),
+          fetchSalonClients(salonData.id)
+        ]);
+
+        setAppointments(appts);
+        setServices(srvs);
+        setReviews(revs);
+        setClients(clis);
+      }
+    } catch (err) {
+      console.error('Erreur chargement données salon:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Date filters
+  const todayDate = new Date().toISOString().split('T')[0];
+  const todayAppointments = appointments.filter(a => a.dateRdv === todayDate);
+  const pendingAppointments = appointments.filter(a => a.statut === 'en_attente');
+  const confirmedAppointments = appointments.filter(a => a.statut === 'confirme');
+
+  const todayRevenue = todayAppointments
+    .filter(a => a.statut === 'termine' || a.statut === 'confirme')
+    .reduce((sum, a) => sum + (a.prixTotalFcfa || 0), 0);
+
+  // CSV Export for today's appointments
+  const handleExportTodayAppointmentsCsv = () => {
+    if (!todayAppointments || todayAppointments.length === 0) {
+      alert("Aucun rendez-vous planifié aujourd'hui à exporter.");
+      return;
+    }
+
+    const headers = [
+      'Heure',
+      'Client',
+      'Téléphone',
+      'Prestation',
+      'Prix (FCFA)',
+      'Statut',
+      'Type',
+      'Adresse Domicile',
+      'Notes Client',
+      'Notes Salon'
+    ];
+
+    const statusLabels: Record<string, string> = {
+      en_attente: 'En attente',
+      confirme: 'Confirmé',
+      termine: 'Terminé',
+      annule: 'Annulé'
+    };
+
+    const rows = todayAppointments.map(app => [
+      `"${app.heureRdv}"`,
+      `"${(app.nomClient || '').replace(/"/g, '""')}"`,
+      `"${(app.telephoneClient || '').replace(/"/g, '""')}"`,
+      `"${(app.serviceNom || 'Prestation beauté').replace(/"/g, '""')}"`,
+      app.prixTotalFcfa || 0,
+      `"${statusLabels[app.statut] || app.statut}"`,
+      app.aDomicile ? '"À domicile"' : '"Au salon"',
+      `"${(app.adresseDomicile || '').replace(/"/g, '""')}"`,
+      `"${(app.notesClient || '').replace(/"/g, '""')}"`,
+      `"${(app.notesSalon || '').replace(/"/g, '""')}"`
+    ]);
+
+    // UTF-8 BOM for flawless Excel opening with accents
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const salonSlug = (salon?.nom || 'salon')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `rendez-vous-du-jour-${todayDate}-${salonSlug}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Status handlers
+  const handleUpdateStatus = async (appointmentId: string, newStatus: BeautyAppointmentStatus) => {
+    setUpdatingAppId(appointmentId);
+    try {
+      await updateAppointmentStatus(appointmentId, newStatus);
+      setAppointments(prev =>
+        prev.map(a => (a.id === appointmentId ? { ...a, statut: newStatus } : a))
+      );
+    } catch (err) {
+      console.error('Erreur mise à jour statut:', err);
+    } finally {
+      setUpdatingAppId(null);
+    }
+  };
+
+  // Service CRUD handlers
+  const handleOpenCreateService = () => {
+    setEditingService(null);
+    setServiceForm({
+      nom: '',
+      description: '',
+      categorie: 'coiffure',
+      dureeMinutes: 45,
+      prixFcfa: 5000,
+      estPopulaire: false,
+      estActif: true
+    });
+    setIsServiceModalOpen(true);
+  };
+
+  const handleOpenEditService = (service: BeautyService) => {
+    setEditingService(service);
+    setServiceForm({
+      nom: service.nom,
+      description: service.description || '',
+      categorie: service.categorie,
+      dureeMinutes: service.dureeMinutes,
+      prixFcfa: service.prixFcfa,
+      estPopulaire: service.estPopulaire,
+      estActif: service.estActif
+    });
+    setIsServiceModalOpen(true);
+  };
+
+  const handleSaveService = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!salon) return;
+
+    try {
+      if (editingService) {
+        const updated = await updateBeautyService(editingService.id, serviceForm);
+        setServices(prev => prev.map(s => (s.id === updated.id ? updated : s)));
+      } else {
+        const created = await saveBeautyService({
+          salonId: salon.id,
+          ...serviceForm
+        });
+        setServices(prev => [...prev, created]);
+      }
+      setIsServiceModalOpen(false);
+    } catch (err) {
+      console.error('Erreur sauvegarde service:', err);
+    }
+  };
+
+  const handleDeleteService = async (serviceId: string) => {
+    if (!window.confirm('Voulez-vous vraiment supprimer cette prestation ?')) return;
+    try {
+      await deleteBeautyService(serviceId);
+      setServices(prev => prev.filter(s => s.id !== serviceId));
+    } catch (err) {
+      console.error('Erreur suppression service:', err);
+    }
+  };
+
+  // Review reply handler
+  const handleReplyReview = async (reviewId: string) => {
+    if (!replyText.trim()) return;
+    try {
+      const updated = await replyToBeautyReview(reviewId, replyText.trim());
+      setReviews(prev => prev.map(r => (r.id === updated.id ? updated : r)));
+      setReplyingReviewId(null);
+      setReplyText('');
+    } catch (err) {
+      console.error('Erreur réponse avis:', err);
+    }
+  };
+
+  // Salon profile update handler
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!salon) return;
+    setIsSavingProfile(true);
+    setProfileSuccessMsg('');
+
+    try {
+      const updated = await updateBeautySalon(salon.id, salon);
+      setSalon(updated);
+      setProfileSuccessMsg('Profil et horaires enregistrés avec succès.');
+      setTimeout(() => setProfileSuccessMsg(''), 4000);
+    } catch (err) {
+      console.error('Erreur mise à jour profil salon:', err);
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  // Create initial salon handler
+  const handleCreateInitialSalon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser?.id) return;
+    setIsCreatingSalon(true);
+
+    try {
+      const created = await saveBeautySalon({
+        userId: currentUser.id,
+        nom: newSalonForm.nom,
+        typeEtablissement: newSalonForm.typeEtablissement,
+        telephone: newSalonForm.telephone,
+        whatsapp: newSalonForm.whatsapp,
+        ville: newSalonForm.ville,
+        quartier: newSalonForm.quartier,
+        adresse: newSalonForm.adresse,
+        description: newSalonForm.description,
+        accepteSansRdv: newSalonForm.accepteSansRdv,
+        aDomicile: newSalonForm.aDomicile,
+        photosGalerie: [],
+        noteMoyenne: 5.0,
+        totalAvis: 0,
+        estVerifie: false
+      });
+      setSalon(created);
+      await loadSalonData();
+    } catch (err) {
+      console.error('Erreur création salon:', err);
+    } finally {
+      setIsCreatingSalon(false);
+    }
+  };
+
+  // WhatsApp quick contact
+  const getWhatsAppClientLink = (appointment: BeautyAppointment) => {
+    const cleanPhone = appointment.telephoneClient.replace(/\D/g, '');
+    const phone = cleanPhone.startsWith('226') ? cleanPhone : `226${cleanPhone}`;
+    const message = `Bonjour ${appointment.nomClient}, ici votre salon ${salon?.nom}. Nous vous contactons concernant votre rendez-vous du ${appointment.dateRdv} à ${appointment.heureRdv}.`;
+    return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-rose-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs font-bold text-gray-500">Chargement de votre espace salon...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If no salon registered yet for this user
+  if (!salon) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 sm:p-8 flex items-center justify-center">
+        <div className="max-w-xl w-full bg-white dark:bg-gray-900 rounded-3xl p-6 sm:p-8 border border-gray-100 dark:border-gray-800 shadow-xl space-y-6">
+          <div className="text-center space-y-2">
+            <div className="w-16 h-16 bg-gradient-to-tr from-rose-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto text-white shadow-lg shadow-rose-500/30">
+              <Sparkles className="w-8 h-8" />
+            </div>
+            <h1 className="text-2xl font-black text-gray-900 dark:text-white">
+              Bienvenue sur ZAKA Beauty
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-500 max-w-md mx-auto">
+              Configurez le profil de votre salon de coiffure, barber shop ou institut pour recevoir des réservations en ligne dès aujourd'hui.
+            </p>
+          </div>
+
+          <form onSubmit={handleCreateInitialSalon} className="space-y-4 text-xs font-bold">
+            <div>
+              <label className="block text-gray-700 dark:text-gray-300 mb-1">Nom de votre établissement *</label>
+              <input
+                type="text"
+                required
+                placeholder="Ex: Salon Glamour Prestige, Barber King..."
+                value={newSalonForm.nom}
+                onChange={e => setNewSalonForm({ ...newSalonForm, nom: e.target.value })}
+                className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-medium outline-none focus:border-rose-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-700 dark:text-gray-300 mb-1">Type d'activité *</label>
+                <select
+                  value={newSalonForm.typeEtablissement}
+                  onChange={e => setNewSalonForm({ ...newSalonForm, typeEtablissement: e.target.value as BeautySalonType })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-bold outline-none focus:border-rose-500"
+                >
+                  <option value="coiffure_femme">Salon de coiffure femme</option>
+                  <option value="barber">Barber shop (Hommes)</option>
+                  <option value="mixte">Salon mixte</option>
+                  <option value="institut">Institut de beauté & soins</option>
+                  <option value="onglerie">Bar à ongles / Onglerie</option>
+                  <option value="spa">Spa & Bien-être</option>
+                  <option value="maquillage">Studio maquillage / MUA</option>
+                  <option value="domicile">Coiffeur / Soins à domicile</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-gray-700 dark:text-gray-300 mb-1">Ville *</label>
+                <select
+                  value={newSalonForm.ville}
+                  onChange={e => setNewSalonForm({ ...newSalonForm, ville: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-bold outline-none focus:border-rose-500"
+                >
+                  <option value="Ouagadougou">Ouagadougou</option>
+                  <option value="Bobo-Dioulasso">Bobo-Dioulasso</option>
+                  <option value="Koudougou">Koudougou</option>
+                  <option value="Autre">Autre ville</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-700 dark:text-gray-300 mb-1">Téléphone d'appel *</label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="Ex: 70 00 00 00"
+                  value={newSalonForm.telephone}
+                  onChange={e => setNewSalonForm({ ...newSalonForm, telephone: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-medium outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 dark:text-gray-300 mb-1">Numéro WhatsApp</label>
+                <input
+                  type="tel"
+                  placeholder="Ex: 78 00 00 00"
+                  value={newSalonForm.whatsapp}
+                  onChange={e => setNewSalonForm({ ...newSalonForm, whatsapp: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-medium outline-none focus:border-rose-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-700 dark:text-gray-300 mb-1">Quartier</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Ouaga 2000, 1200 Logements, Zone 1..."
+                  value={newSalonForm.quartier}
+                  onChange={e => setNewSalonForm({ ...newSalonForm, quartier: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-medium outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 dark:text-gray-300 mb-1">Adresse ou repère précis</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Face à la station Shell"
+                  value={newSalonForm.adresse}
+                  onChange={e => setNewSalonForm({ ...newSalonForm, adresse: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl text-xs font-medium outline-none focus:border-rose-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 pt-2">
+              <label className="flex items-center gap-2 cursor-pointer text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={newSalonForm.accepteSansRdv}
+                  onChange={e => setNewSalonForm({ ...newSalonForm, accepteSansRdv: e.target.checked })}
+                  className="rounded text-rose-600 focus:ring-rose-500"
+                />
+                <span>Accepte sans rendez-vous</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={newSalonForm.aDomicile}
+                  onChange={e => setNewSalonForm({ ...newSalonForm, aDomicile: e.target.checked })}
+                  className="rounded text-rose-600 focus:ring-rose-500"
+                />
+                <span>Propose des prestations à domicile</span>
+              </label>
+            </div>
+
+            <div className="pt-4 flex items-center justify-between">
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="text-xs font-bold text-gray-400 hover:text-gray-600 flex items-center gap-1.5"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Déconnexion</span>
+                </button>
+              )}
+
+              <button
+                type="submit"
+                disabled={isCreatingSalon}
+                className="ml-auto px-6 py-3 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white font-black text-xs rounded-xl shadow-lg shadow-rose-600/30 transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
+              >
+                {isCreatingSalon && (
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                )}
+                <span>Créer et activer mon salon</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // Filter appointments for 'all_appointments' tab
+  const filteredAllAppointments = appointments.filter(a => {
+    if (statusFilter === 'tous') return true;
+    return a.statut === statusFilter;
+  });
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col lg:flex-row pb-24 lg:pb-8">
+      {/* ========================================================================= */}
+      {/* NAVIGATION LATÉRALE (SIDEBAR DÉDIÉE)                                       */}
+      {/* ========================================================================= */}
+      <aside className="w-full lg:w-72 bg-white dark:bg-gray-900 border-b lg:border-b-0 lg:border-r border-gray-100 dark:border-gray-800 p-4 lg:p-5 shrink-0 flex flex-col justify-between">
+        <div className="space-y-6">
+          {/* Salon Identification Card */}
+          <div className="bg-rose-50/70 dark:bg-rose-950/40 p-3.5 rounded-2xl border border-rose-100 dark:border-rose-900/40 flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-rose-600 to-pink-600 flex items-center justify-center text-white font-black text-lg shrink-0 shadow-sm">
+              {salon.photoProfil ? (
+                <img src={salon.photoProfil} alt={salon.nom} className="w-full h-full object-cover rounded-xl" />
+              ) : (
+                salon.nom.charAt(0)
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-xs font-black text-gray-900 dark:text-white truncate">
+                  {salon.nom}
+                </h2>
+                {salon.estVerifie && (
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                )}
+              </div>
+              <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 truncate">
+                {BEAUTY_TYPE_LABELS[salon.typeEtablissement]?.label || salon.typeEtablissement}
+              </p>
+              <div className="flex items-center gap-1 text-[10px] text-gray-400 mt-0.5">
+                <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                <span className="font-bold text-gray-700 dark:text-gray-300">{salon.noteMoyenne.toFixed(1)}</span>
+                <span>({salon.totalAvis} avis)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Action: Aperçu Public Button */}
+          <button
+            type="button"
+            onClick={() => setIsPreviewOpen(true)}
+            className="w-full py-2.5 px-3.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200 rounded-xl text-xs font-black flex items-center justify-center gap-2 cursor-pointer transition-colors"
+          >
+            <Eye className="w-3.5 h-3.5 text-rose-500" />
+            <span>Voir mon salon en public</span>
+          </button>
+
+          {/* Navigation Links */}
+          <nav className="space-y-1">
+            {/* 1. Rendez-vous du jour */}
+            <button
+              onClick={() => setActiveNav('today')}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeNav === 'today'
+                  ? 'bg-rose-600 text-white shadow-sm font-black'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <CalendarClock className="w-4 h-4" />
+                <span>Rendez-vous du jour</span>
+              </div>
+              {todayAppointments.length > 0 && (
+                <span className={`px-2 py-0.5 text-[10px] font-black rounded-full ${
+                  activeNav === 'today' ? 'bg-white text-rose-600' : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                }`}>
+                  {todayAppointments.length}
+                </span>
+              )}
+            </button>
+
+            {/* 2. Demandes en attente */}
+            <button
+              onClick={() => setActiveNav('pending')}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeNav === 'pending'
+                  ? 'bg-rose-600 text-white shadow-sm font-black'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Inbox className="w-4 h-4" />
+                <span>Demandes en attente</span>
+              </div>
+              {pendingAppointments.length > 0 && (
+                <span className="px-2 py-0.5 text-[10px] font-black rounded-full bg-amber-500 text-white animate-pulse">
+                  {pendingAppointments.length}
+                </span>
+              )}
+            </button>
+
+            {/* 3. Tous les rendez-vous */}
+            <button
+              onClick={() => setActiveNav('all_appointments')}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeNav === 'all_appointments'
+                  ? 'bg-rose-600 text-white shadow-sm font-black'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Calendar className="w-4 h-4" />
+                <span>Tous les rendez-vous</span>
+              </div>
+              <span className="text-[10px] text-gray-400">
+                {appointments.length}
+              </span>
+            </button>
+
+            {/* 4. Catalogue des services */}
+            <button
+              onClick={() => setActiveNav('services')}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeNav === 'services'
+                  ? 'bg-rose-600 text-white shadow-sm font-black'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Sparkles className="w-4 h-4" />
+                <span>Catalogue des services</span>
+              </div>
+              <span className="text-[10px] text-gray-400">
+                {services.length}
+              </span>
+            </button>
+
+            {/* 5. Clients du salon */}
+            <button
+              onClick={() => setActiveNav('clients')}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeNav === 'clients'
+                  ? 'bg-rose-600 text-white shadow-sm font-black'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Users className="w-4 h-4" />
+                <span>Fichier Clients</span>
+              </div>
+              <span className="text-[10px] text-gray-400">
+                {clients.length}
+              </span>
+            </button>
+
+            {/* 6. Avis et notations */}
+            <button
+              onClick={() => setActiveNav('reviews')}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeNav === 'reviews'
+                  ? 'bg-rose-600 text-white shadow-sm font-black'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Star className="w-4 h-4" />
+                <span>Avis & Évaluations</span>
+              </div>
+              <span className="text-[10px] text-gray-400">
+                {reviews.length}
+              </span>
+            </button>
+
+            {/* 7. Paramètres & Horaires */}
+            <button
+              onClick={() => setActiveNav('settings')}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeNav === 'settings'
+                  ? 'bg-rose-600 text-white shadow-sm font-black'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Settings className="w-4 h-4" />
+                <span>Paramètres & Horaires</span>
+              </div>
+            </button>
+          </nav>
+        </div>
+
+        {/* Sidebar Footer */}
+        <div className="pt-6 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs">
+          <button
+            onClick={loadSalonData}
+            className="flex items-center gap-1.5 text-gray-500 hover:text-rose-600 cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Actualiser</span>
+          </button>
+
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-1.5 text-red-500 hover:text-red-600 font-bold cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Déconnexion</span>
+            </button>
+          )}
+        </div>
+      </aside>
+
+      {/* ========================================================================= */}
+      {/* MAIN CONTENT AREA                                                         */}
+      {/* ========================================================================= */}
+      <main className="flex-1 p-4 lg:p-8 max-w-5xl space-y-6 overflow-y-auto">
+        {/* Top Metric Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs">
+            <div className="flex items-center justify-between text-gray-400 mb-1">
+              <span className="text-[11px] font-bold">RDV Aujourd'hui</span>
+              <CalendarClock className="w-4 h-4 text-rose-500" />
+            </div>
+            <div className="text-xl font-black text-gray-900 dark:text-white">
+              {todayAppointments.length}
+            </div>
+            <div className="text-[10px] text-gray-500 mt-0.5">
+              {todayAppointments.filter(a => a.statut === 'confirme').length} confirmés
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs">
+            <div className="flex items-center justify-between text-gray-400 mb-1">
+              <span className="text-[11px] font-bold">En attente</span>
+              <Inbox className="w-4 h-4 text-amber-500" />
+            </div>
+            <div className="text-xl font-black text-amber-600 dark:text-amber-400">
+              {pendingAppointments.length}
+            </div>
+            <div className="text-[10px] text-gray-500 mt-0.5">
+              À confirmer rapidement
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs">
+            <div className="flex items-center justify-between text-gray-400 mb-1">
+              <span className="text-[11px] font-bold">Total Clients</span>
+              <Users className="w-4 h-4 text-blue-500" />
+            </div>
+            <div className="text-xl font-black text-gray-900 dark:text-white">
+              {clients.length}
+            </div>
+            <div className="text-[10px] text-gray-500 mt-0.5">
+              Fidélisés via ZAKA+
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs">
+            <div className="flex items-center justify-between text-gray-400 mb-1">
+              <span className="text-[11px] font-bold">CA Estimé Jour</span>
+              <TrendingUp className="w-4 h-4 text-emerald-500" />
+            </div>
+            <div className="text-xl font-black text-emerald-600 dark:text-emerald-400">
+              {formatFcfa(todayRevenue)}
+            </div>
+            <div className="text-[10px] text-gray-500 mt-0.5">
+              Prestations du jour
+            </div>
+          </div>
+        </div>
+
+        {/* ----------------------------------------------------------------------- */}
+        {/* VIEW 1: RENDEZ-VOUS DU JOUR                                            */}
+        {/* ----------------------------------------------------------------------- */}
+        {activeNav === 'today' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
+                  <CalendarClock className="w-5 h-5 text-rose-500" />
+                  <span>Planning du jour ({todayDate})</span>
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Visualisez et traitez les clients attendus aujourd'hui dans votre salon.
+                </p>
+              </div>
+
+              {/* Bouton Exporter en CSV */}
+              <button
+                id="export-today-appointments-csv-btn"
+                type="button"
+                onClick={handleExportTodayAppointmentsCsv}
+                disabled={todayAppointments.length === 0}
+                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                  todayAppointments.length > 0
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/20'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
+                }`}
+                title={todayAppointments.length > 0 ? "Télécharger la liste des rendez-vous du jour en fichier CSV" : "Aucun rendez-vous à exporter"}
+              >
+                <Download className="w-4 h-4" />
+                <span>Exporter en CSV</span>
+                {todayAppointments.length > 0 && (
+                  <span className="px-1.5 py-0.5 bg-white/20 rounded-md text-[10px] font-black">
+                    {todayAppointments.length}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {todayAppointments.length === 0 ? (
+              <div className="bg-white dark:bg-gray-900 p-10 rounded-3xl text-center border border-gray-100 dark:border-gray-800">
+                <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <h4 className="text-sm font-black text-gray-800 dark:text-white">
+                  Aucun rendez-vous planifié aujourd'hui
+                </h4>
+                <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+                  Vos créneaux libres sont visibles par vos clients sur ZAKA Beauty.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {todayAppointments.map(appointment => (
+                  <div
+                    key={appointment.id}
+                    className={`p-4 rounded-2xl border transition-all ${
+                      appointment.statut === 'en_attente'
+                        ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50'
+                        : appointment.statut === 'confirme'
+                        ? 'bg-white dark:bg-gray-900 border-rose-200 dark:border-rose-900/50'
+                        : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 opacity-80'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="px-3 py-2 bg-rose-100 dark:bg-rose-950/60 rounded-xl text-center shrink-0">
+                          <span className="block text-sm font-black text-rose-600 dark:text-rose-400">
+                            {appointment.heureRdv}
+                          </span>
+                          <span className="text-[10px] font-bold text-gray-400 uppercase">
+                            Aujourd'hui
+                          </span>
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-black text-gray-900 dark:text-white">
+                              {appointment.nomClient}
+                            </h4>
+                            {appointment.aDomicile && (
+                              <span className="px-2 py-0.5 bg-purple-50 dark:bg-purple-950 text-purple-600 text-[10px] font-bold rounded-md">
+                                À domicile
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                            Prestation : <strong>{appointment.serviceNom || 'Prestation beauté'}</strong> — {formatFcfa(appointment.prixTotalFcfa || 0)}
+                          </p>
+
+                          {appointment.notesClient && (
+                            <p className="text-[11px] text-gray-500 italic">
+                              Note : « {appointment.notesClient} »
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Contact & Status Controls */}
+                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end">
+                        <a
+                          href={`tel:${appointment.telephoneClient}`}
+                          className="p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold flex items-center gap-1"
+                          title="Appeler le client"
+                        >
+                          <Phone className="w-3.5 h-3.5 text-rose-500" />
+                          <span className="hidden sm:inline">{appointment.telephoneClient}</span>
+                        </a>
+
+                        <a
+                          href={getWhatsAppClientLink(appointment)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-1"
+                          title="WhatsApp direct avec message pré-rempli"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 text-emerald-500" />
+                          <span className="hidden sm:inline">WhatsApp</span>
+                        </a>
+
+                        {/* Status Change Buttons */}
+                        {appointment.statut === 'en_attente' && (
+                          <button
+                            onClick={() => handleUpdateStatus(appointment.id, 'confirme')}
+                            disabled={updatingAppId === appointment.id}
+                            className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black flex items-center gap-1 cursor-pointer"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Confirmer</span>
+                          </button>
+                        )}
+
+                        {appointment.statut === 'confirme' && (
+                          <button
+                            onClick={() => handleUpdateStatus(appointment.id, 'termine')}
+                            disabled={updatingAppId === appointment.id}
+                            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black flex items-center gap-1 cursor-pointer"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Terminer</span>
+                          </button>
+                        )}
+
+                        {appointment.statut !== 'annule' && appointment.statut !== 'termine' && (
+                          <button
+                            onClick={() => handleUpdateStatus(appointment.id, 'annule')}
+                            disabled={updatingAppId === appointment.id}
+                            className="p-2 text-gray-400 hover:text-red-600 rounded-xl cursor-pointer"
+                            title="Annuler le rendez-vous"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ----------------------------------------------------------------------- */}
+        {/* VIEW 2: DEMANDES EN ATTENTE                                            */}
+        {/* ----------------------------------------------------------------------- */}
+        {activeNav === 'pending' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
+                  <Inbox className="w-5 h-5 text-amber-500" />
+                  <span>Demandes de rendez-vous en attente ({pendingAppointments.length})</span>
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Confirmez ces réservations ou contactez vos clients pour ajuster le créneau.
+                </p>
+              </div>
+            </div>
+
+            {pendingAppointments.length === 0 ? (
+              <div className="bg-white dark:bg-gray-900 p-10 rounded-3xl text-center border border-gray-100 dark:border-gray-800">
+                <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
+                <h4 className="text-sm font-black text-gray-800 dark:text-white">
+                  Toutes les demandes ont été traitées !
+                </h4>
+                <p className="text-xs text-gray-500 mt-1">
+                  Aucune demande de réservation en attente pour le moment.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {pendingAppointments.map(appointment => (
+                  <div
+                    key={appointment.id}
+                    className="bg-white dark:bg-gray-900 p-4 sm:p-5 rounded-2xl border-2 border-amber-200 dark:border-amber-900/60 shadow-sm space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-base font-black text-gray-900 dark:text-white">
+                            {appointment.nomClient}
+                          </h4>
+                          <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 text-[10px] font-black rounded-md uppercase">
+                            En attente de confirmation
+                          </span>
+                        </div>
+
+                        <p className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                          Date demandée : <span className="text-rose-600">{appointment.dateRdv} à {appointment.heureRdv}</span>
+                        </p>
+
+                        <p className="text-xs text-gray-500">
+                          Service : <strong>{appointment.serviceNom || 'Prestation'}</strong> ({formatFcfa(appointment.prixTotalFcfa || 0)})
+                        </p>
+
+                        {appointment.aDomicile && (
+                          <p className="text-xs font-semibold text-purple-600">
+                            Adresse domicile : {appointment.adresseDomicile || 'Non spécifiée'}
+                          </p>
+                        )}
+
+                        {appointment.notesClient && (
+                          <p className="text-xs text-gray-500 italic bg-gray-50 dark:bg-gray-800/50 p-2 rounded-lg">
+                            « {appointment.notesClient} »
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Immediate Confirmation Buttons */}
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={getWhatsAppClientLink(appointment)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          <span>WhatsApp</span>
+                        </a>
+
+                        <button
+                          onClick={() => handleUpdateStatus(appointment.id, 'confirme')}
+                          disabled={updatingAppId === appointment.id}
+                          className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm cursor-pointer"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>Confirmer le RDV</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleUpdateStatus(appointment.id, 'annule')}
+                          disabled={updatingAppId === appointment.id}
+                          className="px-3 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-red-50 text-gray-500 hover:text-red-600 rounded-xl text-xs font-bold cursor-pointer"
+                        >
+                          Refuser
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ----------------------------------------------------------------------- */}
+        {/* VIEW 3: TOUS LES RENDEZ-VOUS                                            */}
+        {/* ----------------------------------------------------------------------- */}
+        {activeNav === 'all_appointments' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-gray-900 dark:text-white">
+                  Historique des rendez-vous ({appointments.length})
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Filtrez par statut pour consulter vos rendez-vous passés et à venir.
+                </p>
+              </div>
+
+              {/* Status Filter */}
+              <div className="flex items-center gap-1 bg-white dark:bg-gray-900 p-1 rounded-xl border border-gray-100 dark:border-gray-800 text-xs">
+                {(['tous', 'en_attente', 'confirme', 'termine', 'annule'] as const).map(st => (
+                  <button
+                    key={st}
+                    onClick={() => setStatusFilter(st)}
+                    className={`px-2.5 py-1.5 rounded-lg font-bold capitalize transition-all cursor-pointer ${
+                      statusFilter === st
+                        ? 'bg-rose-600 text-white shadow-xs'
+                        : 'text-gray-500 hover:text-gray-900'
+                    }`}
+                  >
+                    {st === 'tous' ? 'Tous' : st.replace('_', ' ')}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {filteredAllAppointments.length === 0 ? (
+                <div className="bg-white dark:bg-gray-900 p-8 rounded-3xl text-center border border-gray-100 dark:border-gray-800">
+                  <p className="text-xs font-bold text-gray-500">Aucun rendez-vous trouvé.</p>
+                </div>
+              ) : (
+                filteredAllAppointments.map(appointment => (
+                  <div
+                    key={appointment.id}
+                    className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-gray-900 dark:text-white">
+                          {appointment.nomClient}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                          appointment.statut === 'confirme'
+                            ? 'bg-rose-50 text-rose-600'
+                            : appointment.statut === 'termine'
+                            ? 'bg-emerald-50 text-emerald-600'
+                            : appointment.statut === 'annule'
+                            ? 'bg-red-50 text-red-600'
+                            : 'bg-amber-50 text-amber-600'
+                        }`}>
+                          {appointment.statut.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {appointment.dateRdv} à {appointment.heureRdv} — {appointment.serviceNom || 'Prestation'} ({formatFcfa(appointment.prixTotalFcfa || 0)})
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={`tel:${appointment.telephoneClient}`}
+                        className="p-2 bg-gray-100 dark:bg-gray-800 rounded-xl text-xs font-bold text-gray-700"
+                        title="Appeler"
+                      >
+                        <Phone className="w-3.5 h-3.5 text-rose-500" />
+                      </a>
+                      <a
+                        href={getWhatsAppClientLink(appointment)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 bg-emerald-50 dark:bg-emerald-950/60 rounded-xl text-xs font-bold text-emerald-600"
+                        title="WhatsApp"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ----------------------------------------------------------------------- */}
+        {/* VIEW 4: CATALOGUE DES SERVICES (PRESTATIONS)                           */}
+        {/* ----------------------------------------------------------------------- */}
+        {activeNav === 'services' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-rose-500" />
+                  <span>Catalogue des prestations ({services.length})</span>
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Définissez vos prix en FCFA, durées et prestations proposées à vos clients.
+                </p>
+              </div>
+
+              <button
+                onClick={handleOpenCreateService}
+                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Ajouter une prestation</span>
+              </button>
+            </div>
+
+            {services.length === 0 ? (
+              <div className="bg-white dark:bg-gray-900 p-10 rounded-3xl text-center border border-gray-100 dark:border-gray-800">
+                <Sparkles className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <h4 className="text-sm font-black text-gray-800 dark:text-white">
+                  Aucun service dans votre carte
+                </h4>
+                <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+                  Ajoutez vos premières prestations (coiffure, tresses, barbe, soins, manucure...) pour permettre aux clients de réserver en ligne.
+                </p>
+                <button
+                  onClick={handleOpenCreateService}
+                  className="mt-4 px-4 py-2 bg-rose-600 text-white text-xs font-black rounded-xl cursor-pointer"
+                >
+                  Ajouter un service
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {services.map(service => (
+                  <div
+                    key={service.id}
+                    className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs flex flex-col justify-between space-y-3"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="text-sm font-black text-gray-900 dark:text-white">
+                              {service.nom}
+                            </h4>
+                            {service.estPopulaire && (
+                              <span className="px-1.5 py-0.5 bg-rose-50 dark:bg-rose-950/60 text-rose-600 text-[10px] font-black rounded-md uppercase">
+                                Populaire
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] font-semibold text-gray-400">
+                            {BEAUTY_CATEGORY_LABELS[service.categorie]?.label || service.categorie}
+                          </span>
+                        </div>
+
+                        <span className="text-sm font-black text-rose-600 dark:text-rose-400">
+                          {formatFcfa(service.prixFcfa)}
+                        </span>
+                      </div>
+
+                      {service.description && (
+                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                          {service.description}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-50 dark:border-gray-800/80 text-xs">
+                      <span className="flex items-center gap-1 font-bold text-gray-400">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>{service.dureeMinutes} min</span>
+                      </span>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleOpenEditService(service)}
+                          className="p-1.5 text-gray-500 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                          title="Modifier"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteService(service.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 cursor-pointer"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ----------------------------------------------------------------------- */}
+        {/* VIEW 5: FICHIER CLIENTS                                                */}
+        {/* ----------------------------------------------------------------------- */}
+        {activeNav === 'clients' && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
+                <Users className="w-5 h-5 text-blue-500" />
+                <span>Répertoire des clients ({clients.length})</span>
+              </h3>
+              <p className="text-xs text-gray-500">
+                Coordonnées et historique des clients ayant pris rendez-vous dans votre salon.
+              </p>
+            </div>
+
+            {clients.length === 0 ? (
+              <div className="bg-white dark:bg-gray-900 p-8 rounded-3xl text-center border border-gray-100 dark:border-gray-800">
+                <p className="text-xs font-bold text-gray-500">
+                  Aucun client enregistré pour l'instant. Vos clients apparaîtront ici dès leur première réservation.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden">
+                <div className="divide-y divide-gray-100 dark:divide-gray-800 text-xs">
+                  {clients.map(cli => (
+                    <div key={cli.telephoneClient} className="p-4 flex items-center justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-gray-900 dark:text-white">
+                            {cli.nomClient}
+                          </span>
+                          <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950 text-blue-600 text-[10px] font-bold rounded-md">
+                            {cli.totalRendezVous} rendez-vous
+                          </span>
+                        </div>
+                        <p className="text-gray-400 text-[11px]">
+                          Dernière visite le {cli.dernierRdvDate} — Total dépensé : {formatFcfa(cli.totalDepenseFcfa)}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`tel:${cli.telephoneClient}`}
+                          className="p-2 bg-gray-100 dark:bg-gray-800 text-gray-700 rounded-xl"
+                          title="Appeler"
+                        >
+                          <Phone className="w-3.5 h-3.5 text-rose-500" />
+                        </a>
+                        <a
+                          href={`https://wa.me/${cli.telephoneClient.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 rounded-xl"
+                          title="WhatsApp"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ----------------------------------------------------------------------- */}
+        {/* VIEW 6: AVIS & NOTATIONS                                               */}
+        {/* ----------------------------------------------------------------------- */}
+        {activeNav === 'reviews' && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
+                <Star className="w-5 h-5 text-amber-500" />
+                <span>Avis & Évaluations clients ({reviews.length})</span>
+              </h3>
+              <p className="text-xs text-gray-500">
+                Note globale : {salon.noteMoyenne.toFixed(1)} / 5. Répondez à vos clients pour valoriser votre e-réputation.
+              </p>
+            </div>
+
+            {reviews.length === 0 ? (
+              <div className="bg-white dark:bg-gray-900 p-8 rounded-3xl text-center border border-gray-100 dark:border-gray-800">
+                <p className="text-xs font-bold text-gray-500">
+                  Aucun avis reçu pour le moment.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {reviews.map(review => (
+                  <div
+                    key={review.id}
+                    className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-2 text-xs"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center font-bold">
+                          {review.nomClient.charAt(0)}
+                        </div>
+                        <span className="font-black text-gray-900 dark:text-white">
+                          {review.nomClient}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-3.5 h-3.5 ${
+                              i < review.note ? 'fill-amber-400 text-amber-400' : 'text-gray-300'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {review.commentaire && (
+                      <p className="text-gray-600 dark:text-gray-300 pl-9">
+                        {review.commentaire}
+                      </p>
+                    )}
+
+                    {review.reponseSalon ? (
+                      <div className="ml-9 p-3 bg-rose-50/50 dark:bg-rose-950/30 rounded-xl border-l-2 border-rose-500">
+                        <span className="font-bold text-rose-600 block mb-0.5">Votre réponse :</span>
+                        <p className="text-gray-600 dark:text-gray-300">{review.reponseSalon}</p>
+                      </div>
+                    ) : (
+                      <div className="ml-9 pt-1">
+                        {replyingReviewId === review.id ? (
+                          <div className="space-y-2">
+                            <textarea
+                              rows={2}
+                              value={replyText}
+                              onChange={e => setReplyText(e.target.value)}
+                              placeholder="Écrivez votre réponse publique..."
+                              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl outline-none"
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => setReplyingReviewId(null)}
+                                className="px-3 py-1.5 bg-gray-100 rounded-lg text-gray-600 font-bold"
+                              >
+                                Annuler
+                              </button>
+                              <button
+                                onClick={() => handleReplyReview(review.id)}
+                                className="px-3 py-1.5 bg-rose-600 text-white rounded-lg font-bold"
+                              >
+                                Envoyer la réponse
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setReplyingReviewId(review.id);
+                              setReplyText('');
+                            }}
+                            className="text-rose-600 font-bold hover:underline"
+                          >
+                            Répondre à cet avis
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ----------------------------------------------------------------------- */}
+        {/* VIEW 7: PARAMÈTRES & HORAIRES                                          */}
+        {/* ----------------------------------------------------------------------- */}
+        {activeNav === 'settings' && (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
+                <Settings className="w-5 h-5 text-gray-500" />
+                <span>Paramètres & Horaires d'ouverture</span>
+              </h3>
+              <p className="text-xs text-gray-500">
+                Mettez à jour les informations visibles par les clients sur ZAKA Beauty.
+              </p>
+            </div>
+
+            {profileSuccessMsg && (
+              <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-2xl text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                <span>{profileSuccessMsg}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateProfile} className="bg-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-800 space-y-4 text-xs font-bold">
+              <div>
+                <label className="block text-gray-700 dark:text-gray-300 mb-1">Nom de l'établissement *</label>
+                <input
+                  type="text"
+                  required
+                  value={salon.nom}
+                  onChange={e => setSalon({ ...salon, nom: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-1">Téléphone d'appel *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={salon.telephone}
+                    onChange={e => setSalon({ ...salon, telephone: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:border-rose-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-1">Numéro WhatsApp</label>
+                  <input
+                    type="tel"
+                    value={salon.whatsapp || ''}
+                    onChange={e => setSalon({ ...salon, whatsapp: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:border-rose-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-1">Ville</label>
+                  <input
+                    type="text"
+                    value={salon.ville}
+                    onChange={e => setSalon({ ...salon, ville: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:border-rose-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-1">Quartier</label>
+                  <input
+                    type="text"
+                    value={salon.quartier || ''}
+                    onChange={e => setSalon({ ...salon, quartier: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:border-rose-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-gray-700 dark:text-gray-300 mb-1">Description</label>
+                <textarea
+                  rows={3}
+                  value={salon.description || ''}
+                  onChange={e => setSalon({ ...salon, description: e.target.value })}
+                  placeholder="Présentez votre savoir-faire, les spécialités de votre salon..."
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:border-rose-500"
+                />
+              </div>
+
+              {/* Options checkboxes */}
+              <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={salon.accepteSansRdv}
+                    onChange={e => setSalon({ ...salon, accepteSansRdv: e.target.checked })}
+                    className="rounded text-rose-600"
+                  />
+                  <span>Accepte les clients sans rendez-vous</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={salon.aDomicile}
+                    onChange={e => setSalon({ ...salon, aDomicile: e.target.checked })}
+                    className="rounded text-rose-600"
+                  />
+                  <span>Déplacement à domicile possible</span>
+                </label>
+              </div>
+
+              {/* Horaires d'ouverture configurables */}
+              <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3">
+                <h4 className="text-xs font-black uppercase text-gray-500 tracking-wider">
+                  Horaires d'ouverture hebdomadaires
+                </h4>
+
+                <div className="divide-y divide-gray-100 dark:divide-gray-800 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden">
+                  {Object.entries(salon.horairesOuverture || {}).map(([day, sched]) => (
+                    <div key={day} className="p-3 bg-gray-50/50 dark:bg-gray-900/50 flex items-center justify-between gap-3">
+                      <span className="font-bold capitalize w-24 text-gray-700 dark:text-gray-300">{day}</span>
+                      
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={sched.ouvert}
+                          onChange={e => {
+                            const newSched = { ...salon.horairesOuverture, [day]: { ...sched, ouvert: e.target.checked } };
+                            setSalon({ ...salon, horairesOuverture: newSched });
+                          }}
+                          className="rounded text-rose-600"
+                        />
+                        <span>{sched.ouvert ? 'Ouvert' : 'Fermé'}</span>
+                      </label>
+
+                      {sched.ouvert && (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="time"
+                            value={sched.ouverture}
+                            onChange={e => {
+                              const newSched = { ...salon.horairesOuverture, [day]: { ...sched, ouverture: e.target.value } };
+                              setSalon({ ...salon, horairesOuverture: newSched });
+                            }}
+                            className="px-2 py-1 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg text-xs"
+                          />
+                          <span>-</span>
+                          <input
+                            type="time"
+                            value={sched.fermeture}
+                            onChange={e => {
+                              const newSched = { ...salon.horairesOuverture, [day]: { ...sched, fermeture: e.target.value } };
+                              setSalon({ ...salon, horairesOuverture: newSched });
+                            }}
+                            className="px-2 py-1 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-lg text-xs"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={isSavingProfile}
+                  className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black cursor-pointer flex items-center gap-2"
+                >
+                  {isSavingProfile && <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                  <span>Enregistrer les modifications</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+      </main>
+
+      {/* ========================================================================= */}
+      {/* MODAL CRÉATION / ÉDITION DE SERVICE                                       */}
+      {/* ========================================================================= */}
+      {isServiceModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-3xl p-6 border border-gray-100 dark:border-gray-800 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-black text-gray-900 dark:text-white">
+                {editingService ? 'Modifier la prestation' : 'Nouvelle prestation'}
+              </h3>
+              <button onClick={() => setIsServiceModalOpen(false)} className="p-1 text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveService} className="space-y-3 text-xs font-bold">
+              <div>
+                <label className="block text-gray-700 dark:text-gray-300 mb-1">Nom de la prestation *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Tresses sénégalaises, Dégradé américain, Pose vernis gel..."
+                  value={serviceForm.nom}
+                  onChange={e => setServiceForm({ ...serviceForm, nom: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-1">Catégorie *</label>
+                  <select
+                    value={serviceForm.categorie}
+                    onChange={e => setServiceForm({ ...serviceForm, categorie: e.target.value as BeautyServiceCategory })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:border-rose-500"
+                  >
+                    <option value="coiffure">Coiffure</option>
+                    <option value="barbe">Barbe</option>
+                    <option value="tresses">Tresses</option>
+                    <option value="soins">Soins du visage</option>
+                    <option value="ongles">Ongles / Manucure</option>
+                    <option value="maquillage">Maquillage</option>
+                    <option value="massage">Massage / Spa</option>
+                    <option value="epilation">Épilation</option>
+                    <option value="autre">Autre</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-1">Prix (FCFA) *</label>
+                  <input
+                    type="number"
+                    required
+                    min={500}
+                    step={500}
+                    value={serviceForm.prixFcfa}
+                    onChange={e => setServiceForm({ ...serviceForm, prixFcfa: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:border-rose-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-gray-700 dark:text-gray-300 mb-1">Durée estimée (minutes) *</label>
+                <input
+                  type="number"
+                  required
+                  min={10}
+                  step={5}
+                  value={serviceForm.dureeMinutes}
+                  onChange={e => setServiceForm({ ...serviceForm, dureeMinutes: Number(e.target.value) })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 dark:text-gray-300 mb-1">Description (optionnelle)</label>
+                <textarea
+                  rows={2}
+                  placeholder="Détails des produits utilisés, conseils..."
+                  value={serviceForm.description}
+                  onChange={e => setServiceForm({ ...serviceForm, description: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-4 pt-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={serviceForm.estPopulaire}
+                    onChange={e => setServiceForm({ ...serviceForm, estPopulaire: e.target.checked })}
+                    className="rounded text-rose-600"
+                  />
+                  <span>Mettre en avant (Populaire)</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={serviceForm.estActif}
+                    onChange={e => setServiceForm({ ...serviceForm, estActif: e.target.checked })}
+                    className="rounded text-rose-600"
+                  />
+                  <span>Actif au catalogue</span>
+                </label>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsServiceModalOpen(false)}
+                  className="px-4 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-gray-700 dark:text-gray-300"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black"
+                >
+                  {editingService ? 'Mettre à jour' : 'Ajouter'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL APERÇU PUBLIC                                                       */}
+      {/* ========================================================================= */}
+      {isPreviewOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md overflow-y-auto">
+          <div className="min-h-screen">
+            <div className="sticky top-0 z-40 bg-gray-900/90 backdrop-blur-md border-b border-gray-800 p-3 px-4 flex items-center justify-between text-white">
+              <span className="text-xs font-black flex items-center gap-2">
+                <Eye className="w-4 h-4 text-rose-400" />
+                <span>Aperçu public de votre salon</span>
+              </span>
+              <button
+                onClick={() => setIsPreviewOpen(false)}
+                className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Fermer l'aperçu
+              </button>
+            </div>
+            <BeautySalonPublicView salon={salon} onBack={() => setIsPreviewOpen(false)} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

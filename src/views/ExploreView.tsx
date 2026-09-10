@@ -5,12 +5,13 @@ import { CATEGORIES_LIST, Category, Establishment, getCategoryLabel, ArtistProfi
 import { Search, MapPin, Star, Calendar, MessageSquare, Tag, Phone, Sparkles, Filter, SlidersHorizontal, Map, Grid, Crosshair, HelpCircle, Heart, Users, UserPlus, Check, Clock, X, Mic, Music, ArrowRight, ExternalLink } from 'lucide-react';
 import { RateVisitedEstablishmentModal } from '../components/RateVisitedEstablishmentModal';
 import { fetchAllArtists } from '../lib/artistService';
+import { BeautySalonsList } from '../components/beauty/BeautySalonsList';
 
 export function ExploreView() {
   const navigate = useNavigate();
   const { establishments, toggleFavorite, favorites, currentUser, addReservation, userLocation, setUserLocation, users, relationshipRequests, sendFriendRequest, acceptFriendRequest, declineFriendRequest, friendships } = useAppStore();
   const [searchTerm, setSearchTerm] = useState('');
-  const [exploreTab, setExploreTab] = useState<'establishments' | 'members' | 'artists'>('establishments');
+  const [exploreTab, setExploreTab] = useState<'establishments' | 'members' | 'artists' | 'beauty'>('establishments');
   const [artistsList, setArtistsList] = useState<ArtistProfile[]>([]);
   const [artistCategoryFilter, setArtistCategoryFilter] = useState('Tous');
   const [memberSearch, setMemberSearch] = useState('');
@@ -262,9 +263,22 @@ export function ExploreView() {
           <Mic size={15} />
           <span className="truncate">Artistes 🎤</span>
         </button>
+        <button
+          onClick={() => setExploreTab('beauty')}
+          className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            exploreTab === 'beauty'
+              ? 'bg-white dark:bg-gray-900 text-rose-600 shadow-sm font-black'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+          }`}
+        >
+          <Sparkles size={15} />
+          <span className="truncate">Beauty 💇‍♀️</span>
+        </button>
       </div>
 
-      {exploreTab === 'members' ? (
+      {exploreTab === 'beauty' ? (
+        <BeautySalonsList showHeroHeader={false} />
+      ) : exploreTab === 'members' ? (
         <div className="space-y-6">
           {/* Incoming Friend Requests */}
           {(() => {

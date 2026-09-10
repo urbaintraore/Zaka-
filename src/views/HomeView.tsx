@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store';
 import { Tab } from '../components/BottomNav';
 import { MapPin, Tag, Flame, Sparkles, Star, MessageSquare, Calendar, Megaphone, X, Users, Heart, ChevronLeft, ChevronRight, Eye, Trophy, TrendingUp, Award, Clock, Share2, AlertCircle, BookOpen, Phone, SlidersHorizontal, Navigation, Compass, Loader2, Wine, Search, RefreshCw, Mic, MicOff, Coins, ArrowUpDown, History, Trash2 } from 'lucide-react';
@@ -172,6 +173,7 @@ interface HomeViewProps {
 }
 
 export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
+  const navigate = useNavigate();
   const { publications, establishments, entreprises, currentUser, createServiceRequest, relationshipRequests, setGlobalError, favorites, toggleFavorite, reviews, trackPublicationView, users, loading } = useAppStore();
   const [reservationEst, setReservationEst] = useState<{ id: string, name: string } | null>(null);
   const [selectedPub, setSelectedPub] = useState<Publication | null>(null);
@@ -1174,6 +1176,17 @@ export function HomeView({ onStartChat, onNavigate }: HomeViewProps) {
                 </button>
               );
             })}
+
+            {/* ZAKA Beauty Shortcut */}
+            <button
+              type="button"
+              onClick={() => navigate('/beauty')}
+              className="shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/80 hover:bg-rose-100 dark:hover:bg-rose-900/40"
+              title="Découvrir ZAKA Beauty (Salons, Spas & Ongleries)"
+            >
+              <span className="text-xs">💇‍♀️</span>
+              <span>Beauty</span>
+            </button>
 
             {/* Compteur de résultats & Saut vers la liste */}
             <button

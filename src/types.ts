@@ -843,3 +843,131 @@ export interface ArtistFollow {
   createdAt: string;
 }
 
+// ==========================================
+// ZAKA BEAUTY MODULE TYPES & INTERFACES
+// ==========================================
+
+export type BeautySalonType = 
+  | 'coiffure_femme'
+  | 'barber'
+  | 'mixte'
+  | 'institut'
+  | 'onglerie'
+  | 'spa'
+  | 'maquillage'
+  | 'domicile'
+  | 'autre';
+
+export type BeautyServiceCategory = 
+  | 'coiffure'
+  | 'barbe'
+  | 'tresses'
+  | 'soins'
+  | 'ongles'
+  | 'maquillage'
+  | 'massage'
+  | 'epilation'
+  | 'autre';
+
+export type BeautyAppointmentStatus = 
+  | 'en_attente'
+  | 'confirme'
+  | 'annule'
+  | 'termine';
+
+export interface BeautyOpeningHoursDay {
+  ouvert: boolean;
+  ouverture: string;
+  fermeture: string;
+}
+
+export interface BeautyOpeningHours {
+  lundi: BeautyOpeningHoursDay;
+  mardi: BeautyOpeningHoursDay;
+  mercredi: BeautyOpeningHoursDay;
+  jeudi: BeautyOpeningHoursDay;
+  vendredi: BeautyOpeningHoursDay;
+  samedi: BeautyOpeningHoursDay;
+  dimanche: BeautyOpeningHoursDay;
+}
+
+export interface BeautySalon {
+  id: string;
+  userId?: string;
+  nom: string;
+  typeEtablissement: BeautySalonType;
+  description?: string;
+  adresse?: string;
+  quartier?: string;
+  ville: string;
+  pays: string;
+  telephone: string;
+  whatsapp?: string;
+  photoProfil?: string;
+  photoCouverture?: string;
+  photosGalerie?: string[];
+  horairesOuverture?: BeautyOpeningHours | Record<string, BeautyOpeningHoursDay>;
+  noteMoyenne: number;
+  totalAvis: number;
+  estVerifie?: boolean;
+  accepteSansRdv?: boolean;
+  aDomicile?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BeautyService {
+  id: string;
+  salonId: string;
+  nom: string;
+  description?: string;
+  categorie: BeautyServiceCategory;
+  dureeMinutes: number;
+  prixFcfa: number;
+  estPopulaire?: boolean;
+  estActif?: boolean;
+  createdAt?: string;
+}
+
+export interface BeautyAppointment {
+  id: string;
+  salonId: string;
+  salonNom?: string;
+  serviceId?: string;
+  serviceNom?: string;
+  clientId?: string;
+  nomClient: string;
+  telephoneClient: string;
+  dateRdv: string;
+  heureRdv: string;
+  statut: BeautyAppointmentStatus;
+  notesClient?: string;
+  notesSalon?: string;
+  prixTotalFcfa?: number;
+  aDomicile?: boolean;
+  adresseDomicile?: string;
+  createdAt?: string;
+}
+
+export interface BeautyReview {
+  id: string;
+  salonId: string;
+  clientId: string;
+  nomClient: string;
+  clientAvatar?: string;
+  note: number;
+  commentaire?: string;
+  reponseSalon?: string;
+  createdAt: string;
+}
+
+export interface BeautySalonClient {
+  clientId?: string;
+  nomClient: string;
+  telephoneClient: string;
+  totalRendezVous: number;
+  dernierRdvDate: string;
+  statutDernierRdv: BeautyAppointmentStatus;
+  totalDepenseFcfa: number;
+}
+

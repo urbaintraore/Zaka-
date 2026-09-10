@@ -15,6 +15,9 @@ import { HelpView } from './views/HelpView';
 import { ArtistPublicPage } from './views/ArtistPublicPage';
 import { ArtistDashboard } from './views/ArtistDashboard';
 import { PitchDeckView } from './components/PitchDeckView';
+import { BeautyDashboardView } from './views/BeautyDashboardView';
+import { BeautySalonsList } from './components/beauty/BeautySalonsList';
+import { BeautySalonPublicView } from './components/beauty/BeautySalonPublicView';
 
 export default function App() {
   return (
@@ -26,6 +29,9 @@ export default function App() {
             <Route index element={<HomeView />} />
             <Route path="home" element={<HomeView />} />
             <Route path="explore" element={<ExploreView />} />
+            <Route path="beauty" element={<BeautySalonsList />} />
+            <Route path="beauty/:id" element={<BeautySalonPublicView />} />
+            <Route path="beauty-dashboard" element={<BeautyDashboardView />} />
             <Route path="favorites" element={<FavoritesView />} />
             <Route path="jobs" element={<RecruitmentsView />} />
             <Route path="messages" element={<MessagesView />} />

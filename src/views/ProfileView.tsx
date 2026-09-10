@@ -7,6 +7,7 @@ import { GerantDashboard } from './GerantDashboard';
 import { AdminDashboard } from './AdminDashboard';
 import { EntrepriseDashboard } from './EntrepriseDashboard';
 import { ArtistDashboard } from './ArtistDashboard';
+import { BeautyDashboardView } from './BeautyDashboardView';
 import { CaissierView } from '../components/CaissierView';
 import { ZakaAdsDashboard } from '../components/ZakaAdsDashboard';
 import { useInstallApp } from '../hooks/useInstallApp';
@@ -501,6 +502,8 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
             {subView === 'dashboard' ? (
               currentUser.role === 'admin' ? (
                 <AdminDashboard onLogout={logout} />
+              ) : currentUser.role === 'salon_coiffure' ? (
+                <BeautyDashboardView onLogout={logout} />
               ) : (
                 <GerantDashboard onLogout={logout} onNavigate={onNavigate} onStartChatWithConv={onStartChatWithConv} />
               )
