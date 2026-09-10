@@ -1,14 +1,17 @@
-import { useState } from 'react';
-import { X, Check, Clock, XCircle, Info, Calendar, UserPlus, Users } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Check, Clock, XCircle, Info, Calendar, UserPlus, Users, Scissors, CheckCircle, Sparkles, AlertTriangle } from 'lucide-react';
 import { useAppStore } from '../store';
+import { AppNotification } from '../types';
 
 interface NotificationsModalProps {
   onClose: () => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
-export function NotificationsModal({ onClose }: NotificationsModalProps) {
+export function NotificationsModal({ onClose, onNavigateTab }: NotificationsModalProps) {
   const { 
     currentUser, 
+    notifications: storeNotifications = [],
     serviceRequests, 
     relationshipRequests, 
     establishments, 
@@ -19,6 +22,19 @@ export function NotificationsModal({ onClose }: NotificationsModalProps) {
   } = useAppStore();
 
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [localNotifs, setLocalNotifs] = useState<AppNotification[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('zaka_notifications');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setLocalNotifs(parsed);
+        }
+      }
+    } catch {}
+  }, []);
 
   if (!currentUser) return null;
 
@@ -26,8 +42,6 @@ export function NotificationsModal({ onClose }: NotificationsModalProps) {
   const myEstIds = myEsts.map(e => e.id);
 
   // Pour les clients: status de leurs propres requêtes de service + invitations des gérants
-  // Pour les gérants: nouvelles demandes de services sur leurs établissements + requêtes pour rejoindre
-  
   const relevantServiceRequests = serviceRequests.filter(req => {
     if (currentUser.role === 'client' && req.clientId === currentUser.id && req.status !== 'en_attente') return true;
     if ((currentUser.role === 'gerant' || currentUser.role === 'salon_coiffure') && myEstIds.includes(req.establishmentId) && req.status === 'en_attente') return true;
@@ -47,7 +61,14 @@ export function NotificationsModal({ onClose }: NotificationsModalProps) {
          f.status === 'pending'
   );
 
+  // App notifications specifically for current user or beauty appointment updates
+  const combinedAppNotifs = [...storeNotifications, ...localNotifs].filter((n, idx, self) => 
+    self.findIndex(t => t.id === n.id) === idx &&
+    (!n.userId || n.userId === currentUser.id || currentUser.role === 'client')
+  );
+
   const allNotifications = [
+    ...combinedAppNotifs.map(n => ({ type: 'app_notification' as const, data: n, date: new Date(n.createdAt || Date.now()) })),
     ...incomingFriendRequests.map(req => ({ type: 'friend_request' as const, data: req, date: new Date(req.createdAt || Date.now()) })),
     ...relevantServiceRequests.map(req => ({ type: 'service' as const, data: req, date: new Date(req.date) })),
     ...relevantRelRequests.map(req => ({ type: 'relation' as const, data: req, date: new Date(req.date) }))
@@ -82,18 +103,22 @@ export function NotificationsModal({ onClose }: NotificationsModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
       <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh] shadow-2xl border border-gray-100 dark:border-gray-800">
         <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between sticky top-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md z-10">
           <div className="flex items-center gap-2">
-            <h2 className="font-bold text-lg text-gray-900 dark:text-white">Notifications</h2>
+            <h2 className="font-bold text-lg text-gray-900 dark:text-white">Centre de Notifications</h2>
             {allNotifications.length > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 font-extrabold text-xs">
                 {allNotifications.length}
               </span>
             )}
           </div>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+          <button 
+            onClick={onClose} 
+            className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors cursor-pointer"
+            aria-label="Fermer les notifications"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -101,12 +126,71 @@ export function NotificationsModal({ onClose }: NotificationsModalProps) {
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
           {allNotifications.length === 0 ? (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              <Info className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p>Aucune notification pour le moment.</p>
+              <Info className="w-8 h-8 mx-auto mb-2 opacity-50 text-orange-500" />
+              <p className="text-sm font-medium">Aucune notification pour le moment.</p>
+              <p className="text-xs text-gray-400 mt-1">Vous recevrez ici les confirmations de vos rendez-vous et invitations.</p>
             </div>
           ) : (
             allNotifications.map((notif, idx) => {
-              if (notif.type === 'friend_request') {
+              if (notif.type === 'app_notification') {
+                const item = notif.data as any;
+                const isBeauty = item.type === 'beauty_appointment_update' || item.title?.includes('Beauté') || item.title?.includes('Rendez-vous');
+                const isConfirmed = item.title?.includes('confirmé') || item.message?.includes('confirmé');
+                const isCancelled = item.title?.includes('annulé') || item.message?.includes('annulé');
+
+                return (
+                  <div 
+                    key={`app-notif-${item.id || idx}`}
+                    className={`rounded-2xl p-4 border shadow-xs transition-all ${
+                      isConfirmed 
+                        ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40'
+                        : isCancelled
+                        ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/40'
+                        : 'bg-orange-50/70 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800/40'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`p-2.5 rounded-xl shrink-0 ${
+                        isConfirmed 
+                          ? 'bg-emerald-500 text-white' 
+                          : isCancelled 
+                          ? 'bg-rose-500 text-white' 
+                          : 'bg-orange-500 text-white'
+                      }`}>
+                        {isBeauty ? <Scissors className="w-5 h-5" /> : <Calendar className="w-5 h-5" />}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <h4 className="text-xs font-black text-gray-900 dark:text-white truncate">
+                            {item.title}
+                          </h4>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                            isConfirmed 
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300'
+                              : isCancelled
+                              ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-300'
+                              : 'bg-orange-100 text-orange-800 dark:bg-orange-900/60 dark:text-orange-300'
+                          }`}>
+                            {isConfirmed ? 'Confirmé' : isCancelled ? 'Annulé' : 'Alerte RDV'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-700 dark:text-gray-300 mt-1 leading-relaxed">
+                          {item.message}
+                        </p>
+                        <p className="text-[10px] text-gray-400 mt-1.5 font-medium">
+                          {new Date(notif.date).toLocaleDateString('fr-FR', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              } else if (notif.type === 'friend_request') {
                 const req = notif.data as any;
                 const sender = users.find(u => u.id === req.requesterId) || {
                   id: req.requesterId,

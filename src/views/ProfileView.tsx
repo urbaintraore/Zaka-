@@ -22,6 +22,7 @@ import { exportReservationsToCSV } from '../utils/exportReservationsCsv';
 import { UserReservationsCalendar } from '../components/UserReservationsCalendar';
 import { ThemeModeSelector } from '../components/ThemeModeSelector';
 import { UserEstablishmentPreferencesChart } from '../components/UserEstablishmentPreferencesChart';
+import { ClientBeautyAppointmentsCard } from '../components/beauty/ClientBeautyAppointmentsCard';
 
 interface ProfileViewProps {
   onNavigate?: (tab: any) => void;
@@ -1225,6 +1226,12 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
             </div>
           )}
         </div>
+
+        {/* Mes rendez-vous Beauté & Salons (Temps Réel & Notifications) */}
+        <ClientBeautyAppointmentsCard 
+          clientId={currentUser.id} 
+          clientPhone={currentUser.phone} 
+        />
 
         {/* Mes réservations et commandes */}
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">

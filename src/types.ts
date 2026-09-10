@@ -891,6 +891,20 @@ export interface BeautyOpeningHours {
   dimanche: BeautyOpeningHoursDay;
 }
 
+export interface BeautyBusinessHour {
+  id?: string;
+  salonId: string;
+  dayOfWeek: number; // 1 = Lundi, ..., 7 = Dimanche (or 0 = Dimanche)
+  dayName: string;   // 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'
+  dayLabel?: string;  // 'Lundi', 'Mardi', etc.
+  isOpen: boolean;
+  openTime: string;  // '08:30'
+  closeTime: string; // '19:30'
+  pauseStart?: string;
+  pauseEnd?: string;
+  notes?: string;
+}
+
 export interface BeautySalon {
   id: string;
   userId?: string;

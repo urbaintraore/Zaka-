@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BeautySalon,
   BeautySalonType
 } from '../../types';
 import {
-  fetchAllBeautySalons,
   BEAUTY_TYPE_LABELS
 } from '../../lib/beautyService';
+import { useBeautySalonsQuery } from '../../hooks/useBeautySalonsQuery';
 import { BeautySalonDetailModal } from './BeautySalonDetailModal';
 import { BeautyBookingModal } from './BeautyBookingModal';
 import {
@@ -24,7 +24,11 @@ import {
   SlidersHorizontal,
   ChevronRight,
   Clock,
-  X
+  X,
+  RefreshCw,
+  Wifi,
+  WifiOff,
+  Database
 } from 'lucide-react';
 
 interface BeautySalonsListProps {
@@ -33,9 +37,6 @@ interface BeautySalonsListProps {
 }
 
 export function BeautySalonsList({ onSelectSalon, showHeroHeader = true }: BeautySalonsListProps) {
-  const [salons, setSalons] = useState<BeautySalon[]>([]);
-  const [loading, setLoading] = useState(true);
-
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCity, setSelectedCity] = useState<string>('tous');
@@ -44,40 +45,25 @@ export function BeautySalonsList({ onSelectSalon, showHeroHeader = true }: Beaut
   const [filterADomicile, setFilterADomicile] = useState(false);
   const navigate = useNavigate();
 
+  // Use React Query with local caching and offline fallback
+  const {
+    data: salons = [],
+    isLoading: loading,
+    isFetching,
+    refetch,
+    isPlaceholderData
+  } = useBeautySalonsQuery({
+    ville: selectedCity,
+    type: selectedType,
+    searchTerm,
+    aDomicile: filterADomicile ? true : undefined,
+    sansRdv: filterSansRdv ? true : undefined
+  });
+
   // Selected modals
   const [activeDetailSalon, setActiveDetailSalon] = useState<BeautySalon | null>(null);
   const [activeBookingSalon, setActiveBookingSalon] = useState<BeautySalon | null>(null);
   const [bookingPreselectedServiceId, setBookingPreselectedServiceId] = useState<string | undefined>();
-
-  const loadSalons = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchAllBeautySalons({
-        ville: selectedCity,
-        type: selectedType,
-        searchTerm,
-        aDomicile: filterADomicile ? true : undefined,
-        sansRdv: filterSansRdv ? true : undefined
-      });
-      setSalons(data);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadSalons();
-  }, [selectedCity, selectedType, filterSansRdv, filterADomicile]);
-
-  // Debounced search
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      loadSalons();
-    }, 250);
-    return () => clearTimeout(handler);
-  }, [searchTerm]);
 
   const handleOpenDetail = (salon: BeautySalon) => {
     if (onSelectSalon) {
@@ -118,6 +104,7 @@ export function BeautySalonsList({ onSelectSalon, showHeroHeader = true }: Beaut
 
   return (
     <div className="space-y-6">
+
       {/* Optional Hero Banner */}
       {showHeroHeader && (
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-rose-600 via-pink-600 to-amber-600 p-6 sm:p-8 text-white shadow-xl shadow-rose-900/10">
@@ -271,10 +258,28 @@ export function BeautySalonsList({ onSelectSalon, showHeroHeader = true }: Beaut
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
               {salons.length} salon{salons.length > 1 ? 's' : ''} disponible{salons.length > 1 ? 's' : ''}
             </span>
+
+            {/* Offline / Cache indicator */}
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800/40" title="Données mises en cache localement avec React Query pour chargement instantané">
+              <Database size={10} className="text-emerald-600" />
+              <span>Cache local actif</span>
+            </div>
+
+            {/* Quick Refresh */}
+            <button
+              type="button"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="p-1 text-gray-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-md transition-colors cursor-pointer"
+              title="Rafraîchir les salons"
+            >
+              <RefreshCw size={12} className={isFetching ? 'animate-spin text-rose-500' : ''} />
+            </button>
+
             {hasActiveFilters && (
               <button
                 type="button"

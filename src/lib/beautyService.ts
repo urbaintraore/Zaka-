@@ -8,7 +8,8 @@ import {
   BeautyAppointmentStatus,
   BeautyReview,
   BeautySalonClient,
-  BeautyOpeningHours
+  BeautyOpeningHours,
+  BeautyBusinessHour
 } from '../types';
 
 // =========================================================================
@@ -849,14 +850,20 @@ export async function fetchSalonAppointments(salonId: string): Promise<BeautyApp
     .sort((a, b) => new Date(`${b.dateRdv}T${b.heureRdv}`).getTime() - new Date(`${a.dateRdv}T${a.heureRdv}`).getTime());
 }
 
-export async function fetchClientAppointments(userId: string): Promise<BeautyAppointment[]> {
+export async function fetchClientAppointments(userId: string, phone?: string): Promise<BeautyAppointment[]> {
   if (isSupabaseConfigured) {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('beauty_appointments')
-        .select('*, beauty_salons(nom), beauty_services(nom)')
-        .eq('client_id', userId)
-        .order('date_rdv', { ascending: false });
+        .select('*, beauty_salons(nom), beauty_services(nom)');
+      
+      if (phone) {
+        query = query.or(`client_id.eq.${userId},telephone_client.eq.${phone}`);
+      } else {
+        query = query.eq('client_id', userId);
+      }
+
+      const { data, error } = await query.order('date_rdv', { ascending: false });
       if (!error && data && data.length > 0) {
         return data.map(mapAppointmentRow);
       }
@@ -866,7 +873,7 @@ export async function fetchClientAppointments(userId: string): Promise<BeautyApp
   }
 
   return localBeautyAppointments
-    .filter(a => a.clientId === userId)
+    .filter(a => a.clientId === userId || (phone && a.telephoneClient === phone))
     .sort((a, b) => new Date(`${b.dateRdv}T${b.heureRdv}`).getTime() - new Date(`${a.dateRdv}T${a.heureRdv}`).getTime());
 }
 
@@ -920,6 +927,8 @@ export async function updateAppointmentStatus(
   statut: BeautyAppointmentStatus,
   notesSalon?: string
 ): Promise<BeautyAppointment> {
+  let updatedAppointment: BeautyAppointment | null = null;
+
   if (isSupabaseConfigured) {
     try {
       const payload: any = { statut };
@@ -932,20 +941,301 @@ export async function updateAppointmentStatus(
         .select('*, beauty_salons(nom), beauty_services(nom)')
         .single();
       if (!error && data) {
-        return mapAppointmentRow(data);
+        updatedAppointment = mapAppointmentRow(data);
       }
     } catch (e) {
       console.warn('Supabase updateAppointmentStatus error:', e);
     }
   }
 
-  localBeautyAppointments = localBeautyAppointments.map(a =>
-    a.id === id ? { ...a, statut, ...(notesSalon !== undefined ? { notesSalon } : {}) } : a
+  if (!updatedAppointment) {
+    localBeautyAppointments = localBeautyAppointments.map(a =>
+      a.id === id ? { ...a, statut, ...(notesSalon !== undefined ? { notesSalon } : {}) } : a
+    );
+    persistLocalState();
+    updatedAppointment = localBeautyAppointments.find(a => a.id === id) || null;
+  }
+
+  if (!updatedAppointment) throw new Error("Rendez-vous introuvable");
+
+  // Dispatch notification to client if clientId is present
+  try {
+    const salonNom = updatedAppointment.salonNom || 'Salon de Beauté';
+    const dateFormatted = updatedAppointment.dateRdv;
+    const heureFormatted = updatedAppointment.heureRdv;
+    
+    let notifTitle = 'Mise à jour de votre rendez-vous';
+    let notifMessage = `Le statut de votre rendez-vous chez ${salonNom} a changé : ${statut}.`;
+    
+    if (statut === 'confirme') {
+      notifTitle = 'Rendez-vous Beauté confirmé ! ✅';
+      notifMessage = `Votre rendez-vous chez "${salonNom}" prévu le ${dateFormatted} à ${heureFormatted} a été confirmé par le gérant.`;
+    } else if (statut === 'annule') {
+      notifTitle = 'Rendez-vous Beauté annulé ❌';
+      notifMessage = `Votre rendez-vous chez "${salonNom}" prévu le ${dateFormatted} a été annulé${notesSalon ? ` (${notesSalon})` : '.'}`;
+    } else if (statut === 'termine') {
+      notifTitle = 'Prestation Beauté effectuée 💇‍♀️';
+      notifMessage = `Votre soin chez "${salonNom}" est terminé. Merci pour votre confiance !`;
+    }
+
+    const newNotif = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      userId: updatedAppointment.clientId || '',
+      title: notifTitle,
+      message: notifMessage,
+      type: 'beauty_appointment_update',
+      read: false,
+      createdAt: new Date().toISOString(),
+      linkTab: 'profile',
+      relatedId: updatedAppointment.id,
+      appointment: updatedAppointment
+    };
+
+    // Save to localStorage notifications
+    const existingRaw = localStorage.getItem('zaka_notifications');
+    const existing = existingRaw ? JSON.parse(existingRaw) : [];
+    localStorage.setItem('zaka_notifications', JSON.stringify([newNotif, ...existing]));
+
+    // Dispatch custom events for live UI reactivity
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('zaka-new-notification', { detail: newNotif }));
+      window.dispatchEvent(new CustomEvent('beauty-appointment-status-change', { 
+        detail: { 
+          appointment: updatedAppointment,
+          statut,
+          notesSalon
+        } 
+      }));
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: {
+          message: notifTitle + " - " + notifMessage,
+          type: statut === 'confirme' ? 'success' : statut === 'annule' ? 'error' : 'info'
+        }
+      }));
+    }
+  } catch (err) {
+    console.warn('Erreur de notification rendez-vous:', err);
+  }
+
+  return updatedAppointment;
+}
+
+// =========================================================================
+// REALTIME SUBSCRIPTION FOR SALON APPOINTMENTS & CLIENT APPOINTMENTS
+// =========================================================================
+
+export function subscribeToClientAppointments(
+  clientId: string,
+  onAppointmentEvent: (appointment: BeautyAppointment, eventType: 'INSERT' | 'UPDATE' | 'DELETE') => void
+): () => void {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const channel = supabase
+        .channel(`beauty-client-appointments-${clientId}-${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'beauty_appointments',
+            filter: `client_id=eq.${clientId}`
+          },
+          (payload) => {
+            const eventType = payload.eventType as 'INSERT' | 'UPDATE' | 'DELETE';
+            const rowData = payload.new || payload.old;
+            if (rowData) {
+              const appt = mapAppointmentRow(rowData);
+              onAppointmentEvent(appt, eventType);
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log(`[ZAKA Realtime] Écoute active pour le client ${clientId}`);
+          }
+        });
+
+      return () => {
+        try {
+          supabase.removeChannel(channel);
+        } catch (e) {
+          console.warn('removeChannel error:', e);
+        }
+      };
+    } catch (e) {
+      console.warn('subscribeToClientAppointments error:', e);
+    }
+  }
+
+  return () => {};
+}
+
+export function subscribeToSalonAppointments(
+  salonId: string,
+  onAppointmentEvent: (appointment: BeautyAppointment, eventType: 'INSERT' | 'UPDATE' | 'DELETE') => void
+): () => void {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const channel = supabase
+        .channel(`beauty-appointments-channel-${salonId}-${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'beauty_appointments',
+            filter: `salon_id=eq.${salonId}`
+          },
+          (payload) => {
+            const eventType = payload.eventType as 'INSERT' | 'UPDATE' | 'DELETE';
+            const rowData = payload.new || payload.old;
+            if (rowData) {
+              const appt = mapAppointmentRow(rowData);
+              onAppointmentEvent(appt, eventType);
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log(`[ZAKA Realtime] Écoute active sur beauty_appointments pour le salon ${salonId}`);
+          }
+        });
+
+      return () => {
+        try {
+          supabase.removeChannel(channel);
+        } catch (e) {
+          console.warn('removeChannel error:', e);
+        }
+      };
+    } catch (e) {
+      console.warn('subscribeToSalonAppointments error:', e);
+    }
+  }
+
+  return () => {};
+}
+
+// =========================================================================
+// BUSINESS HOURS CONFIGURATION (TABLE: beauty_business_hours)
+// =========================================================================
+
+export const BEAUTY_DAYS_CONFIG: Array<{ dayOfWeek: number; dayName: keyof BeautyOpeningHours; label: string }> = [
+  { dayOfWeek: 1, dayName: 'lundi', label: 'Lundi' },
+  { dayOfWeek: 2, dayName: 'mardi', label: 'Mardi' },
+  { dayOfWeek: 3, dayName: 'mercredi', label: 'Mercredi' },
+  { dayOfWeek: 4, dayName: 'jeudi', label: 'Jeudi' },
+  { dayOfWeek: 5, dayName: 'vendredi', label: 'Vendredi' },
+  { dayOfWeek: 6, dayName: 'samedi', label: 'Samedi' },
+  { dayOfWeek: 7, dayName: 'dimanche', label: 'Dimanche' }
+];
+
+export async function fetchSalonBusinessHours(salonId: string): Promise<BeautyBusinessHour[]> {
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase
+        .from('beauty_business_hours')
+        .select('*')
+        .eq('salon_id', salonId)
+        .order('day_of_week', { ascending: true });
+
+      if (!error && data && data.length > 0) {
+        return data.map((row: any) => ({
+          id: row.id,
+          salonId: row.salon_id,
+          dayOfWeek: Number(row.day_of_week),
+          dayName: row.day_name || BEAUTY_DAYS_CONFIG.find(d => d.dayOfWeek === Number(row.day_of_week))?.dayName || 'lundi',
+          dayLabel: BEAUTY_DAYS_CONFIG.find(d => d.dayOfWeek === Number(row.day_of_week))?.label || row.day_name || 'Lundi',
+          isOpen: row.is_open !== false,
+          openTime: row.open_time || '08:30',
+          closeTime: row.close_time || '19:30',
+          pauseStart: row.pause_start || undefined,
+          pauseEnd: row.pause_end || undefined,
+          notes: row.notes || undefined
+        }));
+      }
+    } catch (e) {
+      console.warn('Supabase fetchSalonBusinessHours error:', e);
+    }
+  }
+
+  // Fallback: load from salon's horairesOuverture or DEFAULT_OPENING_HOURS
+  const salon = localBeautySalons.find(s => s.id === salonId);
+  const horaires = salon?.horairesOuverture || DEFAULT_OPENING_HOURS;
+
+  return BEAUTY_DAYS_CONFIG.map(day => {
+    const sched = (horaires as any)[day.dayName] || { ouvert: day.dayName !== 'dimanche', ouverture: '08:30', fermeture: '19:30' };
+    return {
+      salonId,
+      dayOfWeek: day.dayOfWeek,
+      dayName: day.dayName,
+      dayLabel: day.label,
+      isOpen: sched.ouvert !== false,
+      openTime: sched.ouverture || '08:30',
+      closeTime: sched.fermeture || '19:30',
+      pauseStart: sched.pauseStart || undefined,
+      pauseEnd: sched.pauseEnd || undefined
+    };
+  });
+}
+
+export async function saveSalonBusinessHours(salonId: string, hours: BeautyBusinessHour[]): Promise<BeautyBusinessHour[]> {
+  // 1. Build compatible BeautyOpeningHours object
+  const newOpeningHours: any = {};
+  hours.forEach(h => {
+    newOpeningHours[h.dayName] = {
+      ouvert: h.isOpen,
+      ouverture: h.openTime,
+      fermeture: h.closeTime,
+      ...(h.pauseStart ? { pauseStart: h.pauseStart } : {}),
+      ...(h.pauseEnd ? { pauseEnd: h.pauseEnd } : {})
+    };
+  });
+
+  // 2. Persist in Supabase beauty_business_hours table
+  if (isSupabaseConfigured) {
+    try {
+      const rows = hours.map(h => ({
+        salon_id: salonId,
+        day_of_week: h.dayOfWeek,
+        day_name: h.dayName,
+        is_open: h.isOpen,
+        open_time: h.openTime,
+        close_time: h.closeTime,
+        pause_start: h.pauseStart || null,
+        pause_end: h.pauseEnd || null,
+        notes: h.notes || null,
+        updated_at: new Date().toISOString()
+      }));
+
+      const { error: upsertError } = await supabase
+        .from('beauty_business_hours')
+        .upsert(rows, { onConflict: 'salon_id,day_of_week' });
+
+      if (upsertError) {
+        console.warn('Supabase upsert beauty_business_hours error:', upsertError);
+      }
+
+      // Also update beauty_salons table
+      await supabase
+        .from('beauty_salons')
+        .update({
+          horaires_ouverture: newOpeningHours,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', salonId);
+    } catch (e) {
+      console.warn('Supabase saveSalonBusinessHours error:', e);
+    }
+  }
+
+  // 3. Fallback memory & local storage
+  localBeautySalons = localBeautySalons.map(s =>
+    s.id === salonId ? { ...s, horairesOuverture: newOpeningHours, updatedAt: new Date().toISOString() } : s
   );
   persistLocalState();
-  const updated = localBeautyAppointments.find(a => a.id === id);
-  if (!updated) throw new Error("Rendez-vous introuvable");
-  return updated;
+
+  return hours;
 }
 
 // =========================================================================
