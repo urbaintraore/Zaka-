@@ -355,6 +355,22 @@ export function DashboardLayout() {
             <span>Messages</span>
           </NavLink>
 
+          {currentUser?.role === 'salon_coiffure' && (
+            <NavLink
+              to="/beauty-dashboard"
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-0.5 text-[10px] font-bold transition-colors ${
+                  isActive
+                    ? 'text-rose-600 dark:text-rose-400 font-black'
+                    : 'text-rose-500 hover:text-rose-600 dark:hover:text-rose-300'
+                }`
+              }
+            >
+              <Store size={18} />
+              <span>Mon Salon</span>
+            </NavLink>
+          )}
+
           <NavLink
             to="/profile"
             className={({ isActive }) =>

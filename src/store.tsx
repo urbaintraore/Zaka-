@@ -442,7 +442,7 @@ interface AppContextType {
   register: (userData: any, password?: string, estData?: any, entrepriseData?: any, artistData?: any, salonData?: any) => Promise<void>;
   logout: () => void;
   upgradeToGerant: (estData: any) => Promise<void>;
-  upgradeToSalonCoiffure?: (salonData: any) => Promise<void>;
+  upgradeToSalonCoiffure?: (salonData?: any) => Promise<void>;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;
   envoyerCodeOtp: (phone: string, containerId: string) => Promise<void>;
   confirmerCodeOtp: (code: string, details?: any) => Promise<void>;
@@ -1151,7 +1151,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const upgradeToSalonCoiffure = async (salonData: any) => {
+  const upgradeToSalonCoiffure = async (salonData?: any) => {
     if (currentUser) {
       const updatedUser: UserProfile = { ...currentUser, role: 'salon_coiffure' };
       setCurrentUser(updatedUser);

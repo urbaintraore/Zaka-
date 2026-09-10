@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ResponsiveContainer,
   BarChart,
@@ -107,6 +108,7 @@ export type BeautyDashboardNav =
 
 export function BeautyDashboardView({ onLogout }: BeautyDashboardViewProps = {}) {
   const { currentUser, addNotification } = useAppStore();
+  const navigate = useNavigate();
   const [salon, setSalon] = useState<BeautySalon | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeNav, setActiveNav] = useState<BeautyDashboardNav>('today');
@@ -894,6 +896,16 @@ export function BeautyDashboardView({ onLogout }: BeautyDashboardViewProps = {})
             <p className="text-xs sm:text-sm text-gray-500 max-w-md mx-auto">
               Configurez le profil de votre salon de coiffure, barber shop ou institut pour recevoir des réservations en ligne dès aujourd'hui.
             </p>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => navigate('/salon-onboarding')}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-rose-600 to-pink-600 text-white rounded-2xl text-xs font-black shadow-md shadow-rose-600/20 hover:scale-105 transition-transform cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Ouvrir l'assistant d'onboarding complet</span>
+              </button>
+            </div>
           </div>
 
           <form onSubmit={handleCreateInitialSalon} className="space-y-4 text-xs font-bold">

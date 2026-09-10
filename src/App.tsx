@@ -16,6 +16,7 @@ import { ArtistPublicPage } from './views/ArtistPublicPage';
 import { ArtistDashboard } from './views/ArtistDashboard';
 import { PitchDeckView } from './components/PitchDeckView';
 import { BeautyDashboardView } from './views/BeautyDashboardView';
+import { SalonOnboarding } from './views/SalonOnboarding';
 import { BeautySalonsList } from './components/beauty/BeautySalonsList';
 import { BeautySalonPublicView } from './components/beauty/BeautySalonPublicView';
 
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="beauty" element={<BeautySalonsList />} />
             <Route path="beauty/:id" element={<BeautySalonPublicView />} />
             <Route path="beauty-dashboard" element={<BeautyDashboardView />} />
+            <Route path="salon-onboarding" element={<SalonOnboarding />} />
             <Route path="favorites" element={<FavoritesView />} />
             <Route path="jobs" element={<RecruitmentsView />} />
             <Route path="messages" element={<MessagesView />} />

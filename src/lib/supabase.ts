@@ -85,26 +85,84 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
 export async function fetchUserProfileFromDb(userId: string): Promise<UserProfile | null> {
   if (!isSupabaseConfigured) return null;
   try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    if (error) throw error;
-    if (!data) return null;
+    let rawData: any = null;
+
+    // 1. Try 'users' table
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      if (!error && data) {
+        rawData = data;
+      }
+    } catch {
+      // Ignore and fallback
+    }
+
+    // 2. If not found in 'users', try 'profiles' table
+    if (!rawData) {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+        if (!error && data) {
+          rawData = data;
+        }
+      } catch {
+        // Ignore and fallback
+      }
+    }
+
+    // 3. If neither table returned data, fallback to auth.user metadata
+    if (!rawData) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && user.id === userId) {
+        const metaRole = user.user_metadata?.role;
+        const normalizedRole = (metaRole === 'salon_coiffure' || metaRole === 'salon' || metaRole === 'coiffure' || metaRole === 'gerant_salon')
+          ? 'salon_coiffure'
+          : (metaRole || 'client');
+
+        return {
+          id: user.id,
+          name: user.user_metadata?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || '',
+          email: user.email || '',
+          phone: user.user_metadata?.phone || user.phone || '',
+          role: normalizedRole as any,
+          city: user.user_metadata?.city || 'Ouagadougou',
+          country: user.user_metadata?.country || 'Burkina Faso',
+          avatarUrl: user.user_metadata?.avatar || user.user_metadata?.avatar_url || '',
+          points: 0,
+          code_parrainage: '',
+          zakaPoints: 0,
+          isVerified: false
+        };
+      }
+      return null;
+    }
+
+    // Normalize role
+    let role = rawData.role || 'client';
+    if (role === 'salon' || role === 'coiffure' || role === 'gerant_salon') {
+      role = 'salon_coiffure';
+    }
+
     return {
-      id: data.id,
-      name: data.name || '',
-      email: data.email || '',
-      phone: data.phone || '',
-      role: data.role as any,
-      city: data.city || 'Ouagadougou',
-      country: data.country || 'Burkina Faso',
-      avatarUrl: data.avatar || '',
-      points: data.points || 0,
-      code_parrainage: data.code_parrainage || '',
-      zakaPoints: data.zakaPoints || 0,
-      isVerified: data.isVerified || false
+      id: rawData.id,
+      name: rawData.name || rawData.full_name || '',
+      email: rawData.email || '',
+      phone: rawData.phone || '',
+      role: role as any,
+      city: rawData.city || 'Ouagadougou',
+      country: rawData.country || 'Burkina Faso',
+      avatarUrl: rawData.avatar || rawData.avatar_url || '',
+      points: rawData.points || 0,
+      code_parrainage: rawData.code_parrainage || rawData.referral_code || '',
+      zakaPoints: rawData.zakaPoints || rawData.zaka_points || 0,
+      isVerified: rawData.isVerified || rawData.is_verified || false
     };
   } catch (err) {
     console.warn('Supabase fetchUserProfileFromDb warning:', err);
@@ -115,24 +173,52 @@ export async function fetchUserProfileFromDb(userId: string): Promise<UserProfil
 export async function saveUserProfileToDb(profile: UserProfile): Promise<boolean> {
   if (!isSupabaseConfigured) return true;
   try {
-    const { error } = await supabase
+    const payload = {
+      id: profile.id,
+      name: profile.name,
+      email: profile.email,
+      phone: profile.phone,
+      role: profile.role,
+      city: profile.city,
+      country: profile.country,
+      avatar: profile.avatarUrl,
+      points: profile.points || 0,
+      zakaPoints: profile.zakaPoints || 0,
+      code_parrainage: profile.code_parrainage,
+      isVerified: profile.isVerified || false
+    };
+
+    let saved = false;
+
+    // Try saving to 'users'
+    const { error: userError } = await supabase
       .from('users')
-      .upsert({
-        id: profile.id,
-        name: profile.name,
-        email: profile.email,
-        phone: profile.phone,
-        role: profile.role,
-        city: profile.city,
-        country: profile.country,
-        avatar: profile.avatarUrl,
-        points: profile.points || 0,
-        zakaPoints: profile.zakaPoints || 0,
-        code_parrainage: profile.code_parrainage,
-        isVerified: profile.isVerified || false
-      });
-    if (error) throw error;
-    return true;
+      .upsert(payload);
+    if (!userError) saved = true;
+
+    // Also sync to 'profiles' if table exists
+    try {
+      await supabase
+        .from('profiles')
+        .upsert({
+          id: profile.id,
+          full_name: profile.name,
+          email: profile.email,
+          phone: profile.phone,
+          role: profile.role,
+          city: profile.city,
+          country: profile.country,
+          avatar_url: profile.avatarUrl,
+          points: profile.points || 0,
+          zaka_points: profile.zakaPoints || 0,
+          code_parrainage: profile.code_parrainage,
+          is_verified: profile.isVerified || false
+        });
+    } catch {
+      // Optional sync
+    }
+
+    return saved;
   } catch (err) {
     console.warn('Supabase saveUserProfileToDb error:', err);
     return false;
