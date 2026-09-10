@@ -1429,3 +1429,7 @@ export function generateWhatsAppBeautyBookingUrl(
   const text = `Bonjour ${salonNom}, je viens de réserver sur ZAKA Beauty :\n- Prestation : ${serviceNom}\n- Date : ${date} à ${timeSlot}\n- Nom : ${clientNom}\n\nMerci de confirmer la disponibilité de ce créneau.`;
   return `https://wa.me/${targetPhone}?text=${encodeURIComponent(text)}`;
 }
+
+// Re-export all ZAKA Beauty V2 functions & constants
+export * from './beautyV2Service';
+

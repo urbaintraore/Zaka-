@@ -89,6 +89,10 @@ import {
   BarChart2,
   DollarSign
 } from 'lucide-react';
+import { CashRegisterView } from '../components/beauty/BeautyPosView';
+import { BeautyStockView } from '../components/beauty/BeautyStockView';
+import { LoyaltyRewardsView } from '../components/beauty/BeautyLoyaltyView';
+import { SalesAnalyticsDashboard } from '../components/beauty/BeautyAnalyticsView';
 
 interface BeautyDashboardViewProps {
   onLogout?: () => void;
@@ -96,11 +100,14 @@ interface BeautyDashboardViewProps {
 
 export type BeautyDashboardNav =
   | 'today'            // Rendez-vous du jour
+  | 'pos'              // Caisse & Enregistrement des ventes
+  | 'stock'            // Gestion du stock
+  | 'loyalty'          // Programme Fidélité
   | 'analytics'        // Statistiques & Graphiques (Recharts)
   | 'pending'          // Demandes en attente
   | 'all_appointments' // Tous les rendez-vous
   | 'services'         // Catalogue des prestations
-  | 'hours'            // Horaires d'ouverture (beauty_business_hours)
+  | 'hours'            // Horaires d'ouverture
   | 'gallery'          // Galerie & Réalisations photos
   | 'clients'          // Répertoire clients
   | 'reviews'          // Avis et notes
@@ -1131,6 +1138,59 @@ export function BeautyDashboardView({ onLogout }: BeautyDashboardViewProps = {})
               )}
             </button>
 
+            {/* 2. Caisse & Ventes (POS V2) */}
+            <button
+              id="beauty-nav-pos-btn"
+              onClick={() => setActiveNav('pos')}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeNav === 'pos'
+                  ? 'bg-rose-600 text-white shadow-sm font-black'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <DollarSign className="w-4 h-4" />
+                <span>Caisse & Enregistrement</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${
+                activeNav === 'pos' ? 'bg-white/20 text-white' : 'text-emerald-700 bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300'
+              }`}>
+                POS V2
+              </span>
+            </button>
+
+            {/* 3. Gestion du Stock */}
+            <button
+              id="beauty-nav-stock-btn"
+              onClick={() => setActiveNav('stock')}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeNav === 'stock'
+                  ? 'bg-rose-600 text-white shadow-sm font-black'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Store className="w-4 h-4" />
+                <span>Stock & Produits</span>
+              </div>
+            </button>
+
+            {/* 4. Programme Fidélité */}
+            <button
+              id="beauty-nav-loyalty-btn"
+              onClick={() => setActiveNav('loyalty')}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeNav === 'loyalty'
+                  ? 'bg-rose-600 text-white shadow-sm font-black'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Sparkles className="w-4 h-4" />
+                <span>Fidélité & Récompenses</span>
+              </div>
+            </button>
+
             {/* 2. Statistiques & Graphiques (Recharts) */}
             <button
               id="beauty-nav-analytics-btn"
@@ -1417,295 +1477,25 @@ export function BeautyDashboardView({ onLogout }: BeautyDashboardViewProps = {})
         </div>
 
         {/* ----------------------------------------------------------------------- */}
-        {/* VIEW: STATISTIQUES & GRAPHIQUES RECHARTS                                */}
+        {/* VIEWS V2: CAISSE POS, STOCK, FIDÉLITÉ                                   */}
+        {/* ----------------------------------------------------------------------- */}
+        {activeNav === 'pos' && (
+          <CashRegisterView salon={salon} />
+        )}
+
+        {activeNav === 'stock' && (
+          <BeautyStockView salon={salon} />
+        )}
+
+        {activeNav === 'loyalty' && (
+          <LoyaltyRewardsView salon={salon} />
+        )}
+
+        {/* ----------------------------------------------------------------------- */}
+        {/* VIEW: STATISTIQUES & GRAPHIQUES RECHARTS (V2)                          */}
         {/* ----------------------------------------------------------------------- */}
         {activeNav === 'analytics' && (
-          <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-gray-900 via-rose-950 to-gray-900 p-6 rounded-3xl text-white shadow-md">
-              <div>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/30 text-rose-300 text-[11px] font-black uppercase tracking-wider mb-2 border border-rose-500/30">
-                  <TrendingUp className="w-3.5 h-3.5 text-rose-400" />
-                  <span>Analytique & Performances</span>
-                </span>
-                <h3 className="text-xl font-black text-white">
-                  Tableau de bord financier & Rendez-vous
-                </h3>
-                <p className="text-xs text-gray-300 mt-1">
-                  Suivez en temps réel l'évolution de vos rendez-vous quotidiens et vos revenus estimés de la semaine.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={loadSalonData}
-                  className="px-3.5 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Actualiser</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 4 Analytics KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs">
-                <div className="flex items-center justify-between text-gray-400 mb-2">
-                  <span className="text-xs font-bold">Revenu Hebdo Estimé</span>
-                  <div className="p-2 bg-emerald-50 dark:bg-emerald-950/60 rounded-xl text-emerald-600">
-                    <DollarSign className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-                  {formatFcfa(analyticsData.weeklyEstimatedRevenue)}
-                </div>
-                <div className="text-[11px] text-gray-500 mt-1">
-                  Basé sur les RDV confirmés de la semaine
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs">
-                <div className="flex items-center justify-between text-gray-400 mb-2">
-                  <span className="text-xs font-bold">RDV Cette Semaine</span>
-                  <div className="p-2 bg-rose-50 dark:bg-rose-950/60 rounded-xl text-rose-600">
-                    <CalendarCheck className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-gray-900 dark:text-white">
-                  {analyticsData.weeklyAppointmentsCount}
-                </div>
-                <div className="text-[11px] text-gray-500 mt-1">
-                  Dont {analyticsData.weeklyConfirmedCount} honorés ou confirmés
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs">
-                <div className="flex items-center justify-between text-gray-400 mb-2">
-                  <span className="text-xs font-bold">Taux de Confirmation</span>
-                  <div className="p-2 bg-blue-50 dark:bg-blue-950/60 rounded-xl text-blue-600">
-                    <CheckCircle2 className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-blue-600 dark:text-blue-400">
-                  {analyticsData.weeklyAcceptanceRate}%
-                </div>
-                <div className="text-[11px] text-gray-500 mt-1">
-                  Efficacité du planning salon
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs">
-                <div className="flex items-center justify-between text-gray-400 mb-2">
-                  <span className="text-xs font-bold">Panier Moyen</span>
-                  <div className="p-2 bg-purple-50 dark:bg-purple-950/60 rounded-xl text-purple-600">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-gray-900 dark:text-white">
-                  {analyticsData.weeklyConfirmedCount > 0
-                    ? formatFcfa(Math.round(analyticsData.weeklyEstimatedRevenue / analyticsData.weeklyConfirmedCount))
-                    : '0 FCFA'}
-                </div>
-                <div className="text-[11px] text-gray-500 mt-1">
-                  Par client confirmé cette semaine
-                </div>
-              </div>
-            </div>
-
-            {/* GRAPHIQUE 1: Nombre de rendez-vous quotidiens (Recharts BarChart) */}
-            <div className="bg-white dark:bg-gray-900 p-5 sm:p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-800 pb-4">
-                <div>
-                  <h4 className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2">
-                    <BarChart2 className="w-4 h-4 text-rose-500" />
-                    <span>Graphique des Rendez-vous Quotidiens</span>
-                  </h4>
-                  <p className="text-xs text-gray-500">
-                    Répartition des statuts (Confirmés, En attente, Terminés, Annulés) pour chaque jour de la semaine
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
-                  <span className="px-2.5 py-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                    Semaine en cours
-                  </span>
-                </div>
-              </div>
-
-              <div className="h-72 w-full pt-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={analyticsData.daysArr}
-                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.15} />
-                    <XAxis
-                      dataKey="dayName"
-                      tickLine={false}
-                      axisLine={{ stroke: '#e5e7eb', opacity: 0.5 }}
-                      tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 600 }}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      tickLine={false}
-                      axisLine={{ stroke: '#e5e7eb', opacity: 0.5 }}
-                      tick={{ fill: '#6b7280', fontSize: 11 }}
-                    />
-                    <Tooltip
-                      content={({ active, payload, label }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          return (
-                            <div className="bg-gray-900/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl border border-gray-800 text-xs space-y-1.5 min-w-[170px]">
-                              <p className="font-black text-rose-400 border-b border-gray-800 pb-1">
-                                {data.label}
-                              </p>
-                              <div className="space-y-1 pt-0.5">
-                                <div className="flex justify-between items-center text-emerald-400">
-                                  <span>Terminés :</span>
-                                  <span className="font-black">{data.termines}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-rose-400">
-                                  <span>Confirmés :</span>
-                                  <span className="font-black">{data.confirmes}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-amber-400">
-                                  <span>En attente :</span>
-                                  <span className="font-black">{data.en_attente}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-gray-400">
-                                  <span>Annulés :</span>
-                                  <span className="font-black">{data.annules}</span>
-                                </div>
-                                <div className="flex justify-between items-center pt-1 border-t border-gray-800 font-bold text-white">
-                                  <span>Total RDV :</span>
-                                  <span className="font-black">{data.total}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-emerald-300 font-bold text-[11px] pt-0.5">
-                                  <span>CA Jour :</span>
-                                  <span>{formatFcfa(data.revenus)}</span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Legend
-                      wrapperStyle={{ paddingTop: '15px', fontSize: '11px', fontWeight: 600 }}
-                    />
-                    <Bar dataKey="confirmes" name="Confirmés" fill="#e11d48" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="en_attente" name="En attente" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="termines" name="Terminés" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="annules" name="Annulés" fill="#9ca3af" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* GRAPHIQUE 2: Revenus hebdomadaires estimés (Recharts AreaChart) */}
-            <div className="bg-white dark:bg-gray-900 p-5 sm:p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-800 pb-4">
-                <div>
-                  <h4 className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-emerald-500" />
-                    <span>Courbe des Revenus Hebdomadaires Estimés (FCFA)</span>
-                  </h4>
-                  <p className="text-xs text-gray-500">
-                    Projection financière calculée à partir des tarifs de vos prestations réservées
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs font-bold text-gray-500 block">Total estimé</span>
-                  <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
-                    {formatFcfa(analyticsData.weeklyEstimatedRevenue)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="h-72 w-full pt-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={analyticsData.daysArr}
-                    margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.15} />
-                    <XAxis
-                      dataKey="label"
-                      tickLine={false}
-                      axisLine={{ stroke: '#e5e7eb', opacity: 0.5 }}
-                      tick={{ fill: '#6b7280', fontSize: 11, fontWeight: 600 }}
-                    />
-                    <YAxis
-                      tickLine={false}
-                      axisLine={{ stroke: '#e5e7eb', opacity: 0.5 }}
-                      tick={{ fill: '#6b7280', fontSize: 11 }}
-                      tickFormatter={(value) => `${value >= 1000 ? `${Math.round(value / 1000)}k` : value}`}
-                    />
-                    <Tooltip
-                      content={({ active, payload, label }) => {
-                        if (active && payload && payload.length) {
-                          const val = Number(payload[0].value || 0);
-                          return (
-                            <div className="bg-gray-900/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-xl border border-gray-800 text-xs space-y-1">
-                              <p className="font-bold text-gray-400">{label}</p>
-                              <p className="text-emerald-400 font-black text-sm">
-                                {formatFcfa(val)}
-                              </p>
-                              <p className="text-[10px] text-gray-400">Revenus de prestations confirmées</p>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="revenus"
-                      name="Revenus estimés (FCFA)"
-                      stroke="#10b981"
-                      strokeWidth={3}
-                      fillOpacity={1}
-                      fill="url(#revenueGradient)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Comparatif 4 Dernières Semaines */}
-            <div className="bg-white dark:bg-gray-900 p-5 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-3">
-              <h4 className="text-xs font-black uppercase text-gray-500 tracking-wider">
-                Évolution comparative des 4 dernières semaines
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
-                {analyticsData.weeksComparison.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-3.5 rounded-2xl border ${
-                      idx === 3
-                        ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900'
-                        : 'bg-gray-50 dark:bg-gray-800/40 border-gray-100 dark:border-gray-800'
-                    }`}
-                  >
-                    <span className="text-[11px] font-bold text-gray-500 block">{item.week}</span>
-                    <span className="text-sm font-black text-gray-900 dark:text-white block mt-0.5">
-                      {formatFcfa(item.revenus)}
-                    </span>
-                    <span className="text-[10px] text-gray-400 font-medium">
-                      {item.rdv} rendez-vous
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <SalesAnalyticsDashboard salon={salon} />
         )}
 
         {/* ----------------------------------------------------------------------- */}

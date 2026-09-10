@@ -23,6 +23,7 @@ import { UserReservationsCalendar } from '../components/UserReservationsCalendar
 import { ThemeModeSelector } from '../components/ThemeModeSelector';
 import { UserEstablishmentPreferencesChart } from '../components/UserEstablishmentPreferencesChart';
 import { ClientBeautyAppointmentsCard } from '../components/beauty/ClientBeautyAppointmentsCard';
+import { ClientLoyaltyCard } from '../components/beauty/ClientLoyaltyCard';
 
 interface ProfileViewProps {
   onNavigate?: (tab: any) => void;
@@ -1301,6 +1302,13 @@ export function ProfileView({ onNavigate, onStartChatWithConv }: ProfileViewProp
             </div>
           )}
         </div>
+
+        {/* Cartes de Fidélité & Récompenses Beauté */}
+        <ClientLoyaltyCard 
+          clientId={currentUser.id} 
+          clientPhone={currentUser.phone} 
+          clientName={currentUser.name} 
+        />
 
         {/* Mes rendez-vous Beauté & Salons (Temps Réel & Notifications) */}
         <ClientBeautyAppointmentsCard 

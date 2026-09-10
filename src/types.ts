@@ -985,3 +985,276 @@ export interface BeautySalonClient {
   totalDepenseFcfa: number;
 }
 
+// ==========================================
+// ZAKA BEAUTY V2: CAISSE, STOCK & FIDÉLITÉ
+// ==========================================
+
+export type BeautyPaymentMethod = 
+  | 'especes'
+  | 'orange_money'
+  | 'moov_money'
+  | 'wave'
+  | 'virement'
+  | 'autre';
+
+export type BeautyProductCategory =
+  | 'shampooing'
+  | 'soins_capillaires'
+  | 'coloration'
+  | 'gel'
+  | 'huile'
+  | 'meches'
+  | 'extensions'
+  | 'perruques'
+  | 'cosmetiques'
+  | 'soins_visage'
+  | 'vernis'
+  | 'soins'
+  | 'materiel'
+  | 'accessoires'
+  | 'autre';
+
+export interface BeautyProduct {
+  id: string;
+  salonId: string;
+  nom: string;
+  description?: string;
+  categorie: BeautyProductCategory;
+  usageType?: 'revente' | 'interne' | 'mixte';
+  sku?: string;
+  unite: string; // 'unité', 'flacon', 'pot', 'tube', 'paquet', 'pièce', etc.
+  quantiteActuelle: number;
+  quantiteMinimale: number;
+  prixAchat: number;
+  prixVente: number;
+  fournisseur?: string;
+  imageUrl?: string;
+  actif: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type BeautyStockMovementType =
+  | 'entree'
+  | 'sortie'
+  | 'ajustement'
+  | 'vente'
+  | 'sortie_interne'
+  | 'consommation'
+  | 'perte'
+  | 'retour';
+
+export interface BeautyStockMovement {
+  id: string;
+  salonId: string;
+  productId: string;
+  productNom?: string;
+  product?: BeautyProduct;
+  quantite: number; // Valeur positive
+  typeMouvement: BeautyStockMovementType;
+  coutUnitaireFcfa?: number;
+  userId?: string;
+  userName?: string;
+  effectuePar?: string;
+  saleId?: string;
+  dateMouvement: string;
+  motif?: string;
+  fournisseur?: string;
+  commentaire?: string;
+  createdAt?: string;
+}
+
+export interface BeautyInventoryItem {
+  productId: string;
+  productNom: string;
+  stockTheorique: number;
+  stockReel: number;
+  ecart: number;
+  justification?: string;
+}
+
+export interface BeautyInventorySession {
+  id: string;
+  salonId: string;
+  dateInventaire: string;
+  realiseParNom?: string;
+  items: BeautyInventoryItem[];
+  commentaire?: string;
+  totalEcartValeurFcfa?: number;
+  createdAt?: string;
+}
+
+export type BeautySaleItemType = 'service' | 'produit';
+
+export interface BeautySaleItem {
+  id?: string;
+  saleId?: string;
+  itemType: BeautySaleItemType;
+  itemId: string; // ID of BeautyService or BeautyProduct
+  nom: string;
+  quantite: number;
+  prixUnitaireFcfa: number;
+  montantTotalFcfa: number;
+  notes?: string;
+}
+
+export interface BeautySale {
+  id: string;
+  salonId: string;
+  salonNom?: string;
+  appointmentId?: string;
+  clientId?: string;
+  nomClient: string;
+  telephoneClient?: string;
+  employeeId?: string;
+  employeeName?: string;
+  items: BeautySaleItem[];
+  montantBrutFcfa: number;
+  montantRemiseFcfa: number;
+  montantTotalFcfa: number;
+  montantRecuFcfa?: number;
+  montantRenduFcfa?: number;
+  moyenPaiement: BeautyPaymentMethod;
+  referencePaiement?: string;
+  statut: 'paye' | 'annule' | 'rembourse';
+  dateVente: string;
+  pointsFideliteGagnes?: number;
+  pointsFideliteUtilises?: number;
+  recompenseId?: string;
+  notes?: string;
+  caissierNom?: string;
+  createdAt: string;
+}
+
+export interface BeautyCashClosure {
+  id: string;
+  salonId: string;
+  dateCloture: string; // YYYY-MM-DD
+  heureCloture: string; // HH:mm
+  caissierId?: string;
+  caissierNom: string;
+  fondDeCaisseInitialFcfa: number;
+  totalVentesFcfa: number;
+  totalEspecesFcfa: number;
+  totalOrangeMoneyFcfa: number;
+  totalMoovMoneyFcfa: number;
+  totalWaveFcfa: number;
+  totalVirementFcfa: number;
+  totalAutreFcfa: number;
+  nombreTransactions: number;
+  totalReelConstateFcfa: number;
+  ecartCaisseFcfa: number;
+  notes?: string;
+  statut: 'cloturee' | 'ajustee';
+  createdAt: string;
+}
+
+export type BeautyLoyaltyTier = 'bronze' | 'argent' | 'or' | 'platine' | 'diamant';
+
+export interface BeautyLoyaltySettings {
+  id?: string;
+  salonId: string;
+  actif: boolean;
+  montantStepFcfa: number; // e.g. 1000 FCFA
+  pointsGagnesParStep: number; // e.g. 10 points
+  tauxGainFcfaParPoint?: number;
+  valeurPointFcfa?: number;
+  expirationMois?: number;
+  niveauBronzeMinPoints?: number;
+  niveauArgentMinPoints?: number;
+  niveauOrMinPoints?: number;
+  niveauPlatineMinPoints?: number;
+  seuilsNiveaux?: Record<string, number>;
+  updatedAt?: string;
+}
+
+export interface BeautyLoyaltyAccount {
+  id: string;
+  salonId: string;
+  clientId?: string;
+  nomClient: string;
+  clientNom?: string;
+  telephoneClient: string;
+  clientTelephone?: string;
+  pointsSolde: number;
+  pointsCumulesTotal: number;
+  pointsUtilisesTotal: number;
+  niveau: BeautyLoyaltyTier;
+  dernierAchatDate?: string;
+  derniereVisite?: string;
+  montantTotalDepenseFcfa?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type BeautyRewardType = 
+  | 'reduction_pourcentage'
+  | 'reduction_montant'
+  | 'service_gratuit'
+  | 'service_offert'
+  | 'produit_offert'
+  | 'cadeau';
+
+export interface BeautyReward {
+  id: string;
+  salonId: string;
+  titre: string;
+  description?: string;
+  pointsRequis: number;
+  typeRecompense: BeautyRewardType;
+  valeurReduction?: number;
+  serviceId?: string;
+  serviceNom?: string;
+  productId?: string;
+  productNom?: string;
+  actif: boolean;
+  createdAt?: string;
+}
+
+export type BeautyLoyaltyTransactionType = 'gain' | 'utilisation' | 'ajustement' | 'expiration';
+
+export interface BeautyLoyaltyTransaction {
+  id: string;
+  salonId: string;
+  accountId: string;
+  clientId?: string;
+  nomClient?: string;
+  telephoneClient?: string;
+  saleId?: string;
+  rewardId?: string;
+  rewardTitre?: string;
+  typeTransaction: BeautyLoyaltyTransactionType;
+  points: number; // positif pour gain, négatif ou absolu selon type
+  soldeApres: number;
+  motif?: string;
+  dateTransaction: string;
+  createdAt: string;
+}
+
+export interface BeautyStaffMember {
+  id: string;
+  salonId: string;
+  userId?: string;
+  nom: string;
+  role: 'coiffeur' | 'estheticienne' | 'barbier' | 'manucure' | 'caissier' | 'gerant' | 'apprenti';
+  telephone?: string;
+  specialites?: string[];
+  actif: boolean;
+  avatarUrl?: string;
+}
+
+export interface BeautyCommercialStats {
+  chiffreAffairesTotalFcfa: number;
+  chiffreAffairesServicesFcfa: number;
+  chiffreAffairesProduitsFcfa: number;
+  nombreVentes: number;
+  panierMoyenFcfa: number;
+  totalRemisesFcfa: number;
+  repartitionPaiements: Record<BeautyPaymentMethod, number>;
+  topServices: { id: string; nom: string; quantite: number; totalFcfa: number }[];
+  topProduits: { id: string; nom: string; quantite: number; totalFcfa: number }[];
+  performancesEmployes: { employeeId: string; nom: string; nombrePrestations: number; totalCaFcfa: number }[];
+}
+
+
+
