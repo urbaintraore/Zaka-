@@ -18,7 +18,9 @@ import {
   BeautyLoyaltyTransaction,
   BeautyStaffMember,
   BeautyAppointment,
-  BeautyCommercialStats
+  BeautyCommercialStats,
+  BeautyExpense,
+  BeautyExpenseCategory
 } from '../types';
 
 // =============================================================================
@@ -2387,3 +2389,183 @@ export const BEAUTY_PRODUCT_CATEGORY_LABELS: Record<BeautyProductCategory, { lab
   accessoires: { label: 'Accessoires & Outils', icon: '🪮' },
   autre: { label: 'Autres produits', icon: '📦' }
 };
+
+export const BEAUTY_EXPENSE_CATEGORY_LABELS: Record<BeautyExpenseCategory, { label: string; icon: string; color: string }> = {
+  loyer: { label: 'Loyer du Local', icon: '🏢', color: 'bg-purple-100 text-purple-800 border-purple-200' },
+  electricite: { label: 'Électricité (SONABEL)', icon: '⚡', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+  eau: { label: 'Eau (ONEA)', icon: '💧', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+  salaires: { label: 'Salaires du Personnel', icon: '👥', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+  achats_materiel: { label: 'Matériel & Équipements', icon: '✂️', color: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
+  achats_produits: { label: 'Achat de Stocks / Consommables', icon: '🧴', color: 'bg-rose-100 text-rose-800 border-rose-200' },
+  abonnements: { label: 'Marketing, Abonnements & Pub', icon: '📢', color: 'bg-pink-100 text-pink-800 border-pink-200' },
+  transport: { label: 'Transport & Déplacements', icon: '🚗', color: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
+  maintenance: { label: 'Entretien & Réparations', icon: '🛠️', color: 'bg-orange-100 text-orange-800 border-orange-200' },
+  autre: { label: 'Autres Charges Diverses', icon: '🧾', color: 'bg-gray-100 text-gray-800 border-gray-200' }
+};
+
+// =============================================================================
+// EXPENSES & ACCOUNTING (COMPTABILITÉ & BILAN)
+// =============================================================================
+
+const BEAUTY_EXPENSES_STORAGE_KEY = 'zaka_beauty_expenses_v1';
+
+function getLocalExpenses(salonId?: string): BeautyExpense[] {
+  try {
+    const raw = localStorage.getItem(BEAUTY_EXPENSES_STORAGE_KEY);
+    const list: BeautyExpense[] = raw ? JSON.parse(raw) : [];
+    if (salonId) {
+      return list.filter(e => e.salonId === salonId);
+    }
+    return list;
+  } catch (err) {
+    console.warn('Erreur lecture local expenses:', err);
+    return [];
+  }
+}
+
+function saveLocalExpense(exp: BeautyExpense): void {
+  const list = getLocalExpenses();
+  const idx = list.findIndex(e => e.id === exp.id);
+  if (idx >= 0) {
+    list[idx] = exp;
+  } else {
+    list.unshift(exp);
+  }
+  localStorage.setItem(BEAUTY_EXPENSES_STORAGE_KEY, JSON.stringify(list));
+}
+
+function removeLocalExpense(id: string): void {
+  const list = getLocalExpenses().filter(e => e.id !== id);
+  localStorage.setItem(BEAUTY_EXPENSES_STORAGE_KEY, JSON.stringify(list));
+}
+
+export async function fetchBeautyExpenses(salonId: string, month?: string): Promise<BeautyExpense[]> {
+  if (!isSupabaseConfigured || !salonId) {
+    let local = getLocalExpenses(salonId);
+    if (month) {
+      local = local.filter(e => e.dateDepense && e.dateDepense.startsWith(month));
+    }
+    return local.sort((a, b) => new Date(b.dateDepense).getTime() - new Date(a.dateDepense).getTime());
+  }
+
+  try {
+    let query = supabase
+      .from('beauty_expenses')
+      .select('*')
+      .eq('salon_id', salonId)
+      .order('date_depense', { ascending: false });
+
+    if (month) {
+      // e.g. month = '2026-09'
+      const startDate = `${month}-01`;
+      const endDate = `${month}-31T23:59:59`;
+      query = query.gte('date_depense', startDate).lte('date_depense', endDate);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      let local = getLocalExpenses(salonId);
+      if (month) {
+        local = local.filter(e => e.dateDepense && e.dateDepense.startsWith(month));
+      }
+      return local;
+    }
+
+    return data.map((d: any) => ({
+      id: d.id,
+      salonId: d.salon_id,
+      categorie: d.categorie as BeautyExpenseCategory,
+      categorieNom: d.categorie_nom || BEAUTY_EXPENSE_CATEGORY_LABELS[d.categorie as BeautyExpenseCategory]?.label,
+      titre: d.titre,
+      description: d.description,
+      montantFcfa: d.montant_fcfa,
+      modePaiement: (d.mode_paiement || 'especes') as BeautyPaymentMethod,
+      dateDepense: d.date_depense,
+      userNom: d.user_nom,
+      pieceJustificativeUrl: d.piece_justificative_url,
+      createdAt: d.created_at,
+      updatedAt: d.updated_at
+    }));
+  } catch (err) {
+    console.warn('Erreur fetchBeautyExpenses Supabase, fallback local:', err);
+    let local = getLocalExpenses(salonId);
+    if (month) {
+      local = local.filter(e => e.dateDepense && e.dateDepense.startsWith(month));
+    }
+    return local;
+  }
+}
+
+export async function saveBeautyExpense(
+  expenseData: Partial<BeautyExpense> & Omit<BeautyExpense, 'id' | 'createdAt'>
+): Promise<BeautyExpense> {
+  const newExp: BeautyExpense = {
+    ...expenseData,
+    id: expenseData.id || `exp_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+    createdAt: expenseData.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase
+        .from('beauty_expenses')
+        .insert({
+          salon_id: newExp.salonId,
+          categorie: newExp.categorie,
+          categorie_nom: newExp.categorieNom || BEAUTY_EXPENSE_CATEGORY_LABELS[newExp.categorie]?.label,
+          titre: newExp.titre,
+          description: newExp.description || null,
+          montant_fcfa: newExp.montantFcfa,
+          mode_paiement: newExp.modePaiement,
+          date_depense: newExp.dateDepense,
+          user_nom: newExp.userNom || null,
+          piece_justificative_url: newExp.pieceJustificativeUrl || null
+        })
+        .select()
+        .single();
+
+      if (!error && data) {
+        const saved: BeautyExpense = {
+          id: data.id,
+          salonId: data.salon_id,
+          categorie: data.categorie as BeautyExpenseCategory,
+          categorieNom: data.categorie_nom,
+          titre: data.titre,
+          description: data.description,
+          montantFcfa: data.montant_fcfa,
+          modePaiement: data.mode_paiement as BeautyPaymentMethod,
+          dateDepense: data.date_depense,
+          userNom: data.user_nom,
+          pieceJustificativeUrl: data.piece_justificative_url,
+          createdAt: data.created_at
+        };
+        saveLocalExpense(saved);
+        return saved;
+      }
+    } catch (err) {
+      console.warn('Erreur saveBeautyExpense Supabase, fallback local:', err);
+    }
+  }
+
+  saveLocalExpense(newExp);
+  return newExp;
+}
+
+export async function deleteBeautyExpense(id: string): Promise<boolean> {
+  if (isSupabaseConfigured) {
+    try {
+      const { error } = await supabase.from('beauty_expenses').delete().eq('id', id);
+      if (!error) {
+        removeLocalExpense(id);
+        return true;
+      }
+    } catch (err) {
+      console.warn('Erreur deleteBeautyExpense Supabase:', err);
+    }
+  }
+  removeLocalExpense(id);
+  return true;
+}
+

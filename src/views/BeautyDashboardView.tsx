@@ -87,12 +87,16 @@ import {
   UploadCloud,
   ExternalLink,
   BarChart2,
-  DollarSign
+  DollarSign,
+  Receipt
 } from 'lucide-react';
 import { CashRegisterView } from '../components/beauty/BeautyPosView';
 import { BeautyStockView } from '../components/beauty/BeautyStockView';
 import { LoyaltyRewardsView } from '../components/beauty/BeautyLoyaltyView';
 import { SalesAnalyticsDashboard } from '../components/beauty/BeautyAnalyticsView';
+import { BeautyAccountingView } from '../components/beauty/BeautyAccountingView';
+import { ExpenseManagement } from '../components/beauty/ExpenseManagement';
+import { FinancialReport } from '../components/beauty/FinancialReport';
 
 interface BeautyDashboardViewProps {
   onLogout?: () => void;
@@ -103,6 +107,9 @@ export type BeautyDashboardNav =
   | 'pos'              // Caisse & Enregistrement des ventes
   | 'stock'            // Gestion du stock
   | 'loyalty'          // Programme Fidélité
+  | 'expenses'         // ExpenseManagement: Saisie des dépenses quotidiennes
+  | 'financial_report' // FinancialReport: Flux de trésorerie (Cashflow)
+  | 'accounting'       // Comptabilité & Bilan
   | 'analytics'        // Statistiques & Graphiques (Recharts)
   | 'pending'          // Demandes en attente
   | 'all_appointments' // Tous les rendez-vous
@@ -1191,6 +1198,69 @@ export function BeautyDashboardView({ onLogout }: BeautyDashboardViewProps = {})
               </div>
             </button>
 
+            {/* Gestion des Dépenses Quotidiennes */}
+            <button
+              id="beauty-nav-expenses-btn"
+              onClick={() => setActiveNav('expenses')}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeNav === 'expenses'
+                  ? 'bg-rose-600 text-white shadow-sm font-black'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Receipt className="w-4 h-4" />
+                <span>Gestion des Dépenses</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${
+                activeNav === 'expenses' ? 'bg-white/20 text-white' : 'text-rose-700 bg-rose-100 dark:bg-rose-950 dark:text-rose-300'
+              }`}>
+                Coûts
+              </span>
+            </button>
+
+            {/* Rapport Financier & Cashflow */}
+            <button
+              id="beauty-nav-financial-report-btn"
+              onClick={() => setActiveNav('financial_report')}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeNav === 'financial_report'
+                  ? 'bg-rose-600 text-white shadow-sm font-black'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <TrendingUp className="w-4 h-4" />
+                <span>Flux de Trésorerie (Cashflow)</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${
+                activeNav === 'financial_report' ? 'bg-white/20 text-white' : 'text-indigo-700 bg-indigo-100 dark:bg-indigo-950 dark:text-indigo-300'
+              }`}>
+                Rapport
+              </span>
+            </button>
+
+            {/* Comptabilité & Bilan Financier */}
+            <button
+              id="beauty-nav-accounting-btn"
+              onClick={() => setActiveNav('accounting')}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeNav === 'accounting'
+                  ? 'bg-rose-600 text-white shadow-sm font-black'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <DollarSign className="w-4 h-4" />
+                <span>Comptabilité & Bilan</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${
+                activeNav === 'accounting' ? 'bg-white/20 text-white' : 'text-rose-700 bg-rose-100 dark:bg-rose-950 dark:text-rose-300'
+              }`}>
+                Bilan
+              </span>
+            </button>
+
             {/* 2. Statistiques & Graphiques (Recharts) */}
             <button
               id="beauty-nav-analytics-btn"
@@ -1489,6 +1559,18 @@ export function BeautyDashboardView({ onLogout }: BeautyDashboardViewProps = {})
 
         {activeNav === 'loyalty' && (
           <LoyaltyRewardsView salon={salon} />
+        )}
+
+        {activeNav === 'expenses' && (
+          <ExpenseManagement salon={salon} />
+        )}
+
+        {activeNav === 'financial_report' && (
+          <FinancialReport salon={salon} />
+        )}
+
+        {activeNav === 'accounting' && (
+          <BeautyAccountingView salon={salon} />
         )}
 
         {/* ----------------------------------------------------------------------- */}

@@ -84,7 +84,7 @@ export function DashboardLayout() {
               }
             >
               <Sparkles size={15} />
-              <span>Beauty</span>
+              <span>Zaka Beauty</span>
             </NavLink>
 
             <NavLink
@@ -171,7 +171,7 @@ export function DashboardLayout() {
                 }
               >
                 <Store size={15} />
-                <span>Mon Salon</span>
+                <span>Mon Salon de Beauté</span>
               </NavLink>
             )}
 
@@ -217,7 +217,7 @@ export function DashboardLayout() {
               title="ZAKA Beauty - Salons, Coiffure & Spas"
             >
               <Sparkles size={16} />
-              <span className="hidden sm:inline">Beauty</span>
+              <span className="hidden sm:inline">Zaka Beauty</span>
             </NavLink>
 
             {/* Aide / Support Quick Access */}

@@ -1256,5 +1256,34 @@ export interface BeautyCommercialStats {
   performancesEmployes: { employeeId: string; nom: string; nombrePrestations: number; totalCaFcfa: number }[];
 }
 
+export type BeautyExpenseCategory = 
+  | 'loyer' 
+  | 'electricite' 
+  | 'eau' 
+  | 'salaires' 
+  | 'achats_materiel' 
+  | 'achats_produits' 
+  | 'abonnements' 
+  | 'transport' 
+  | 'maintenance' 
+  | 'autre';
+
+export interface BeautyExpense {
+  id: string;
+  salonId: string;
+  categorie: BeautyExpenseCategory;
+  categorieNom?: string;
+  titre: string;
+  description?: string;
+  montantFcfa: number;
+  modePaiement: BeautyPaymentMethod;
+  dateDepense: string;
+  userNom?: string;
+  pieceJustificativeUrl?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+
 
 

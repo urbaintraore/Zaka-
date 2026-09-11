@@ -18,7 +18,9 @@ import {
   Filter,
   Sparkles,
   RefreshCw,
-  Layers
+  Layers,
+  Printer,
+  FileSpreadsheet
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -38,7 +40,8 @@ import {
   BeautyProduct,
   BeautyService,
   BeautyStaffMember,
-  BeautyCommercialStats
+  BeautyCommercialStats,
+  BeautyExpense
 } from '../../types';
 import {
   fetchCommercialStats,
@@ -46,7 +49,9 @@ import {
   fetchBeautyProducts,
   fetchSalonServices,
   fetchSalonStaff,
+  fetchBeautyExpenses,
   BEAUTY_PAYMENT_LABELS,
+  BEAUTY_EXPENSE_CATEGORY_LABELS,
   formatFcfa
 } from '../../lib/beautyService';
 
@@ -70,23 +75,26 @@ export function BeautyAnalyticsView({ salon }: BeautyAnalyticsViewProps) {
   const [products, setProducts] = useState<BeautyProduct[]>([]);
   const [services, setServices] = useState<BeautyService[]>([]);
   const [staff, setStaff] = useState<BeautyStaffMember[]>([]);
+  const [expenses, setExpenses] = useState<BeautyExpense[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [st, sList, pList, srvList, stfList] = await Promise.all([
+      const [st, sList, pList, srvList, stfList, expList] = await Promise.all([
         fetchCommercialStats(salon.id, period),
         fetchBeautySales(salon.id),
         fetchBeautyProducts(salon.id, false),
         fetchSalonServices(salon.id, true),
-        fetchSalonStaff(salon.id)
+        fetchSalonStaff(salon.id),
+        fetchBeautyExpenses(salon.id)
       ]);
       setStats(st);
       setSales(sList);
       setProducts(pList);
       setServices(srvList);
       setStaff(stfList);
+      setExpenses(expList);
     } catch (err) {
       console.warn('Erreur chargement statistiques:', err);
     } finally {
@@ -98,7 +106,42 @@ export function BeautyAnalyticsView({ salon }: BeautyAnalyticsViewProps) {
     loadData();
   }, [salon.id, period]);
 
-  // Export Summary Report
+  // Export CSV Data (Sales + Expenses)
+  const handleExportCSV = () => {
+    const csvRows: string[] = [];
+    csvRows.push('TYPE;ID;DATE;TITRE_CLIENT;CATEGORIE_SERVICE;MODE_PAIEMENT;MONTANT_FCFA;STATUT_NOTE');
+
+    // Add Sales
+    sales.forEach(s => {
+      const dateStr = s.dateVente ? s.dateVente.substring(0, 10) : '';
+      const client = s.nomClient || 'Client Passage';
+      const payment = BEAUTY_PAYMENT_LABELS[s.moyenPaiement]?.label || s.moyenPaiement;
+      csvRows.push(`VENTE;${s.id};${dateStr};${client};Prestations/Produits;${payment};${s.montantTotalFcfa};${s.statut}`);
+    });
+
+    // Add Expenses
+    expenses.forEach(e => {
+      const dateStr = e.dateDepense ? e.dateDepense.substring(0, 10) : '';
+      const cat = BEAUTY_EXPENSE_CATEGORY_LABELS[e.categorie]?.label || e.categorie;
+      const payment = BEAUTY_PAYMENT_LABELS[e.modePaiement]?.label || e.modePaiement;
+      csvRows.push(`DEPENSE;${e.id};${dateStr};${e.titre};${cat};${payment};-${e.montantFcfa};Approuvé`);
+    });
+
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `comptabilite_ventes_depenses_${salon.nom.toLowerCase().replace(/\s+/g, '_')}_${period}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Export PDF / Print Report
+  const handleExportPDF = () => {
+    window.print();
+  };
+
+  // Export Summary Report Text
   const handleExportReport = () => {
     if (!stats) return;
     const lines = [
@@ -236,11 +279,21 @@ export function BeautyAnalyticsView({ salon }: BeautyAnalyticsViewProps) {
           </div>
 
           <button
-            onClick={handleExportReport}
-            className="p-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-gray-200 rounded-xl transition-colors"
-            title="Exporter le rapport"
+            onClick={handleExportCSV}
+            className="p-2.5 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 rounded-xl transition-colors font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-emerald-200 dark:border-emerald-900"
+            title="Exporter les ventes et dépenses au format CSV"
           >
-            <Download className="w-4 h-4" />
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span className="hidden md:inline">Export CSV</span>
+          </button>
+
+          <button
+            onClick={handleExportPDF}
+            className="p-2.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 rounded-xl transition-colors font-bold text-xs flex items-center gap-1.5 cursor-pointer border border-indigo-200 dark:border-indigo-900"
+            title="Imprimer / Exporter le rapport en PDF"
+          >
+            <Printer className="w-4 h-4 text-indigo-600" />
+            <span className="hidden md:inline">Export PDF / Imprimer</span>
           </button>
         </div>
       </div>
