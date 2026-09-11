@@ -204,22 +204,6 @@ export function DashboardLayout() {
               </div>
             )}
 
-            {/* ZAKA Beauty Quick Access */}
-            <NavLink
-              to="/beauty"
-              className={({ isActive }) =>
-                `p-2 sm:px-3 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-black ${
-                  isActive 
-                    ? 'bg-rose-600 text-white shadow-xs' 
-                    : 'bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200/60 dark:border-rose-900/40'
-                }`
-              }
-              title="ZAKA Beauty - Salons, Coiffure & Spas"
-            >
-              <Sparkles size={16} />
-              <span className="hidden sm:inline">Zaka Beauty</span>
-            </NavLink>
-
             {/* Aide / Support Quick Access */}
             <NavLink
               to="/help"
@@ -367,7 +351,7 @@ export function DashboardLayout() {
               }
             >
               <Store size={18} />
-              <span>Mon Salon</span>
+              <span>Mon Salon de Beauté</span>
             </NavLink>
           )}
 

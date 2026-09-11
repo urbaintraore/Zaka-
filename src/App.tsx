@@ -30,10 +30,19 @@ export default function App() {
             <Route index element={<HomeView />} />
             <Route path="home" element={<HomeView />} />
             <Route path="explore" element={<ExploreView />} />
+            
+            {/* ZAKA BEAUTY MODULE - SINGLE SOURCE OF TRUTH */}
             <Route path="beauty" element={<BeautySalonsList />} />
             <Route path="beauty/:id" element={<BeautySalonPublicView />} />
             <Route path="beauty-dashboard" element={<BeautyDashboardView />} />
             <Route path="salon-onboarding" element={<SalonOnboarding />} />
+            
+            {/* LEGACY BEAUTY ROUTE REDIRECTS FOR UNIFIED STRUCTURE */}
+            <Route path="salons" element={<Navigate to="/beauty" replace />} />
+            <Route path="salons/:id" element={<Navigate to="/beauty" replace />} />
+            <Route path="mon-salon" element={<Navigate to="/beauty-dashboard" replace />} />
+            <Route path="beauty-salon" element={<Navigate to="/beauty-dashboard" replace />} />
+
             <Route path="favorites" element={<FavoritesView />} />
             <Route path="jobs" element={<RecruitmentsView />} />
             <Route path="messages" element={<MessagesView />} />
